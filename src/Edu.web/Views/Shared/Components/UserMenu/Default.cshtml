@@ -1,0 +1,71 @@
+﻿@model Edu.Web.ViewModels.UserMenuViewModel
+
+<li class="nav-item dropdown pe-3">
+    <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
+        <img src="@(Model.PhotoUrl ?? "/images/default-avatar.png")"
+             alt="Profile" class="rounded-circle" width="32" height="32" />
+        <span class="d-none d-md-block dropdown-toggle ps-2">@Model.FullName</span>
+    </a>
+
+    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
+        <li class="dropdown-header text-center">
+            <h6>@Model.FullName</h6>
+            <span>@Model.Role</span>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+
+        <li>
+            <a class="dropdown-item d-flex align-items-center"
+               asp-area="Identity" asp-page="/Account/Manage/Index">
+                <i class="bi bi-person"></i>
+                <span>الملف الشخصي</span>
+            </a>
+        </li>
+
+        <li><hr class="dropdown-divider"></li>
+
+        @if (Model.Role == "Admin")
+        {
+            <li>
+                <a class="dropdown-item d-flex align-items-center"
+                   asp-area="" asp-controller="Admin" asp-action="Index">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>لوحة الإدارة</span>
+                </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+        }
+        else if (Model.Role == "Teacher")
+        {
+            <li>
+                <a class="dropdown-item d-flex align-items-center"
+                   asp-area="" asp-controller="Teacher" asp-action="Index">
+                    <i class="bi bi-journal-text"></i>
+                    <span>دوراتي</span>
+                </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+        }
+        else if (Model.Role == "Student")
+        {
+            <li>
+                <a class="dropdown-item d-flex align-items-center"
+                   asp-area="" asp-controller="Student" asp-action="MyCourses">
+                    <i class="bi bi-book"></i>
+                    <span>دوراتي</span>
+                </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+        }
+
+        <li>
+            <form asp-area="Identity" asp-page="/Account/Logout" method="post" class="dropdown-item d-flex align-items-center">
+                <i class="bi bi-box-arrow-right"></i>
+                <button type="submit" class="btn btn-link p-0 ms-2 text-start">تسجيل الخروج</button>
+            </form>
+        </li>
+    </ul>
+</li>
+
+
+

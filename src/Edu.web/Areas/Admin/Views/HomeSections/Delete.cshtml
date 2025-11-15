@@ -1,0 +1,28 @@
+﻿@model HomeSection
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+    var t = Model.Translations?.FirstOrDefault(x => x.Culture == "en") ?? Model.Translations?.FirstOrDefault();
+}
+
+<h2>@L["Admin.DeleteSection"]</h2>
+
+<div class="card">
+    <div class="card-body">
+        <p>@L["Admin.DeleteSectionConfirm"]</p>
+        <dl class="row">
+            <dt class="col-3">@L["Admin.Order"]</dt>
+            <dd class="col-9">@Model.Order</dd>
+
+            <dt class="col-3">@L["Admin.TitlePreview"]</dt>
+            <dd class="col-9">@t?.Title</dd>
+        </dl>
+
+        <form method="post" asp-action="DeleteConfirmed">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.Id" />
+            <button type="submit" class="btn btn-danger">@L["Admin.Delete"]</button>
+            <a asp-action="Index" class="btn btn-light">@L["Admin.Cancel"]</a>
+        </form>
+    </div>
+</div>
+

@@ -1,0 +1,136 @@
+﻿@model List<Edu.Web.Areas.Shared.ViewModels.BookingListItemVm>
+@using Edu.Domain.Entities
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Booking.Index.Title"] ?? "My Bookings";
+
+    var request = ViewContext.HttpContext.Request;
+    var tab = (ViewData["BookingsTab"] as string) ?? request.Query["tab"].FirstOrDefault() ?? "upcoming";
+
+    int page = (int?)(ViewData["BookingsPage"] as int?)
+        ?? (int.TryParse(request.Query["page"], out var parsedPage) ? parsedPage : 1);
+
+    int pageSize = (int?)(ViewData["BookingsPageSize"] as int?)
+        ?? (int.TryParse(request.Query["pageSize"], out var parsedSize) ? parsedSize : 10);
+
+    int total = (int?)(ViewData["BookingsTotal"] as int?) ?? 0;
+    int totalPages = (int)Math.Ceiling(total / (double)pageSize);
+}
+
+<h3>@L["Booking.Title"]</h3>
+
+<nav class="mb-3">
+    <ul class="nav nav-tabs">
+        <li class="nav-item">
+            <a class="nav-link @(tab == "upcoming" ? "active" : "")" href="@Url.Action("MyBookings", new { tab = "upcoming", page = 1 })">
+                @(L["Booking.Tab.Upcoming"] ?? "Upcoming")
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(tab == "past" ? "active" : "")" href="@Url.Action("MyBookings", new { tab = "past", page = 1 })">
+                @(L["Booking.Tab.Past"] ?? "Past")
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(tab == "all" ? "active" : "")" href="@Url.Action("MyBookings", new { tab = "all", page = 1 })">
+                @(L["Booking.Tab.All"] ?? "All")
+            </a>
+        </li>
+    </ul>
+</nav>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">@L["Admin.NoRecords"]</div>
+}
+else
+{
+    <table class="table table-hover table-responsive">
+        <thead>
+            <tr>
+                <th>@L["Slots.Times"]</th>
+                <th>@L["Booking.Teacher"]</th>
+                <th>@L["Booking.Meet"]</th>
+                <th>@L["Booking.Status"]</th>
+                <th>@L["Booking.Price"]</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var b in Model)
+            {
+                <tr>
+                    <td>
+                        <div class="fw-semibold">@b.SlotStartLocalString</div>
+                        <div class="small text-muted">@b.SlotTimes</div>
+                    </td>
+
+                    <td>@(b.TeacherName ?? "-")</td>
+
+                    <td>
+                        @if (b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl))
+                        {
+                            <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> @(L["Booking.Join"] ?? "Join")
+                            </a>
+                        }
+                        else
+                        {
+                            @("-")
+                        }
+                    </td>
+
+                    <td>
+                        <span class="badge @(b.Status == BookingStatus.Paid ? "bg-success" : "bg-warning text-dark")">
+                            @(L[$"Booking.Status.{b.Status}"] ?? b.Status.ToString())
+                        </span>
+                    </td>
+
+                    <td>@(b.PriceLabel ?? "-")</td>
+
+                    <td class="text-end">
+                        <a asp-action="Details" asp-route-id="@b.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+
+                        @if (b.CanCancel)
+                        {
+                            <form asp-action="Cancel" method="post" class="d-inline-block ms-1"
+                                  onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@b.Id" />
+                                <button type="submit" class="btn btn-sm btn-danger">@L["Button.Cancel"]</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <nav aria-label="Bookings pages">
+        <ul class="pagination justify-content-center">
+            @{
+                Func<int, string> buildUrl = pageNumber => Url.Action("MyBookings", new { tab = tab, page = pageNumber, pageSize = pageSize });
+            }
+            <li class="page-item @(page <= 1 ? "disabled" : "")">
+                <a class="page-link" href="@buildUrl(page - 1)">&laquo;</a>
+            </li>
+            @for (int i = Math.Max(1, page - 2); i <= Math.Min(totalPages, page + 2); i++)
+            {
+                <li class="page-item @(i == page ? "active" : "")">
+                    <a class="page-link" href="@buildUrl(i)">@i</a>
+                </li>
+            }
+            <li class="page-item @(page >= totalPages ? "disabled" : "")">
+                <a class="page-link" href="@buildUrl(page + 1)">&raquo;</a>
+            </li>
+        </ul>
+    </nav>
+}
+
+
+
+
+
+
+

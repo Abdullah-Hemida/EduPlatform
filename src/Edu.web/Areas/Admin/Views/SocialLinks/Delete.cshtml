@@ -1,0 +1,25 @@
+﻿@model Edu.Domain.Entities.SocialLink
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.Delete"] + " - " + L["Admin.SocialLinks"];
+}
+
+<h2>@L["Admin.Delete"] - @L["Admin.SocialLinks"]</h2>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">@Model.Provider</h5>
+        <p class="card-text"><strong>@L["Admin.Url"]:</strong> @Model.Url</p>
+        <p class="card-text"><strong>@L["Admin.Visible"]:</strong> @(Model.IsVisible? L["Common.Yes"] : L["Common.No"])</p>
+        <p class="card-text"><strong>@L["Admin.Order"]:</strong> @Model.Order</p>
+
+        <form method="post" asp-action="DeleteConfirmed" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+            <button type="submit" class="btn btn-danger">@L["Admin.Delete"]</button>
+            <a asp-action="Index" class="btn btn-light ms-2">@L["Admin.Cancel"]</a>
+        </form>
+    </div>
+</div>
+

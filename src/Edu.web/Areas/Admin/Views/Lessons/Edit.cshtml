@@ -1,0 +1,39 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.LessonEditViewModel
+@using Edu.Web.Resources
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+     
+    ViewData["Title"] = L["Admin.EditLesson"];
+}
+<div class="card">
+  <div class="card-body">
+    <h4>@L["Admin.EditLesson"]</h4>
+    <form asp-action="Edit" method="post" enctype="multipart/form-data" class="row g-3">
+      @Html.AntiForgeryToken()
+      <input asp-for="Id" type="hidden" />
+      <input asp-for="ModuleId" type="hidden" />
+      <div class="col-12">
+        <label class="form-label">@L["Admin.Title"]</label>
+        <input asp-for="Title" class="form-control" />
+      </div>
+      <div class="col-12">
+        <label class="form-label">@L["Admin.Description"]</label>
+        <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">@L["Admin.YouTubeUrl"]</label>
+        <input asp-for="YouTubeUrl" class="form-control" />
+        <div class="form-text">@L["Admin.YouTubeHelp"]</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">@L["Admin.Order"]</label>
+             <input asp-for="Order" type="number" value="1" class="form-control form-control-sm" />
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary">@L["Admin.SaveChanges"]</button>
+             <a asp-controller="Curricula" asp-action="Details" asp-area="Admin" asp-route-id="@(ViewBag.CurriculumId ?? 0)" class="btn btn-link">@L["Button.Cancel"]</a>
+      </div>
+    </form>
+  </div>
+</div>
+

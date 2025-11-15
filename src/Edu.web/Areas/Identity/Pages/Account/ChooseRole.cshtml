@@ -1,0 +1,26 @@
+﻿@page
+@model EduPlatform.Web.Areas.Identity.Pages.Account.ChooseRoleModel
+@{
+    Layout = "/Views/Shared/_MentorLayout.cshtml";
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="card-title">@L["RoleSelection.Title"]</h3>
+                    <p class="text-muted">@L["RoleSelection.Subtitle"]</p>
+
+                    <form method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="d-grid gap-2">
+                            <button name="role" value="Teacher" class="btn btn-primary btn-lg">@L["RoleSelection.Teacher"]</button>
+                            <button name="role" value="Student" class="btn btn-outline-secondary btn-lg">@L["RoleSelection.Student"]</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

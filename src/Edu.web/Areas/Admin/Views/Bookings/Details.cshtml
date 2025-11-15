@@ -1,0 +1,169 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.AdminBookingDetailsVm
+@using Edu.Domain.Entities
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.BookingDetails"] ?? "Booking details";
+}
+
+<form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h4 class="mb-0">@L["Booking.Title"]</h4>
+        <div class="small text-muted">#@Model.Id</div>
+    </div>
+    <div class="">
+        <a asp-action="Index" class="btn btn-secondary btn-sm ps-3 pe-3">
+            <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
+            <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
+            @L["Common.Back"]</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">@L["Booking.Student"]</h6>
+                        <div class="fw-semibold">@(Model.StudentName ?? "—")</div>
+                        <div class="small text-muted">@(Model.StudentEmail ?? "—")</div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">@L["Booking.Teacher"]</h6>
+                        <div class="fw-semibold">@(Model.TeacherName ?? "—")</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="text-muted">@L["Booking.RequestDate"]</h6>
+                        <div class="fw-semibold">@Model.RequestedDateUtc.ToLocalTime().ToString("g")</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="text-muted">@L["Booking.Status"]</h6>
+                        <div>
+                            <span class="badge booking-status-badge @(Model.Status == BookingStatus.Paid ? "bg-primary" : "bg-secondary")">@Model.Status</span>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <h6 class="text-muted">@L["Booking.Notes"]</h6>
+                        <div class="small text-muted">@(!string.IsNullOrEmpty(Model.Notes) ? Model.Notes : L["Admin.NoNotes"])</div>
+                    </div>
+
+                    <div class="col-12">
+                        <h6 class="text-muted">@L["Booking.Meet"]</h6>
+                        @if (!string.IsNullOrEmpty(Model.MeetUrl))
+                        {
+                            <div><a class="btn btn-outline-primary btn-sm" href="@Model.MeetUrl" target="_blank">@L["OpenMeet"]</a></div>
+                        }
+                        else
+                        {
+                            <div class="small text-muted">@L["Booking.NoMeetUrl"]</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- logs -->
+        <div class="card">
+            <div class="card-header"><strong>@L["Admin.Notes"]</strong></div>
+            <div class="card-body">
+                @if (Model.ModerationLogs == null || !Model.ModerationLogs.Any())
+                {
+                    <div class="text-muted small">@L["Admin.NoNotes"]</div>
+                }
+                else
+                {
+                    <ul class="list-group">
+                        @foreach (var log in Model.ModerationLogs)
+                        {
+                            <li class="list-group-item">
+                                <div class="small"><strong>@log.Action</strong> — <span class="text-muted">@log.CreatedAtUtc.ToLocalTime().ToString("g")</span></div>
+                                <div class="mt-1">@(!string.IsNullOrEmpty(log.Note) ? log.Note : "")</div>
+                                <div class="small text-muted mt-1">@(!string.IsNullOrEmpty(log.ActorName) ? log.ActorName : log.ActorId)</div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+
+    <aside class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-body d-grid gap-2">
+                <button id="markPaidBtn" data-id="@Model.Id" class="btn btn-outline-primary">@L["Booking.MarkPaid"]</button>
+                <a asp-action="Index" class="btn btn-light">@L["Button.Close"]</a>
+            </div>
+        </div>
+    </aside>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            function getAntiForgeryToken() {
+                var f = document.getElementById('antiForgeryForm');
+                if (!f) return '';
+                var input = f.querySelector('input[name="__RequestVerificationToken"]');
+                return input ? input.value : '';
+            }
+
+            var markBtn = document.getElementById('markPaidBtn');
+            if (!markBtn) return;
+
+            markBtn.addEventListener('click', function (e) {
+                var id = this.getAttribute('data-id');
+                if (!id) return;
+                if (!confirm('@L["Booking.ConfirmMarkPaid"] ?? "Mark this booking as paid?"')) return;
+
+                var payload = { Id: parseInt(id, 10) };
+
+                markBtn.disabled = true;
+                markBtn.classList.add('disabled');
+
+                fetch('@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': getAntiForgeryToken(),
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                }).then(function (res) {
+                    if (!res.ok) return res.json().then(function (j) { throw j; });
+                    return res.json();
+                }).then(function (data) {
+                    if (data && data.success) {
+                        // update badge and button
+                        var badge = document.querySelector('.booking-status-badge');
+                        if (badge) {
+                            badge.className = 'booking-status-badge badge bg-success';
+                            badge.innerText = '@L["Booking.Status.Paid"]';
+                        }
+                        markBtn.classList.remove('btn-outline-primary');
+                        markBtn.classList.add('btn-success');
+                        markBtn.innerText = '@L["Booking.MarkedPaidLabel"] ?? "Paid"';
+                        markBtn.disabled = true;
+                    } else {
+                        alert(data?.error ?? '@L["Admin.OperationFailed"]');
+                        markBtn.disabled = false;
+                        markBtn.classList.remove('disabled');
+                    }
+                }).catch(function (err) {
+                    console.error(err);
+                    alert('@L["Admin.ServerError"]');
+                    markBtn.disabled = false;
+                    markBtn.classList.remove('disabled');
+                });
+            });
+        })();
+    </script>
+}
+
+

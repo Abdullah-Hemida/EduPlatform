@@ -1,0 +1,55 @@
+﻿@model Edu.Domain.Entities.SocialLink
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.Edit"] + " - " + L["Admin.SocialLinks"];
+}
+
+<h2>@L["Admin.Edit"] - @L["Admin.SocialLinks"]</h2>
+
+<form method="post" asp-action="Edit" novalidate>
+    @Html.AntiForgeryToken()
+    <input asp-for="Id" type="hidden" />
+
+    <div class="mb-3">
+        <label asp-for="Provider" class="form-label">@L["Admin.Provider"]</label>
+        <select asp-for="Provider" class="form-select" required>
+            <option value="">@L["Admin.SelectProvider"] ?? "Select provider"</option>
+            <option value="facebook" selected="@(Model.Provider == "facebook")">Facebook</option>
+            <option value="twitter" selected="@(Model.Provider == "twitter")">Twitter</option>
+            <option value="instagram" selected="@(Model.Provider == "instagram")">Instagram</option>
+            <option value="linkedin" selected="@(Model.Provider == "linkedin")">LinkedIn</option>
+            <option value="whatsapp" selected="@(Model.Provider == "whatsapp")">WhatsApp</option>
+            <option value="telegram" selected="@(Model.Provider == "telegram")">Telegram</option>
+            <option value="youtube" selected="@(Model.Provider == "youtube")">YouTube</option>
+            <option value="other" selected="@(Model.Provider == "other")">Other</option>
+        </select>
+        <span asp-validation-for="Provider" class="text-danger small"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Url" class="form-label">@L["Admin.Url"]</label>
+        <input asp-for="Url" class="form-control" placeholder="https://..." />
+        <span asp-validation-for="Url" class="text-danger small"></span>
+        <div class="form-text">@L["Admin.UrlHelp"] ?? "Full URL (https://...)"</div>
+    </div>
+
+    <div class="mb-3 form-check">
+        <input asp-for="IsVisible" class="form-check-input" />
+        <label asp-for="IsVisible" class="form-check-label">@L["Admin.Visible"]</label>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Order" class="form-label">@L["Admin.Order"]</label>
+        <input asp-for="Order" class="form-control" type="number" />
+        <span asp-validation-for="Order" class="text-danger small"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">@L["Admin.SaveChanges"] ?? "Save"</button>
+    <a asp-action="Index" class="btn btn-light ms-2">@L["Admin.Cancel"]</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+

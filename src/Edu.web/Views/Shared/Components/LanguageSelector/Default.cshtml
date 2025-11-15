@@ -1,0 +1,26 @@
+﻿@model Edu.Web.ViewComponents.LanguageSelectorModel
+@using System.Web
+@{
+    var lang = Model.CurrentCulture;
+    var returnUrlEncoded = HttpUtility.UrlEncode(Model.ReturnUrl ?? "/");
+}
+
+<div class="language-selector-component">
+    <select id="langSelectComponent" class="form-select form-select-sm">
+        <option value="en" selected="@(lang == "en" ? "selected" : null)">English</option>
+        <option value="it" selected="@(lang == "it" ? "selected" : null)">Italiano</option>
+        <option value="ar" selected="@(lang == "ar" ? "selected" : null)">العربية</option>
+    </select>
+
+    <script>
+        (function(){
+            var sel = document.getElementById('langSelectComponent');
+            sel.addEventListener('change', function () {
+                var culture = sel.value;
+                // navigate to GET endpoint that sets culture cookie and redirects back
+                var returnUrl = '@returnUrlEncoded';
+                window.location.href = '/Localization/SetLanguage?culture=' + culture + '&returnUrl=' + returnUrl;
+            });
+        })();
+    </script>
+</div>

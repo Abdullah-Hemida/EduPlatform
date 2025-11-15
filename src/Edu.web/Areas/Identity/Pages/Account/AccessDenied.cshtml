@@ -1,0 +1,21 @@
+﻿@page
+@model Microsoft.AspNetCore.Mvc.RazorPages.PageModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer Localizer
+
+@{
+    Layout = "/Views/Shared/_MentorLayout.cshtml";
+    ViewData["Title"] = Localizer["AccessDenied.Title"];
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="alert alert-warning text-center">
+                <h4>@Localizer["AccessDenied.Title"]</h4>
+                <p>@Localizer["AccessDenied.Message"]</p>
+                <a class="btn btn-primary" href="/">@Localizer["Nav.Home"]</a>
+            </div>
+        </div>
+    </div>
+</div>
+

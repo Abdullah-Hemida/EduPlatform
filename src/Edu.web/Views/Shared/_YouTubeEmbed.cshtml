@@ -1,0 +1,148 @@
+﻿@* Views/Shared/_YouTubeEmbed.cshtml *@
+@model string
+@{
+    var videoId = (Model ?? "").Trim();
+    if (string.IsNullOrEmpty(videoId))
+    {
+        <div class="alert alert-warning small">@("No video available")</div>
+        ;
+        return;
+    }
+
+    var qs = "controls=1&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1";
+    var src = $"https://www.youtube-nocookie.com/embed/{videoId}?{qs}";
+    var sandbox = "allow-scripts allow-same-origin allow-presentation";
+    var iframeId = $"yt-sandbox-{videoId}";
+}
+<div class="youtube-embed-wrapper" data-videoid="@videoId" style="max-width:100%;margin:0 auto;">
+    <div class="ratio ratio-16x9 position-relative">
+        <iframe id="@iframeId"
+                class="youtube-embed-iframe rounded"
+                src="@src"
+                title="YouTube video"
+                frameborder="0"
+                loading="lazy"
+                sandbox="@sandbox"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"></iframe>
+    </div>
+</div>
+
+
+
+@section Scripts {
+    <script>
+        (function() {
+            // Basic runtime test: try to create a YT.Player instance (works only when enablejsapi allowed)
+            // and check if calls succeed; if they fail, we can fall back to non-sandbox iframe after user confirmation.
+
+            var videoId = '@videoId';
+            var iframeId = '@iframeId';
+            var attemptedFallback = false;
+
+            // Helper to replace the iframe with non-sandboxed version (after confirmation)
+            function replaceWithFallback() {
+                if (attemptedFallback) return;
+                attemptedFallback = true;
+                var wrap = document.querySelector('.youtube-embed-wrapper[data-videoid="' + videoId + '"]');
+                if (!wrap) return;
+
+                if (!confirm('The secure embed did not initialize properly in your browser. Replace with regular embed (may allow navigation to YouTube)?')) return;
+
+                // build non-sandbox iframe (still using youtube-nocookie + modestbranding)
+                var qs = 'controls=1&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1';
+                var src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?' + qs;
+                var newI = document.createElement('iframe');
+                newI.setAttribute('src', src);
+                newI.setAttribute('title', 'YouTube video');
+                newI.setAttribute('frameborder', '0');
+                newI.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen');
+                newI.setAttribute('allowfullscreen', '');
+                newI.style.width = '100%';
+                newI.style.height = '100%';
+
+                // replace existing iframe container
+                var ratio = wrap.querySelector('.ratio');
+                if (ratio) {
+                    var old = ratio.querySelector('iframe');
+                    if (old) old.remove();
+                    ratio.appendChild(newI);
+                }
+            }
+
+            // Try to load YT API and create a simple player test (only to verify player responds)
+            function loadYouTubeApiOnce(callback) {
+                if (window.YT && window.YT.Player) {
+                    return callback();
+                }
+                if (window._ytApiLoading) {
+                    var t = setInterval(function () {
+                        if (window.YT && window.YT.Player) {
+                            clearInterval(t);
+                            callback();
+                        }
+                    }, 150);
+                    return;
+                }
+                window._ytApiLoading = true;
+                var tag = document.createElement('script');
+                tag.src = "https://www.youtube.com/iframe_api";
+                tag.onload = function() { /* loaded */ };
+                document.head.appendChild(tag);
+
+                // wait for API global
+                var poll = setInterval(function() {
+                    if (window.YT && window.YT.Player) {
+                        clearInterval(poll);
+                        callback();
+                    }
+                }, 150);
+
+                // safety timeout -> fallback decision
+                setTimeout(function() {
+                    if (!(window.YT && window.YT.Player)) {
+                        clearInterval(poll);
+                        // If API didn't become available after 4s, we consider fallback
+                        try { replaceWithFallback(); } catch (e) { /* ignore */ }
+                    }
+                }, 4000);
+            }
+
+            loadYouTubeApiOnce(function() {
+                try {
+                    // create an "invisible" API player just to test if sandbox permits the API to operate
+                    var p = new YT.Player(iframeId, {
+                        events: {
+                            'onReady': function(ev) {
+                                // good: API works. We won't interfere with native controls.
+                                // Optionally hide the hint overlay:
+                                var wrap = document.querySelector('.youtube-embed-wrapper[data-videoid="' + videoId + '"]');
+                                if (wrap) {
+                                    var hint = wrap.querySelector('.youtube-embed-hint');
+                                    if (hint) hint.style.display = 'none';
+                                }
+                                // Do not call play automatically; we leave native controls intact.
+                            },
+                            'onError': function(ev) {
+                                // something blocked; propose fallback
+                                replaceWithFallback();
+                            }
+                        }
+                    });
+
+                    // add a timeout: if player hasn't called onReady within X ms, fallback
+                    setTimeout(function() {
+                        // if player API hasn't set some expected prop, fallback:
+                        if (!p || typeof p.getPlayerState !== 'function') {
+                            replaceWithFallback();
+                        }
+                    }, 2500);
+                } catch (ex) {
+                    // failure likely due to sandbox restrictions in some browsers
+                    replaceWithFallback();
+                }
+            });
+
+        })();
+    </script>
+}
+

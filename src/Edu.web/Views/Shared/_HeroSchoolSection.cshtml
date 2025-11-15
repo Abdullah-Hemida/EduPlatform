@@ -1,0 +1,19 @@
+﻿@*  Partial view for the School page Hero Section *@
+@model HeroVm
+@using System.Globalization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var textAlign = lang == "ar" ? "right" : "left";
+
+    var defaultImg = Url.Content("~/vendor/mentor/img/school-hero.png");
+    var img = Model?.ImagePublicUrl ?? defaultImg;
+}
+
+<section id="Schoolhero" class="hero section" style="text-align:@textAlign; direction:@dir;">
+    <img src="@img" alt="School Hero" class="mt-1 w-100" data-aos="fade-in" />
+</section>
+
+

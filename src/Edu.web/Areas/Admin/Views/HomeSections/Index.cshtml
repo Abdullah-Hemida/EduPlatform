@@ -1,0 +1,36 @@
+﻿@model List<HomeSection>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+<h2>@L["Admin.HomeSections"]</h2>
+
+<p>
+    <a asp-action="Create" class="btn btn-primary">@L["Admin.CreateNewSection"]</a>
+</p>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>@L["Admin.Order"]</th>
+            <th>@L["Admin.TitlePreview"]</th>
+            <th>@L["Admin.ItemsCount"]</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var s in Model)
+        {
+            var t = s.Translations?.FirstOrDefault(x => x.Culture == "en") ?? s.Translations?.FirstOrDefault();
+            <tr>
+                <td>@s.Order</td>
+                <td>@(t?.Title ?? "-")</td>
+                <td>@(s.Items?.Count ?? 0)</td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary">@L["Admin.Edit"]</a>
+                    <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">@L["Admin.Delete"]</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+

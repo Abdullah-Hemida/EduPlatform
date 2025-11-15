@@ -1,0 +1,65 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.TeacherCourseCreateVm
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.Create"] + " - " + L["Nav.TeacherDashboard"];
+    var categories = ViewBag.CategorySelect as SelectList;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3 mt-3">
+     <h4 class="mb-0">@L["Course.CreateNew"]</h4>
+     <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-outline-secondary btn-sm ps-3 pe-3 ">@L["Admin.BackToList"]</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form asp-action="Create" method="post" enctype="multipart/form-data" novalidate>
+            @Html.AntiForgeryToken()
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label small">@L["ReactiveCourse.Title"]</label>
+                    <input asp-for="Title" class="form-control form-control-sm" />
+                    <span asp-validation-for="Title" class="text-danger small"></span>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small">@L["Admin.Description"]</label>
+                    <textarea asp-for="Description" class="form-control form-control-sm" rows="4"></textarea>
+                    <span asp-validation-for="Description" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small">@L["Admin.Category"]</label>
+                    <select asp-for="CategoryId" asp-items="ViewBag.CategorySelect" class="form-select form-select-sm"></select>
+                    <span asp-validation-for="CategoryId" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small">@L["Admin.CoverImage"]</label>
+                    <input asp-for="CoverImage" type="file" class="form-control form-control-sm" />
+                    <div class="form-text small">@L["Admin.CoverImageHelp"]</div>
+                    <span asp-validation-for="CoverImage" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small">@L["Course.Price"]</label>
+                    <input asp-for="Price" class="form-control form-control-sm" />
+                    <span asp-validation-for="Price" class="text-danger small"></span>
+                </div>
+
+                <div class="col-12 text-end">
+                    <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-outline-secondary btn-sm me-2">@L["Button.Cancel"]</a>
+                    <button type="submit" class="btn btn-primary btn-sm">@L["Button.Save"]</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+

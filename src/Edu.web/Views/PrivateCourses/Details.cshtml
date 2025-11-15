@@ -1,0 +1,117 @@
+﻿@model Edu.Web.ViewModels.PrivateCourseDetailsVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Edu.Web.Resources.SharedResource> L
+@using System.Globalization
+
+@{
+    ViewData["Title"] = Model.Title;
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var textAlign = lang == "ar" ? "right" : "left";
+}
+
+<div class="row g-3" dir="@dir" style="text-align:@textAlign">
+    <div class="col-lg-8">
+        <div class="card mb-3 shadow-sm">
+            @if (!string.IsNullOrEmpty(Model.CoverPublicUrl))
+            {
+                <img src="@Model.CoverPublicUrl" class="course-cover card-img-top" alt="@Model.Title" />
+            }
+            <div class="card-body course-body">
+                <div class="course-header mb-3">
+                    <h2 class="mb-1">@Model.Title</h2>
+                    <div class="small meta">@Model.CategoryName &nbsp;•&nbsp; @Model.TeacherName</div>
+                </div>
+
+                <div class="course-desc mb-4">@Html.Raw((Model.Description ?? "").Replace("\n", "<br/>"))</div>
+
+                <!-- Action area: single row that adapts for mobile -->
+                <div class="d-flex flex-column flex-md-row align-items-stretch align-items-md-center justify-content-between course-action-row">
+                    <div class="d-flex align-items-center gap-2 mb-2 mb-md-0">
+                        <div class="hstack gap-2">
+                            <div class="fw-semibold fs-5">@Model.PriceLabel</div>
+                            <div class="text-muted small d-none d-md-inline">@L["Purchase.PriceNote"]</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        @* Actions: Request / Cancel / My courses *@
+                        @if (Model.IsPurchased)
+                        {
+                            <a asp-area="Student" asp-controller="PrivateCourses" asp-action="MyPurchases" class="btn btn-success btn-sm">
+                                <i class="fa fa-book me-1" aria-hidden="true"></i> @(L["ReactiveCourse.MyEnrollments"] ?? "My courses")
+                            </a>
+                        }
+                        else if (Model.HasPendingPurchase)
+                        {
+                            <form asp-area="Student" asp-controller="PrivateCourses" asp-action="CancelPurchase" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                    <i class="fa fa-times me-1" aria-hidden="true"></i> @(L["Purchase.CancelRequest"] ?? "Cancel request")
+                                </button>
+                            </form>
+
+                            <button class="btn btn-outline-secondary btn-sm ms-2" disabled>
+                                <i class="fa fa-clock me-1" aria-hidden="true"></i> @(L["Purchase.Pending"] ?? "Pending")
+                            </button>
+                        }
+                        else
+                        {
+                            @if (!User?.Identity?.IsAuthenticated ?? false)
+                            {
+                                <a asp-area="Identity" asp-page="/Account/Register" class="btn btn-primary btn-sm">
+                                    <i class="fa fa-sign-in-alt me-1"></i> @(L["Account.Login"] ?? "Login / Register")
+                                </a>
+                            }
+                            else
+                            {
+                                <form asp-area="Student" asp-controller="PrivateCourses" asp-action="RequestPurchase" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="fa fa-cart-plus me-1"></i> @(L["Purchase.Request"] ?? "Request purchase")
+                                    </button>
+                                </form>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5>@L["Course.Info"]</h5>
+                <p class="small text-muted mb-2">@(L["Purchase.NotAccessible"] ?? "Course content is visible after purchase in your student area.")</p>
+            </div>
+        </div>
+    </div>
+
+    <aside class="col-lg-4">
+        <div class="card mb-3 sticky-aside">
+            <div class="card-body">
+                <h6 class="mb-3">@L["Course.Info"]</h6>
+
+                <dl class="row small course-info">
+                    <dt class="col-6 text-muted">@L["Purchase.Amount"]</dt>
+                    <dd class="col-6 text-end">@Model.PriceLabel</dd>
+
+                    <dt class="col-6 text-muted">@L["Admin.Category"]</dt>
+                    <dd class="col-6 text-end">@Model.CategoryName</dd>
+
+                    <dt class="col-6 text-muted">@L["Admin.Teachers"]</dt>
+                    <dd class="col-6 text-end">@Model.TeacherName</dd>
+                </dl>
+            </div>
+        </div>
+
+        <a asp-area="" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-light w-100">
+            <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
+            <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
+            @L["Common.Back"]
+        </a>
+    </aside>
+</div>
+
+
+

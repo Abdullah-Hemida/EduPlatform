@@ -1,0 +1,43 @@
+﻿@model IEnumerable<Edu.Domain.Entities.Level>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+     
+    ViewData["Title"] = L["Admin.Levels"];
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3 mt-3">
+    <div><h4 class="mb-0">@L["Admin.Levels"]</h4><small class="text-muted">@L["Admin.LevelsSubtitle"]</small></div>
+    <a class="btn btn-primary btn-sm ms-3 me-3" asp-action="Create">@L["Admin.AddLevel"] +</a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<table class="table table-sm">
+    <thead class="table-light"><tr><th>#</th><th>@L["Admin.Name"]</th><th style="width:120px">@L["Admin.Order"]</th><th style="width:160px"></th></tr></thead>
+    <tbody>
+        @foreach (var l in Model)
+        {
+            <tr>
+                <td>@l.Id</td>
+                <td>@l.Name</td>
+                <td>@l.Order</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@l.Id">@L["Button.Edit"]</a>
+                    <form method="post" asp-action="Delete" asp-route-id="@l.Id" class="d-inline" onsubmit="return confirm('@L["Admin.ConfirmDeleteLevel"]');">
+                        @Html.AntiForgeryToken()
+                        <button class="btn btn-sm btn-danger">@L["Admin.Delete"]</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+

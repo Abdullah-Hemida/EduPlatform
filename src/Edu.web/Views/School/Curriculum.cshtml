@@ -1,0 +1,93 @@
+﻿@model Edu.Web.ViewModels.CurriculumDetailsVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "~/Views/Shared/_MentorLayout.cshtml";
+    ViewData["Title"] = Model.Title;
+}
+
+<div class="container">
+    <div class="d-flex align-items-center mb-4">
+        <div>
+            <h2 class="mb-0">@Model.Title</h2>
+            <div class="small text-muted">@Model.Description</div>
+        </div>
+        <div class="ms-auto">
+            <a asp-controller="School" asp-action="Index" class="btn btn-outline-secondary btn-sm">@(L["Back"] ?? "Back")</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.CoverImageUrl))
+    {
+        <div class="mb-4">
+            <img src="@Model.CoverImageUrl" class="rounded w-100" style="height:300px;object-fit:cover" alt="@Model.Title" />
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="mb-3">
+                <h5 class="mb-3">@L["Admin.Modules"]</h5>
+
+                @foreach (var mod in Model.Modules)
+                {
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3">
+                                    <div class="badge bg-primary rounded-pill">@mod.Order</div>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-start justify-content-between">
+                                        <h6 class="mb-1">@mod.Title</h6>
+                                        <span class="small text-muted">@(mod.Lessons.Count()) @L["Admin.Lessons"]</span>
+                                    </div>
+
+                                    <div class="mt-2">
+                                        <ul class="list-unstyled mb-0">
+                                            @foreach (var lesson in mod.Lessons)
+                                            {
+                                                <li class="py-2 border-bottom d-flex align-items-center justify-content-between">
+                                                    <div>
+                                                        <a asp-controller="School" asp-action="Lesson" asp-route-id="@lesson.Id" class="fw-medium text-decoration-none">@(lesson.Order. ToString()) - @lesson.Title</a>
+                                                        <div class="small text-muted">@(!string.IsNullOrEmpty(lesson.Description) ? lesson.Description : "")</div>
+                                                    </div>
+                                                    <div class="text-end small">
+                                                        @if (!string.IsNullOrEmpty(lesson.YouTubeVideoId) || !string.IsNullOrEmpty(lesson.VideoUrl))
+                                                        {
+                                                            <span class="badge bg-outline-primary">@(L["Admin.Video"] ?? "Video")</span>
+                                                        }
+                                                        @if (lesson.Files?.Any() == true)
+                                                        {
+                                                            <span class="badge bg-outline-secondary ms-1">@lesson.Files.Count() @L["Admin.Files"]</span>
+                                                        }
+                                                    </div>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <aside class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h6 class="mb-2">@(L["Curriculum.Info"] ?? "Curriculum information")</h6>
+                    <dl class="row small">
+                        <dt class="col-5 text-muted">@L["Admin.Level"]</dt>
+                        <dd class="col-7 text-end">@Model.LevelId</dd>
+
+                        <dt class="col-5 text-muted">@L["Admin.Modules"]</dt>
+                        <dd class="col-7 text-end">@Model.Modules.Count()</dd>
+                    </dl>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+

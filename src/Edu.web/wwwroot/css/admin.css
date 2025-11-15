@@ -1,0 +1,529 @@
+﻿/*custom CSS for Admin */
+:root {
+    --sidebar-width: 250px;
+    --sidebar-collapsed: 80px;
+    --transition: 0.25s;
+}
+
+/* Sidebar base */
+#sidebar-wrapper {
+    width: var(--sidebar-width);
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0; /* LTR default */
+    z-index: 1;
+    padding-top: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transition: transform var(--transition) ease, width var(--transition) ease;
+}
+
+/* Place sidebar at right in RTL contexts */
+html[dir="rtl"] #sidebar-wrapper {
+    left: auto;
+    right: 0;
+}
+
+/* Page content should be under the navbar but above background */
+#page-content-wrapper {
+    position: relative;
+    z-index: 1; /* lower than sidebar so sidebar links are clickable */
+    margin-left: var(--sidebar-width);
+    transition: margin var(--transition) ease;
+}
+
+/* RTL content margin-right */
+html[dir="rtl"] #page-content-wrapper {
+    margin-left: 0;
+    margin-right: var(--sidebar-width);
+}
+
+/* Collapsed -> icons only (desktop/tablet) */
+#wrapper.sidebar-collapsed #sidebar-wrapper {
+    width: var(--sidebar-collapsed);
+    overflow: hidden;
+}
+
+#wrapper.sidebar-collapsed #page-content-wrapper {
+    margin-left: var(--sidebar-collapsed);
+}
+
+html[dir="rtl"] #wrapper.sidebar-collapsed #page-content-wrapper {
+    margin-left: 0;
+    margin-right: var(--sidebar-collapsed);
+}
+
+/* Hide nav text when collapsed (desktop) */
+#wrapper.sidebar-collapsed .nav-text {
+    display: none !important;
+}
+
+/* Center icons when collapsed */
+#wrapper.sidebar-collapsed .nav-link {
+    justify-content: center;
+    text-align: center;
+    padding-left: .75rem;
+    padding-right: .75rem;
+}
+
+/* Mobile: hide sidebar off-screen when hidden class present */
+#sidebar-wrapper {
+    transform: translateX(0);
+}
+
+html[dir="rtl"] .navbar .ms-auto {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+/* LTR hide: slide left; RTL hide: slide right (different classes handled by JS) */
+#wrapper.sidebar-hidden #sidebar-wrapper {
+    transform: translateX(-110%);
+}
+
+#wrapper.sidebar-hidden-rtl #sidebar-wrapper {
+    transform: translateX(110%);
+}
+
+/* On small screens, content uses full width */
+@media (max-width: 991.98px) {
+    #sidebar-wrapper {
+        position: fixed;
+        width: var(--sidebar-width);
+    }
+
+    #page-content-wrapper {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
+/* Sidebar link visuals */
+#sidebar-wrapper .nav-link {
+    color: #e6eef8;
+    border-left: 4px solid transparent;
+    padding: .65rem 0.8rem;
+    display: flex;
+    align-items: center;
+    pointer-events: auto; /* ensure clickable */
+}
+html[dir="rtl"] #sidebar-wrapper .nav-link {
+    border-left: none;
+    border-right: 3px solid transparent;
+}
+
+    html[dir="rtl"] #sidebar-wrapper .nav-link.active {
+        border-right-color: #0d6efd; /* active highlight */
+        border-left-color: transparent;
+    }
+
+    /* Hover/active */
+    #sidebar-wrapper .nav-link:hover {
+        background: rgba(255,255,255,0.03);
+        color: #fff;
+        text-decoration: none;
+    }
+
+    #sidebar-wrapper .nav-link.active {
+        background: rgba(255,255,255,0.06);
+        color: #fff;
+        border-left-color: #0d6efd;
+    }
+
+/* Icon width */
+.nav-icon {
+    width: 20px;
+    text-align: center;
+}
+
+/* Topbar stays on top (toggle must be clickable) */
+.navbar {
+    z-index: 1080;
+}
+
+/* Sidebar under navbar, above page content */
+#sidebar-wrapper {
+    z-index: 1060;
+}
+
+#page-content-wrapper {
+    z-index: 1;
+}
+/* ensure navbar and its toggler sit above sidebar on all sizes */
+.navbar {
+    z-index: 1100; /* higher than sidebar */
+}
+
+/* ensure the toggle button itself is on top (in case of overlapping content) */
+#sidebarToggle {
+    z-index: 1110;
+    position: relative; /* ensures z-index applies */
+}
+
+/* slightly move the toggle left/right if needed to avoid overlap (optional) */
+@media (max-width: 991.98px) {
+    /* keep the toggler visible on small screens */
+    #sidebarToggle {
+        margin-left: .25rem;
+    }
+}
+/* On small screens, default to icons-only (collapsed) instead of hiding */
+@media (max-width: 991.98px) {
+    /* Make sidebar fixed and icons-only by default */
+    #sidebar-wrapper {
+        position: fixed;
+        width: var(--sidebar-collapsed); /* icons-only by default */
+        transform: translateX(0); /* no off-screen hiding */
+    }
+
+    /* Page content uses collapsed width as well */
+    #page-content-wrapper {
+        margin-left: var(--sidebar-collapsed);
+        margin-right: 0;
+    }
+
+    /* RTL: page content uses margin-right */
+    html[dir="rtl"] #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-collapsed);
+    }
+
+    /* When we want to expand sidebar on mobile, apply this class on wrapper */
+    #wrapper.sidebar-expanded-mobile #sidebar-wrapper {
+        width: var(--sidebar-width); /* expand to full width */
+    }
+
+    #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: var(--sidebar-width);
+    }
+
+    html[dir="rtl"] #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-width);
+    }
+
+    /* Hide nav text by default (icons-only) */
+    .nav-text {
+        display: none !important;
+    }
+
+    /* When sidebar is expanded-mobile, show nav text */
+    #wrapper.sidebar-expanded-mobile .nav-text {
+        display: inline-block !important;
+    }
+
+    /* Ensure nav links center icon when collapsed */
+    #sidebar-wrapper .nav-link {
+        white-space: nowrap;
+    }
+
+    #wrapper.sidebar-collapsed .nav-link,
+    /* collapsed on mobile (same visual) */
+    #sidebar-wrapper {
+        /* leave appearance */
+    }
+}
+
+/* admin.css additions for ManageUsers */
+.table img.rounded-circle {
+    display: block;
+}
+
+.table .text-truncate {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+}
+
+.table .badge {
+    font-size: .75rem;
+    padding: .35em .45em;
+}
+
+.card .card-body .alert {
+    margin-bottom: 1rem;
+}
+
+.role-filter.active {
+    background-color: #0d6efd;
+    color: #fff;
+    border-color: #0d6efd;
+}
+
+.role-filter .badge {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+}
+/* muted look for soft-deleted rows */
+.table.table-secondary td,
+.table.table-secondary th {
+    background-color: #f8f9fa !important; /* light muted */
+    color: #6c757d;
+}
+/* ---------- Admin header compact layout ---------- */
+.admin-header {
+    padding: .5rem 0;
+}
+
+.header-left h3 {
+    font-size: 1.125rem;
+    margin-bottom: 0.15rem;
+}
+
+.header-left .small {
+    display: block;
+}
+
+/* Make role buttons compact and consistent */
+.role-filters-group .btn {
+    border-radius: .375rem;
+    padding: .35rem .6rem;
+    font-size: .85rem;
+}
+
+    .role-filters-group .btn .badge {
+        font-size: .7rem;
+        padding: .25rem .35rem;
+    }
+
+/* Deleted filter group compact */
+.btn-group[aria-label="Deleted filter"] .btn {
+    padding: .35rem .55rem;
+    font-size: .82rem;
+}
+
+/* DataTables placeholders layout */
+.table-controls {
+    min-width: 200px;
+}
+
+/* Ensure datatables controls look compact */
+.dataTables_length select.form-select {
+    height: calc(1.6em + .5rem); /* slightly smaller */
+    padding: .15rem .4rem;
+    font-size: .85rem;
+}
+
+.dataTables_filter input.form-control {
+    height: calc(1.6em + .5rem);
+    padding: .15rem .5rem;
+    font-size: .88rem;
+    width: 220px; /* reasonable default; mobile will wrap */
+}
+.student-allow-btn {
+    min-width: 110px;
+}
+
+    .student-allow-btn i {
+        font-size: 0.95rem;
+    }
+/* Small screens: stack nicely */
+@media (max-width: 767.98px) {
+    .admin-header {
+        gap: .5rem;
+    }
+
+    .header-left, .header-center, .header-right {
+        width: 100%;
+    }
+
+    .table-controls {
+        justify-content: flex-start;
+        width: 100%;
+        margin-top: .25rem;
+    }
+
+    .dataTables_filter input.form-control {
+        width: 100% !important;
+    }
+}
+
+/* RTL adjustments: flip margins and order */
+html[dir="rtl"] .header-right {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+html[dir="rtl"] .role-filters-group .btn .me-1 {
+    margin-right: .5rem;
+    margin-left: 0;
+}
+
+html[dir="rtl"] .table-controls {
+    direction: ltr;
+}
+/* --- Sidebar / collapsed RTL icon centering fix --- */
+
+/* When collapsed, make icons centered both LTR and RTL */
+#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link {
+    justify-content: center;
+    text-align: center;
+    padding-left: .5rem;
+    padding-right: .5rem;
+}
+
+    /* Ensure the icon itself is centered inside the link */
+    #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link .nav-icon {
+        margin: 0 auto;
+        display: inline-block;
+    }
+
+/* RTL: when collapsed ensure icons are centered (not left-aligned) */
+html[dir="rtl"] #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link,
+html[dir="rtl"] #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link .nav-icon {
+    justify-content: center;
+    text-align: center;
+    padding-left: .5rem;
+    padding-right: .5rem;
+    margin: 0 auto;
+}
+
+/* Active link highlight: LTR uses left border, RTL uses right border */
+#sidebar-wrapper .nav-link.active {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+}
+
+    #sidebar-wrapper .nav-link.active .nav-icon {
+        color: #fff;
+    }
+
+#sidebar-wrapper .nav-link.active {
+    border-left-color: #0d6efd;
+}
+
+html[dir="rtl"] #sidebar-wrapper .nav-link.active {
+    border-left-color: transparent;
+    border-right-color: #0d6efd;
+}
+
+/* When collapsed show subtle background even without text */
+#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link.active {
+    background: rgba(13,110,253,0.12);
+}
+
+/* Ensure clickable area remains full-width when collapsed */
+#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link {
+    width: 100%;
+}
+
+/* On small screens, show icons-only by default but allow expand */
+@media (max-width: 991.98px) {
+    /* default mobile: icons-only */
+    #sidebar-wrapper {
+        width: var(--sidebar-collapsed);
+    }
+
+    #page-content-wrapper {
+        margin-left: var(--sidebar-collapsed);
+    }
+
+    /* expanded mobile (when wrapper has sidebar-expanded-mobile) */
+    #wrapper.sidebar-expanded-mobile #sidebar-wrapper {
+        width: var(--sidebar-width);
+    }
+
+    #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: var(--sidebar-width);
+    }
+
+    /* allow RTL mirrored behaviour */
+    html[dir="rtl"] #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-collapsed);
+    }
+}
+
+/* --- Curriculum / buttons helpers --- */
+.curriculum-header {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.curriculum-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.curriculum-actions {
+    margin-inline-start: auto; /* works with direction: bootstrap utilities as well */
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+}
+
+/* When RTL flip the actions order visually (so primary button keeps to the same visual side) */
+html[dir="rtl"] .curriculum-actions {
+    flex-direction: row-reverse;
+    margin-inline-start: 0;
+    margin-inline-end: auto;
+}
+
+/* smaller buttons in list for lessons */
+.lesson-action-btn {
+    padding: .25rem .5rem;
+    font-size: .82rem;
+}
+
+/* Nice card spacing for modules and lessons */
+.module-card {
+    margin-bottom: .9rem;
+}
+
+.lesson-item {
+    padding: .5rem 0.5rem;
+    border-bottom: 1px dashed rgba(0,0,0,0.04);
+}
+
+    .lesson-item:last-child {
+        border-bottom: none;
+    }
+
+/* compact dataTable control visual tweaks kept from earlier prefs */
+.dataTables_length select.form-select {
+    height: calc(1.6em + .4rem);
+    padding: .15rem .4rem;
+    font-size: .85rem;
+}
+
+.dataTables_filter input.form-control {
+    height: calc(1.6em + .4rem);
+    padding: .15rem .5rem;
+    font-size: .88rem;
+    width: 220px;
+}
+
+/* small utilities to keep header thin in admin page */
+.admin-header .small {
+    display: block;
+    margin-top: .125rem;
+    color: #6c757d;
+    font-size: .85rem;
+}
+
+/* put into your page CSS or site stylesheet */
+.btn-filter .btn {
+    min-width: 110px; /* optional: make buttons a bit wider */
+    white-space: nowrap;
+}
+
+    .btn-filter .btn + .btn {
+        margin-left: .5rem;
+    }
+
+@media (max-width: 767.98px) {
+    .btn-filter .btn {
+        min-width: auto;
+    }
+}
+.dash-card {
+    padding: 15px 5px !important;
+}

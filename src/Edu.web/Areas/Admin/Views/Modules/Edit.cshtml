@@ -1,0 +1,29 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.ModuleEditViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+     
+    ViewData["Title"] = L["Admin.EditModule"];
+}
+<div class="card">
+    <div class="card-body">
+        <h4>@L["Admin.EditModule"]</h4>
+        <form asp-action="Edit" method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <input asp-for="Id" type="hidden" />
+            <input asp-for="CurriculumId" type="hidden" />
+            <div class="col-12">
+                <label class="form-label">@L["Admin.Title"]</label>
+                <input asp-for="Title" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">@L["Admin.Order"]</label>
+                <input asp-for="Order" class="form-control" />
+            </div>
+            <div class="col-12">
+                <button class="btn btn-primary">@L["Admin.SaveChanges"]</button>
+                <a asp-action="Details" asp-controller="Curricula" asp-area="Admin" asp-route-id="@Model.CurriculumId" class="btn btn-link">@L["Button.Cancel"]</a>
+            </div>
+        </form>
+    </div>
+</div>
+

@@ -1,0 +1,56 @@
+﻿@model Edu.Web.ViewModels.PaginationVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    var page = Model?.Page ?? 1;
+    var total = Model?.TotalPages ?? 1;
+    var pageSize = Model?.PageSize ?? 9;
+    var levelId = Model?.LevelId;
+}
+
+@if (total > 1)
+{
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center flex-wrap">
+            <li class="page-item @(page == 1 ? "disabled" : "")">
+                <a class="page-link" asp-action="Index" asp-route-levelId="@(levelId ?? (int?)null)" asp-route-page="1" asp-route-pageSize="@pageSize" aria-label="First">
+                    &laquo;
+                </a>
+            </li>
+
+            <li class="page-item @(page == 1 ? "disabled" : "")">
+                <a class="page-link" asp-action="Index" asp-route-levelId="@(levelId ?? (int?)null)" asp-route-page="@(Math.Max(1, page - 1))" asp-route-pageSize="@pageSize" aria-label="Previous">
+                    &lsaquo;
+                </a>
+            </li>
+
+            @* Show a small window of pages: current ±2 *@
+            @{
+                int start = Math.Max(1, page - 2);
+                int end = Math.Min(total, page + 2);
+                if (page <= 3) { start = 1; end = Math.Min(total, 5); }
+                if (page > total - 3) { end = total; start = Math.Max(1, total - 4); }
+            }
+
+            @for (int p = start; p <= end; p++)
+            {
+                <li class="page-item @(p == page ? "active" : "")">
+                    <a class="page-link" asp-action="Index" asp-route-levelId="@(levelId ?? (int?)null)" asp-route-page="@p" asp-route-pageSize="@pageSize">@p</a>
+                </li>
+            }
+
+            <li class="page-item @(page == total ? "disabled" : "")">
+                <a class="page-link" asp-action="Index" asp-route-levelId="@(levelId ?? (int?)null)" asp-route-page="@(Math.Min(total, page + 1))" asp-route-pageSize="@pageSize" aria-label="Next">
+                    &rsaquo;
+                </a>
+            </li>
+
+            <li class="page-item @(page == total ? "disabled" : "")">
+                <a class="page-link" asp-action="Index" asp-route-levelId="@(levelId ?? (int?)null)" asp-route-page="@total" asp-route-pageSize="@pageSize" aria-label="Last">
+                    &raquo;
+                </a>
+            </li>
+        </ul>
+    </nav>
+}
+

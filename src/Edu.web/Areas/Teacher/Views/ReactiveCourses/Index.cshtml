@@ -1,0 +1,176 @@
+﻿@model List<Edu.Web.Areas.Teacher.ViewModels.ReactiveCourseListItemVm>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["ReactiveCourse.MyReactiveCourses"];
+    var show = (ViewData["Show"] as string ?? "active").ToLowerInvariant();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0">@L["ReactiveCourse.MyReactiveCourses"]</h3>
+
+    <a asp-area="Teacher"
+       asp-controller="ReactiveCourses"
+       asp-action="Create"
+       class="btn btn-primary ps-3 pe-3">
+        @L["ReactiveCourse.CreateCourse"] +
+    </a>
+</div>
+
+<!-- FILTER TABS -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link @(show == "active" ? "active" : "")"
+           asp-area="Teacher"
+           asp-controller="ReactiveCourses"
+           asp-action="Index"
+           asp-route-show="active">
+            <i class="fas fa-play-circle me-1"></i>
+            @L["ReactiveCourse.Active"]
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link @(show == "archived" ? "active" : "")"
+           asp-area="Teacher"
+           asp-controller="ReactiveCourses"
+           asp-action="Index"
+           asp-route-show="archived">
+            <i class="fas fa-archive me-1"></i>
+            @L["ReactiveCourse.IsArchived"]
+        </a>
+    </li>
+</ul>
+
+<div class="row g-3">
+    @foreach (var course in Model)
+    {
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+
+                @if (!string.IsNullOrEmpty(course.CoverPublicUrl))
+                {
+                    <img src="@course.CoverPublicUrl"
+                         alt="@course.Title"
+                         class="card-img-top"
+                         style="height:200px; object-fit:cover" />
+                }
+
+            <div class="card-body d-flex flex-column gap-3">
+                <div class="d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-1">@course.Title</h5>
+                    <div class="fw-semibold mb-2">@course.PricePerMonthLabel</div>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="small text-muted">
+                        <strong>@course.DurationMonths</strong> : @L["ReactiveCourse.Months"]
+                    </div>
+
+                    <div class="small text-muted">
+                        @L["ReactiveCourse.Capacity"] :
+                        <strong>
+                            @(course.Capacity == 0
+                                                        ? (L["ReactiveCourse.Unlimited"] ?? "Unlimited")
+                                                        : course.Capacity.ToString())
+                        </strong>
+                    </div>
+                </div>
+
+                    <!-- Archived badge -->
+                @if (course.IsArchived)
+                    {
+                        <div class="badge bg-danger text-uppercase">
+                            @L["ReactiveCourse.Archived"]
+                        </div>
+                    }
+
+                    <div class="d-flex align-items-center justify-content-between gap-2 mt-auto">
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Details"
+                           asp-route-id="@course.Id"
+                           class="btn btn-outline-primary btn-sm text-nowrap">
+                            @L["ReactiveCourse.Details&AddLessons"]
+                        </a>
+
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Edit"
+                           asp-route-id="@course.Id"
+                           class="btn btn-outline-secondary btn-sm text-nowrap">
+                            @L["Button.Edit"]
+                        </a>
+
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Delete"
+                           asp-route-id="@course.Id"
+                           class="btn btn-outline-danger btn-sm text-nowrap"
+                           onclick="return confirm('@L["ReactiveCourse.DeleteConfirmPrompt"]');">
+                            <i class="fas fa-trash-alt me-1"></i>
+                            @L["Button.Delete"]
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+
+@* @model List<Edu.Web.Areas.Teacher.ViewModels.ReactiveCourseListItemVm>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+    ReactiveCourse.EditReactiveCourse
+@{
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = L["ReactiveCourse.MyReactiveCourses"];
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0">@L["ReactiveCourse.MyReactiveCourses"]</h3>
+    <a class="btn btn-primary" asp-action="Create">
+        <i class="fas fa-plus me-1"></i> @L["ReactiveCourse.CreateCourse"]
+    </a>
+</div>
+
+<div class="row g-3">
+    @foreach (var course in Model)
+    {
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body d-flex flex-column gap-3">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <h5 class="card-title mb-1">@course.Title</h5>
+                        <div class="fw-semibold mb-2">@course.PricePerMonthLabel</div>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between small text-muted">
+                        <div>@L["ReactiveCourse.Months"]: <strong>@course.DurationMonths</strong></div>
+                        <div>
+                            @L["ReactiveCourse.Capacity"]:
+                            <strong>@(course.Capacity == 0 ? L["ReactiveCourse.Unlimited"] ?? "Unlimited" : course.Capacity.ToString())</strong>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between gap-2 mt-auto">
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@course.Id"
+                           class="btn btn-outline-primary btn-sm text-nowrap">
+                            <i class="fas fa-eye me-1"></i> @L["ReactiveCourse.Details&AddLessons"]
+                        </a>
+
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Edit" asp-route-id="@course.Id"
+                           class="btn btn-outline-secondary btn-sm text-nowrap">
+                            <i class="fas fa-edit me-1"></i> @L["ReactiveCourse.EditReactiveCourse"]
+                        </a>
+
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Delete" asp-route-id="@course.Id"
+                           class="btn btn-outline-danger btn-sm text-nowrap"
+                           onclick="return confirm('@L["ReactiveCourse.DeleteConfirmPrompt"]');">
+                            <i class="fas fa-trash-alt me-1"></i> @L["Button.Delete"]
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div> *@
+
+
+
+
+

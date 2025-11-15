@@ -1,0 +1,360 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.TeacherCourseDetailsVm
+@using System.Globalization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = Model.Title ?? L["Admin.CurriculumDetails"];
+
+    string crop(string? s, int len = 140) => string.IsNullOrEmpty(s) ? "" : (s.Length <= len ? s : s.Substring(0, len) + "…");
+
+    var isOwner = Model.IsOwner;
+    var isAdmin = User.IsInRole("Admin");
+}
+
+<div class="row mb-3">
+    <div class="col-md-8">
+        <div class="d-flex align-items-start gap-3">
+            @if (!string.IsNullOrEmpty(Model.PublicCoverUrl))
+            {
+                <img src="@Model.PublicCoverUrl" alt="@Model.Title" class="rounded" style="width:160px;height:100px;object-fit:cover" />
+            }
+            <div>
+                <h3 class="mb-1">@Model.Title</h3>
+                <div class="small text-muted">@L["Admin.Category"]: @Model.CategoryName</div>
+                <p class="mt-2 text-muted">@crop(Model.Description, 260)</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 text-md-end mt-2 mt-md-0">
+        <div class="d-flex justify-content-md-end gap-2">
+            @if (isOwner)
+            {
+                <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Edit" asp-route-id="@Model.Id" class="btn rounded btn-outline-secondary btn-sm">@L["Button.Edit"]</a>
+            }
+
+            @if (isAdmin)
+            {
+                <form asp-area="Admin" asp-controller="PrivateCourses" asp-action="TogglePublish" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button type="submit" class="btn rounded btn-outline-@(Model.IsPublished ? "danger" : "success") btn-sm">
+                        @(Model.IsPublished? L["Admin.UnapproveTeacher"] : L["Button.Approve"])
+                    </button>
+                </form>
+
+                <button class="btn rounded btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#rejectBox" aria-expanded="false" aria-controls="rejectBox">@L["Button.Reject"]</button>
+            }
+
+            <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn rounded btn-light btn-sm">@L["Admin.BackToList"]</a>
+            <!-- Request / Cancel Publish from Details page -->
+            <div class="d-inline-block">
+                @if (Model.IsPublishRequested)
+                {
+                    <form asp-area="Teacher" asp-controller="PrivateCourses" asp-action="CancelRequestPublish" asp-route-id="@Model.Id" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            <i class="fa fa-ban me-1"></i> @(L["Admin.CancelPublishRequest"] ?? "Cancel publish request")
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <form asp-area="Teacher" asp-controller="PrivateCourses" asp-action="RequestPublish" asp-route-id="@Model.Id" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fa fa-upload me-1"></i> @(L["Admin.RequestPublish"] ?? "Request publish")
+                        </button>
+                    </form>
+                }
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left: modules & lessons -->
+    <div class="col-lg-8">
+        @if (Model.Modules == null || !Model.Modules.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="fw-semibold">@L["Admin.NoModulesYet"]</div>
+                    <div class="small text-muted">@L["Admin.AddModuleHint"]</div>
+                </div>
+            </div>
+        }
+        else
+        {
+            foreach (var m in Model.Modules.OrderBy(x => x.Order))
+            {
+                <div class="card mb-3">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div>
+                            <strong>@m.Title</strong>
+                            <span class="small text-muted ms-2">(@L["Admin.ModuleOrder"]: @m.Order)</span>
+                        </div>
+
+                        <div class="btn-group btn-group-sm">
+                            @if (isOwner)
+                            {
+                                <a asp-area="Teacher" asp-controller="Modules" asp-action="Edit" asp-route-id="@m.Id" class="btn rounded m-1 btn-outline-secondary">@L["Button.Edit"]</a>
+                                <form asp-area="Teacher" asp-controller="Modules" asp-action="Delete" asp-route-id="@m.Id" method="post" class="d-inline btn rounded" onsubmit="return confirm('@L["Admin.ConfirmDeleteModule"]');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="courseId" value="@Model.Id" />
+                                    <button class="btn rounded btn-outline-danger">@L["Admin.Delete"]</button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        @{
+                            var lessonsForModule = Model.LessonsByModule.ContainsKey(m.Id)
+                            ? Model.LessonsByModule[m.Id].OrderBy(l => l.Order)
+                            : Enumerable.Empty<PrivateLessonVm>();
+                        }
+
+                        @if (lessonsForModule.Any())
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var lesson in lessonsForModule)
+                                {
+                                    <div class="list-group-item d-flex align-items-start gap-3">
+                                        <div style="width:250px;">
+                                            @if (!string.IsNullOrEmpty(lesson.YouTubeVideoId))
+                                            {
+                                                @await Html.PartialAsync("_YouTubeEmbed", lesson.YouTubeVideoId)
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-light border rounded p-2 small text-center">@L["Admin.NoVideo"]</div>
+                                            }
+                                        </div>
+
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-start justify-content-between">
+                                                <div>
+                                                    <div class="fw-semibold">@lesson.Title</div>
+                                                    <div class="small text-muted">@L["Admin.LessonOrder"]: @lesson.Order</div>
+                                                </div>
+
+                                                <div class="btn-group gap-1 btn-group-sm ms-2">
+                                                    @if (isOwner)
+                                                    {
+                                                        <a asp-area="Teacher" asp-controller="Lessons" asp-action="Edit" asp-route-id="@lesson.Id" class="btn rounded btn-outline-secondary">@L["Button.Edit"]</a>
+                                                        <form asp-area="Teacher" asp-controller="Lessons" asp-action="Delete" asp-route-id="@lesson.Id" method="post" class="d-inline" onsubmit="return confirm('@L["Admin.ConfirmDeleteLesson"]');">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="courseId" value="@Model.Id" />
+                                                            <button class="btn rounded btn-outline-danger">@L["Admin.Delete"]</button>
+                                                        </form>
+                                                    }
+                                                    else if (isAdmin)
+                                                    {
+                                                        <a asp-area="Admin" asp-controller="Lessons" asp-action="Details" asp-route-id="@lesson.Id" class="btn rounded btn-outline-secondary">@L["Button.View"]</a>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            @if (lesson.Files != null && lesson.Files.Any())
+                                            {
+                                                <div class="mt-2">
+                                                    @foreach (var f in lesson.Files)
+                                                    {
+                                                        <a asp-area="Teacher" asp-controller="FileResources" asp-action="Download" asp-route-id="@f.Id" class="me-2 small">@f.Name</a>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-muted small">@L["Admin.NoLessonsYet"]</div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        @* Render lessons that are not in any module (moduleId == null -> key 0) *@
+        @if (Model.LessonsByModule.ContainsKey(0) && Model.LessonsByModule[0].Any())
+        {
+            <div class="card mb-3">
+                <div class="card-header"><strong>@L["Admin.Lessons"]</strong></div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @foreach (var lesson in Model.LessonsByModule[0].OrderBy(l => l.Order))
+                        {
+                            <div class="list-group-item d-flex align-items-start gap-3">
+                                <div style="width:250px;">
+                                    @if (!string.IsNullOrEmpty(lesson.YouTubeVideoId))
+                                    {
+                                        @await Html.PartialAsync("_YouTubeEmbed", lesson.YouTubeVideoId)
+                                    }
+                                    else
+                                    {
+                                        <div class="bg-light border rounded p-2 small text-center">@L["Admin.NoVideo"]</div>
+                                    }
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-start justify-content-between">
+                                        <div>
+                                            <div class="fw-semibold">@lesson.Title</div>
+                                            <div class="small text-muted">@L["Admin.LessonOrder"]: @lesson.Order</div>
+                                        </div>
+                                        <div class="btn-group gap-1 btn-group-sm ms-2">
+                                            @if (isOwner)
+                                            {
+                                                <a asp-area="Teacher" asp-controller="Lessons" asp-action="Edit" asp-route-id="@lesson.Id" class="btn rounded btn-outline-secondary">@L["Button.Edit"]</a>
+                                                <form asp-area="Teacher" asp-controller="Lessons" asp-action="Delete" asp-route-id="@lesson.Id" method="post" class="d-inline" onsubmit="return confirm('@L["Admin.ConfirmDeleteLesson"]');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="courseId" value="@Model.Id" />
+                                                    <button class="btn rounded btn-outline-danger">@L["Admin.Delete"]</button>
+                                                </form>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    @if (lesson.Files != null && lesson.Files.Any())
+                                    {
+                                        <div class="mt-2">
+                                            @foreach (var f in lesson.Files)
+                                            {
+                                                <a asp-area="Teacher" asp-controller="FileResources" asp-action="Download" asp-route-id="@f.Id" class="me-2 small">@f.Name</a>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Right column: inline forms and metadata -->
+    <aside class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="fw-semibold">@L["ReactiveCourse.Title"]</div>
+                <div class="small text-muted">@Model.Title</div>
+                <hr />
+                <div class="fw-semibold">@L["Admin.Category"]</div>
+                <div class="small text-muted">@Model.CategoryName</div>
+                <hr />
+                <div class="fw-semibold">@L["Admin.PurchaseRequestsSubtitle"]</div>
+                <div class="small text-muted">@L["Admin.NoRecords"]</div>
+            </div>
+        </div>
+
+        @if (isOwner)
+        {
+            <div class="card mb-3">
+                <div class="card-header"><strong>@L["Admin.AddModule"]</strong></div>
+                <div class="card-body">
+                    <form asp-area="Teacher" asp-controller="Modules" asp-action="Create" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
+                        <div class="mb-2">
+                            <label class="form-label small">@L["Admin.ModuleTitle"]</label>
+                            <input name="Title" class="form-control form-control-sm" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">@L["Admin.Order"]</label>
+                            <input name="Order" type="number" value="1" class="form-control form-control-sm" />
+                        </div>
+                        <div class="d-grid">
+                            <button class="btn btn-primary rounded btn-sm">@L["Admin.AddModule"]</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><strong>@L["Admin.AddLesson"]</strong></div>
+                <div class="card-body">
+                    <form asp-area="Teacher" asp-controller="Lessons" asp-action="Create" method="post" enctype="multipart/form-data">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
+                        <div class="mb-2">
+                            <label class="form-label small">@L["Admin.SelectModule"]</label>
+                            <select name="PrivateModuleId" class="form-select form-select-sm">
+                                <option value="">-- @L["Admin.SelectModule"] --</option>
+                                @foreach (var m in Model.Modules)
+                                {
+                                    <option value="@m.Id">@m.Title</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small">@L["Admin.LessonTitle"]</label>
+                            <input name="Title" class="form-control form-control-sm" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">@L["Admin.LessonOrder"]</label>
+                            <input name="Order" type="number" value="1" class="form-control form-control-sm" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">@L["Admin.YouTubeUrl"]</label>
+                            <input name="YouTubeUrl" class="form-control form-control-sm" />
+                            <div class="form-text small">@L["Admin.YouTubeHelp"]</div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small">@L["Admin.Files"]</label>
+                            <input type="file" name="Files" multiple class="form-control form-control-sm" />
+                            <div class="form-text small">@L["Admin.FilesHint"]</div>
+                        </div>
+
+                        <div class="d-grid">
+                            <button class="btn rounded btn-success btn-sm">@L["Admin.AddLesson"]</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+
+        @if (isAdmin)
+        {
+            <div class="collapse mt-3" id="rejectBox">
+                <div class="card">
+                    <div class="card-body">
+                        <form asp-area="Admin" asp-controller="PrivateCourses" asp-action="Reject" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <div class="mb-2">
+                                <label class="form-label small">@L["Purchase.AdminNote"]</label>
+                                <textarea name="adminNote" class="form-control form-control-sm" rows="3"></textarea>
+                            </div>
+                            <div class="d-grid">
+                                <button class="btn btn-danger btn-sm">@L["Button.Reject"]</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </aside>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            try {
+                var moduleSelect = document.querySelector('select[name="PrivateModuleId"], select[name="ModuleId"]');
+                if (moduleSelect && moduleSelect.options.length === 2) {
+                    moduleSelect.selectedIndex = 1;
+                }
+            } catch (e) { console && console.warn(e); }
+        })();
+    </script>
+}
+
+
+

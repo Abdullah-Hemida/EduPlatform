@@ -1,0 +1,70 @@
+﻿@model IEnumerable<Edu.Domain.Entities.HeroSection>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.HeroSections"] ?? "Hero Sections";
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">@L["Admin.HeroSections"]</h2>
+    <a asp-action="Create" class="btn btn-primary">@L["Admin.Create"]</a>
+</div>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>@L["Admin.Placement"]</th>
+            <th>@L["Admin.Title"]</th>
+            <th>@L["Admin.Image"]</th>
+            <th>@L["Admin.ActiveShort"]</th>
+            <th>@L["Admin.Order"]</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var h in Model.OrderBy(m => m.Placement).ThenBy(m => m.Order))
+        {
+            <tr>
+                <td>@h.Placement</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(h.TitleEn))
+                    {
+                        <div><strong>EN:</strong> @h.TitleEn</div>
+                    }
+                    @if (!string.IsNullOrEmpty(h.TitleIt))
+                    {
+                        <div><strong>IT:</strong> @h.TitleIt</div>
+                    }
+                    @if (!string.IsNullOrEmpty(h.TitleAr))
+                    {
+                        <div><strong>AR:</strong> @h.TitleAr</div>
+                    }
+                </td>
+                <td>
+                    @if (!string.IsNullOrEmpty(h.ImageStorageKey))
+                    {
+                        var publicUrl = Url.Content(h.ImageStorageKey);
+                        <img src="@publicUrl" style="height:48px;object-fit:cover;border-radius:6px" />
+                    }
+                </td>
+                <td>
+                    @if (h.IsActive)
+                    {
+                        <span class="badge bg-success">@(L["Admin.ActiveShort"] ?? "Active")</span>
+                    }
+                    else
+                    {
+
+                        <span class="badge bg-secondary">@(L["Admin.InactiveShort"] ?? "Inactive")</span>
+                    }
+                </td>
+                <td>@h.Order</td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@h.Id" class="btn btn-sm btn-outline-primary">@L["Admin.Edit"]</a>
+                    <a asp-action="Delete" asp-route-id="@h.Id" class="btn btn-sm btn-outline-danger">@L["Admin.Delete"]</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+

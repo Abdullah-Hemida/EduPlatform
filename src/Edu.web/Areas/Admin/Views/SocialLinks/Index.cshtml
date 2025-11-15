@@ -1,0 +1,39 @@
+﻿@model List<Edu.Domain.Entities.SocialLink>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+
+}
+
+<h2>@L["Admin.SocialLinks"]</h2>
+<p>
+    <a asp-action="Create" class="btn btn-primary">@L["Admin.Create"]</a>
+</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>@L["Admin.Order"]</th>
+            <th>@L["Admin.Provider"]</th>
+            <th>@L["Admin.Url"]</th>
+            <th>@L["Admin.Visible"]</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var s in Model)
+        {
+            <tr>
+                <td>@s.Order</td>
+                <td>@s.Provider</td>
+                <td>@s.Url</td>
+                <td>@(s.IsVisible? L["Common.Yes"] : L["Common.No"])</td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary">@L["Admin.Edit"]</a>
+                    <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">@L["Admin.Delete"]</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+

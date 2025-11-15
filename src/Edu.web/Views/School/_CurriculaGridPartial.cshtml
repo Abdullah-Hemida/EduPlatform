@@ -1,0 +1,62 @@
+﻿@model Edu.Web.ViewModels.SchoolIndexVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+<div class="row g-3">
+    @if (Model.Curricula == null || !Model.Curricula.Any())
+    {
+        <div class="col-12 text-center text-muted py-5">@(L["School.NoCurricula"] ?? "No curricula found")</div>
+    }
+    else
+    {
+        foreach (var c in Model.Curricula)
+        {
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    @if (!string.IsNullOrEmpty(c.CoverImageUrl))
+                    {
+                        <img src="@c.CoverImageUrl" alt="@c.Title" class="card-img-top" style="height:160px;object-fit:cover" />
+                    }
+                    else
+                    {
+                        <div class="bg-light d-flex align-items-center justify-content-center" style="height:160px">
+                            <i class="fas fa-book fa-3x text-muted"></i>
+                        </div>
+                    }
+
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title mb-1">@c.Title</h5>
+                        <p class="card-text text-muted small mb-3">@c.Description</p>
+
+                        <div class="mt-auto d-flex align-items-center justify-content-between">
+                            @if (c.IsAccessible)
+                            {
+                                <a asp-controller="School" asp-action="Curriculum" asp-route-id="@c.Id" class="btn btn-outline-primary btn-sm">
+                                    @L["View"]
+                                </a>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-secondary btn-sm" disabled>
+                                    @L["School.NotAllowed"]
+                                </button>
+                            }
+                            <div class="small text-muted">@c.ModuleCount @L["Admin.Modules"]</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@* Render the pagination HTML here (server-rendered) *@
+<div class="mt-4">
+    @await Html.PartialAsync("_PaginationPartial", new Edu.Web.ViewModels.PaginationVm
+    {
+        Page = Model.Page,
+        TotalPages = Model.TotalPages,
+        PageSize = Model.PageSize,
+        LevelId = Model.SelectedLevelId
+        })
+</div>
+

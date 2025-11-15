@@ -1,0 +1,111 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.TeacherCourseIndexVm
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Teacher.RecordedCourses"]; // or another localized title like "My Courses"
+    var categories = ViewBag.CategorySelect as SelectList;
+    var showPublishedSelect = ViewBag.ShowPublishedSelect as List<SelectListItem>;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3 mt-3">
+    <div>
+        <h4 class="mb-0">@L["Teacher.RecordedCourses"]</h4>
+    </div>
+    <div>
+        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Create" class="btn btn-primary ps-3 pe-3">@L["Course.CreateNew"] +</a>
+    </div>   
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="d-flex align-items-center" id="filterForm">
+            <input name="q" value="@Model.Query" class="form-control form-control-sm me-2" placeholder="@L["Admin.SearchPlaceholder"]" />
+
+            <select asp-for="CategoryId" asp-items="ViewBag.CategorySelect" asp-option-label="@L["Common.All"]" class="form-select form-select-sm m-1 w-50"></select>
+
+            <select asp-for="ShowPublished" asp-items="(IEnumerable<SelectListItem>)ViewBag.ShowPublishedSelect" class="form-select form-select-sm m-1 w-50"></select>
+
+            <button class="btn btn-primary btn-sm m-1">@L["Admin.Search"]</button>
+            <a class="btn btn-outline-secondary btn-sm m-1 text-nowrap" asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index">@L["Admin.Reset"]</a>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3">
+    @if (!Model.Courses.Any())
+    {
+        <div class="col-12">
+            <div class="card mb-3">
+                <div class="card-body text-muted">@L["Admin.NoRecords"]</div>
+            </div>
+        </div>
+    }
+    else
+    {
+        foreach (var c in Model.Courses)
+        {
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    @if (!string.IsNullOrEmpty(c.PublicCoverUrl))
+                    {
+                        <img src="@c.PublicCoverUrl" class="card-img-top" style="height:140px;object-fit:cover" />
+                    }
+                    else
+                    {
+                        <img src="~/images/default-course-cover.png" class="card-img-top" style="height:140px;object-fit:cover" />
+                    }
+
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h5 class="card-title mb-0">@c.Title</h5>
+                            <small class="text-muted ms-2">@c.CategoryName</small>
+                        </div>
+                        <p class="card-text text-muted small">@(!string.IsNullOrEmpty(c.PriceLabel) ? c.PriceLabel : "")</p>
+
+                        <div class="mt-auto d-flex gap-1">
+                            <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@c.Id" class="btn btn-outline-primary btn-sm">@L["Button.View"]</a>
+                            <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Edit" asp-route-id="@c.Id" class="btn btn-outline-secondary btn-sm">@L["Button.Edit"]</a>
+                            <form asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Delete" asp-route-id="@c.Id" method="post" class="d-inline ms-auto" onsubmit="return confirm('@L["Admin.ConfirmDelete"]');">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-danger">@L["Admin.Delete"]</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<div class="mt-3">
+    @{
+        var prevDisabled = !Model.Courses.HasPreviousPage ? "disabled" : "";
+        var nextDisabled = !Model.Courses.HasNextPage ? "disabled" : "";
+        var currentPage = Model.Courses.PageIndex;
+        var totalPages = Model.Courses.TotalPages;
+    }
+    <nav aria-label="Page navigation">
+        <ul class="pagination pagination-sm">
+            <li class="page-item @prevDisabled">
+                <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, page = Model.Courses.PageIndex - 1 })" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+
+            @for (var i = 1; i <= totalPages; i++)
+            {
+                var active = i == currentPage ? "active" : "";
+                <li class="page-item @active"><a class="page-link" href="@Url.Action("Index", new { q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, page = i })">@i</a></li>
+            }
+
+            <li class="page-item @nextDisabled">
+                <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, page = Model.Courses.PageIndex + 1 })" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</div>
+
+

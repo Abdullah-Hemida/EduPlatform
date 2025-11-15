@@ -1,0 +1,102 @@
+﻿@model Edu.Web.Areas.Student.ViewModels.PrivateCourseDetailsVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<div class="row g-3">
+    <div class="col-md-8">
+        <div class="card mb-3 shadow-sm">
+            @if (!string.IsNullOrEmpty(Model.CoverPublicUrl))
+            {
+                <img src="@Model.CoverPublicUrl" class="card-img-top" style="height:260px;object-fit:cover" />
+            }
+            <div class="card-body">
+                <h2>@Model.Title</h2>
+                <div class="small text-muted mb-2">@Model.TeacherName • @Model.CategoryName</div>
+                <p>@Model.Description</p>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="fw-semibold">@(!string.IsNullOrEmpty(Model.PriceLabel) ? Model.PriceLabel : L["Admin.Paid"])</div>
+                    @if (Model.IsPurchased)
+                    {
+                        <span class="badge bg-success">@L["Status.Completed"]</span>
+                        <a asp-area="Student" asp-controller="PrivateCourses" asp-action="MyPurchases" class="btn btn-outline-secondary btn-sm ms-2">@(L["ReactiveCourse.MyEnrollments"] ?? "My courses")</a>
+                    }
+                    else
+                    {
+                        <form asp-action="RequestPurchase" method="post" class="ms-2">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
+                            <button class="btn btn-primary">@(L["Purchase.Request"] ?? "Request to purchase")</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5>@L["Admin.Lessons"] (@Model.TotalLessons)</h5>
+                @if (!Model.Modules.Any())
+                {
+                    <div class="text-muted">@L["Admin.NoLessonsYet"]</div>
+                }
+                else
+                {
+                    @foreach (var m in Model.Modules)
+                    {
+                        <div class="mb-3">
+                            <h6 class="mb-1">@m.Title</h6>
+                            <ul class="list-group">
+                                @foreach (var l in m.Lessons)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>@l.Title</strong>
+                                        </div>
+                                        <div>
+                                            @if (Model.IsPurchased)
+                                            {
+                                                <a asp-area="Student" asp-controller="PrivateCourses" asp-action="Lesson" asp-route-id="@l.Id" class="btn btn-sm btn-primary">@L["Button.View"]</a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">@(L["Purchase.NotAccessible"] ?? "Locked — purchase required")</span>
+                                            }
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <aside class="col-md-4">
+        <div class="card sticky-top mb-3">
+            <div class="card-body">
+                <h6>@L["Course.Info"]</h6>
+                <dl class="row">
+                    <dt class="col-4">@L["Admin.Category"]</dt>
+                    <dd class="col-8">@Model.CategoryName</dd>
+                    <dt class="col-4">@L["Admin.Teachers"]</dt>
+                    <dd class="col-8">@Model.TeacherName</dd>
+                    <dt class="col-4">@L["Admin.Lessons"]</dt>
+                    <dd class="col-8">@Model.TotalLessons</dd>
+                </dl>
+            </div>
+        </div>
+
+        <a asp-action="Index" class="btn btn-light w-100">
+            <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
+            <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
+            @L["Common.Back"]
+        </a>
+    </aside>
+</div>
+
+

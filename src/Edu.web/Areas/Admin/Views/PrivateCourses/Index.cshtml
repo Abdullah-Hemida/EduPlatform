@@ -1,0 +1,153 @@
+﻿
+@model PrivateCourseIndexVm
+
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+     
+    ViewData["Title"] = L["Admin.PrivateCourses"] ?? "Private Courses";
+}
+
+    <div class="d-flex align-items-center gap-2 mb-3 mt-3">
+        <form method="get" id="filterForm" class="d-flex align-items-center">
+            <input name="q" value="@Model.Query" class="form-control form-control-sm ms-1 me-1 row-cols-auto" placeholder="@L["Admin.SearchPlaceholder"]" />
+
+            <select asp-for="CategoryId"
+                    asp-items="ViewBag.CategorySelect"
+                    asp-option-label="@L["Common.All"]"
+                    class="form-select form-select-sm ms-1 me-1 w-75">
+            </select>
+
+            <select asp-for="ShowPublished"
+                    asp-items="ViewBag.ShowPublishedSelect"
+                    asp-option-label="@L["Common.All"]"
+                    class="form-select form-select-sm ms-1 me-1 w-50">
+            </select>
+
+            @* preserve showAll mode when toggled *@
+            @if (Model.ShowAll)
+            {
+                <input type="hidden" name="showAll" value="true" />
+            }
+
+            <button class="btn btn-primary btn-sm ms-1 me-1 ps-3 pe-3">@L["Admin.Search"]</button>
+            <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">@L["Admin.Reset"]</a>
+
+            @if (!Model.ShowAll)
+            {
+                <a class="btn btn-outline-info btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin", q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = true })">
+                    @(L["Admin.ShowAll"] ?? "Show all")
+                </a>
+            }
+            else
+            {
+                <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
+                    @(L["Admin.ShowOnlyRequests"] ?? "Show only requests")
+                </a>
+            }
+        </form>
+    </div>
+
+<div class="row g-3">
+    @foreach (var c in Model.Courses)
+    {
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                @if (!string.IsNullOrEmpty(c.PublicCoverUrl))
+                {
+                    <img src="@c.PublicCoverUrl" alt="@c.Title" class="card-img-top" style="height:140px;object-fit:cover" />
+                }
+
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h5 class="card-title mb-0">@c.Title</h5>
+                        <small class="text-muted ms-2">@c.PriceLabel</small>
+                    </div>
+
+                    <p class="card-text text-muted small mb-3">@c.CategoryName</p>
+
+                    <div class="mt-auto d-flex gap-1 align-items-center">
+                        <a asp-action="Details" asp-route-id="@c.Id" asp-area="Admin" class="btn btn-outline-primary btn-sm">@L["Button.View"]</a>
+
+                        <form asp-action="Delete" asp-route-id="@c.Id" asp-area="Admin" method="post" class="d-inline ms-auto" onsubmit="return confirm('@L["Admin.ConfirmDelete"]');">
+                            @Html.AntiForgeryToken()
+                            <button class="btn btn-sm btn-danger">@L["Admin.Delete"]</button>
+                        </form>
+
+                        <button class="btn btn-sm @(c.IsPublished ? "btn-warning" : "btn-success") toggle-publish-btn ms-2" data-id="@c.Id">
+                            @(c.IsPublished? L["Admin.Unapprove"] : L["Button.Approve"])
+                        </button>
+                    </div>
+                    <div class="mt-2 small text-muted">@L["Role.Teacher"] : @(c.TeacherName ?? "(unknown)")</div>
+                    @if (c.IsPublishRequested)
+                    {
+                        <span class="badge bg-info ms-2">@(L["Admin.PublishRequested"] ?? "Publish requested")</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (Model.Courses != null)
+{
+    <nav aria-label="Page navigation" class="mt-3">
+        <ul class="pagination">
+            <li class="page-item @(Model.Courses.HasPreviousPage ? "" : "disabled")">
+                <a class="page-link" href="@Url.Action("Index", new { page = Model.Courses.PageIndex - 1, q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = Model.ShowAll })">&laquo;</a>
+            </li>
+            @for (int i = 1; i <= Model.Courses.TotalPages; i++)
+            {
+                <li class="page-item @(Model.Courses.PageIndex == i ? "active" : "")">
+                    <a class="page-link" href="@Url.Action("Index", new { page = i, q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = Model.ShowAll })">@i</a>
+                </li>
+            }
+            <li class="page-item @(Model.Courses.HasNextPage ? "" : "disabled")">
+                <a class="page-link" href="@Url.Action("Index", new { page = Model.Courses.PageIndex + 1, q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = Model.ShowAll })">&raquo;</a>
+            </li>
+        </ul>
+    </nav>
+}
+
+@section Scripts {
+    <script>
+        (function(){
+            var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+            var token = tokenMeta ? tokenMeta.getAttribute('content') : '';
+
+        function postToggle(id, btn) {
+            fetch('@Url.Action("TogglePublish", "PrivateCourses", new { area = "Admin" })?id=' + encodeURIComponent(id), {
+                method: 'POST',
+                headers: {
+                    'RequestVerificationToken': token,
+                    'Accept': 'application/json'
+                }
+            }).then(r => {
+                if (!r.ok) throw new Error('network');
+                return r.json();
+            }).then(function(data){
+                if (data && data.success) {
+                    if (data.isPublished) {
+                        btn.classList.remove('btn-success'); btn.classList.add('btn-warning');
+                        btn.innerText = '@L["Admin.UnapproveTeacher"].Value';
+                    } else {
+                        btn.classList.remove('btn-warning'); btn.classList.add('btn-success');
+                        btn.innerText = '@L["Admin.ApproveTeacher"].Value';
+                    }
+                } else {
+                    alert('@L["Admin.OperationFailed"]');
+                }
+            }).catch(function(){
+                alert('@L["Admin.ServerError"]');
+            });
+        }
+            document.querySelectorAll('.toggle-publish-btn').forEach(function(b){
+                b.addEventListener('click', function(){
+                    var id = b.getAttribute('data-id');
+                    postToggle(id, b);
+                });
+            });
+        })();
+    </script>
+}
+
+

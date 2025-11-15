@@ -1,0 +1,90 @@
+﻿@* inside E:\Education\src\Edu.Web\Views\Shared\Components\Footer\Default.cshtml *@ 
+@model Edu.Web.Views.Shared.Components.ViewComponents.FooterVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+<footer class="site-footer text-light pt-5 pb-4 mt-5">
+    <div class="container">
+        <div class="row gy-4">
+            <div class="col-md-6">
+                <h5 class="footer-title">@L["Footer.ContactUs"]</h5>
+                @if (Model.Contacts?.Any() != true)
+                {
+                    <p class="text-secondary small">@L["Footer.NoContacts"]</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled">
+                        @foreach (var c in Model.Contacts)
+                        {
+                            <li class="mb-3 d-flex justify-content-start gap-2">
+                                <div>
+                                    <strong class="d-block">@c.PersonName</strong>
+                                    <small class="text-light">@c.Position</small><br />
+                                </div>
+                                <span class="text-light opacity-75">@c.Contact</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+@*             <div class="col-md-4">
+                <h5 class="footer-title">@L["Footer.Resources"]</h5>
+                <ul class="list-unstyled">
+                    <li><a href="/Privacy" class="footer-link">@L["Footer.Privacy"]</a></li>
+                    <li><a href="/About" class="footer-link">@L["About"]</a></li>
+                </ul>
+            </div> *@
+
+            <div class="col-md-6 text-md-end">
+                <h5 class="footer-title">@L["Footer.FollowUs"]</h5>
+                <div class="d-flex justify-content-md-end gap-3 mt-2">
+                    @if (Model.SocialLinks?.Any() != true)
+                    {
+                        <span class="text-secondary small">@L["Footer.NoSocial"]</span>
+                    }
+                    else
+                    {
+                        @foreach (var s in Model.SocialLinks)
+                        {
+                            var iconClass = s.Provider?.ToLowerInvariant() switch
+                            {
+                                "facebook" => "fab fa-facebook-f",
+                                "twitter" => "fab fa-twitter",
+                                "instagram" => "fab fa-instagram",
+                                "linkedin" => "fab fa-linkedin-in",
+                                "whatsapp" => "fab fa-whatsapp",
+                                "telegram" => "fab fa-telegram",
+                                "youtube" => "fab fa-youtube",
+                                _ => "fas fa-link"
+                            };
+
+                            <a class="footer-social" href="@s.Url" target="_blank" rel="noopener">
+                                <i class="@iconClass fa-lg"></i>
+                            </a>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <hr class="mt-4 mb-3 border-secondary opacity-25" />
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-center small text-secondary">
+            <div>
+                @string.Format(L["Footer.Copyright"].Value, DateTime.UtcNow.Year)
+
+            </div>
+            <div>
+                @L["Footer.PoweredBy"]
+            </div>
+        </div>
+    </div>
+</footer>
+
+<style>
+
+</style>
+
+
+

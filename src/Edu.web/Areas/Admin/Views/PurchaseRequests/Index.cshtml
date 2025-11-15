@@ -1,0 +1,185 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.PurchaseRequestsIndexViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.PurchaseRequests"];
+    var status = Model.Status?.ToString() ?? "All";
+}
+
+<div class="admin-header d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h3 class="mb-0">@L["Admin.PurchaseRequests"]</h3>
+        <small class="text-muted">@L["Admin.PurchaseRequestsSubtitle"]</small>
+    </div>
+
+    <div class="ms-3 me-3">
+        <div class="btn-group" role="group">
+            <a class="btn @(status == "All" ? "btn-primary" : "btn-outline-secondary")"
+               href="@Url.Action("Index", new { status = (int?)null, search = Model.Search })">
+                @L["Common.All"]
+            </a>
+            <a class="btn @(Model.Status == 0 ? "btn-primary" : "btn-outline-secondary")"
+               href="@Url.Action("Index", new { status = 0, search = Model.Search })">
+                @L["Status.Pending"]
+            </a>
+            <a class="btn @(Model.Status == 1 ? "btn-primary" : "btn-outline-secondary")"
+               href="@Url.Action("Index", new { status = 1, search = Model.Search })">
+                @L["Status.Completed"]
+            </a>
+            <a class="btn @(Model.Status == 2 ? "btn-primary" : "btn-outline-secondary")"
+               href="@Url.Action("Index", new { status = 2, search = Model.Search })">
+                @L["Status.Rejected"]
+            </a>
+            <a class="btn @(Model.Status == 3 ? "btn-primary" : "btn-outline-secondary")"
+               href="@Url.Action("Index", new { status = 3, search = Model.Search })">
+                @L["Status.Cancelled"]
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+
+        <!-- 🔍 Search Form -->
+        <form method="get" class="row gx-2 gy-2 align-items-center mb-3">
+            <div class="col-auto">
+                <div class="d-flex gap-1">
+                    <input name="search" value="@Model.Search"
+                           class="form-control"
+                           placeholder="@L["Admin.SearchPlaceHolder"]" />
+                    <button class="btn btn-outline-secondary" type="submit">@L["Admin.Search"]</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- 📋 Table -->
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small">
+                    <tr>
+                        <th style="width:20px">#</th>
+                        <th>@L["Purchase.Requester"]</th>
+                        <th>@L["Purchase.Course"]</th>
+                        <th>@L["Course.Price"]</th>
+                        <th style="width:120px">@L["Purchase.Date"]</th>
+                        <th style="width:90px">@L["Purchase.Status"]</th>
+                        <th style="width:200px">@L["Admin.Actions"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Items.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center small text-muted">
+                                @L["Admin.NoRecords"]
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        var idx = (Model.Page - 1) * Model.PageSize;
+                        foreach (var r in Model.Items)
+                        {
+                            idx++;
+                            <tr>
+                                <td class="small text-muted">@idx</td>
+                                <td>
+                                    <div class="fw-semibold">@r.StudentName</div>
+                                    <div class="small text-muted">@r.StudentPhone</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">@r.CourseTitle</div>
+                                    <div class="small text-muted">@L["Purchase.By"] @r.TeacherName</div>
+                                </td>
+                                <td class="fw-semibold">@r.AmountLabel</td>
+                                <td class="small">@r.RequestDateUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    <span class="badge
+                                                @(r.Status == "Completed" ? "bg-success" :
+                                                                                    r.Status == "Rejected" ? "bg-danger" :
+                                                                                    r.Status == "Pending" ? "bg-warning text-dark" :
+                                                                                    "bg-secondary")">
+                                @r.Status
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a class="btn btn-outline-primary"
+                                   href="@Url.Action("Details", new { id = r.Id })">
+                                    @L["Button.View"]
+                                </a>
+
+                                @if (r.Status == "Pending")
+                                        {
+                                            <form method="post" asp-action="Complete" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@r.Id" />
+                                                <button class="btn btn-success btn-sm text-nowrap">
+                                                    @L["Purchase.MarkCompleted"]
+                                                </button>
+                                            </form>
+                                            <form method="post" asp-action="Reject" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@r.Id" />
+                                                <button class="btn btn-warning btn-sm">
+                                                    @L["Button.Reject"]
+                                                </button>
+                                            </form>
+                                        }
+
+                                        @if (r.Status != "Completed")
+                                        {
+                                            <form method="post" asp-action="Delete" class="d-inline"
+                                                  onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@r.Id" />
+                                                <button class="btn btn-danger btn-sm">
+                                                    @L["Button.Delete"]
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 📄 Pagination -->
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="mt-3" aria-label="Page navigation">
+                <ul class="pagination pagination-sm justify-content-end mb-0">
+                    <li class="page-item @(Model.Page > 1 ? "" : "disabled")">
+                        <a class="page-link"
+                           href="@Url.Action("Index", new { status = Model.Status, search = Model.Search, page = Model.Page - 1 })">
+                            &laquo;
+                        </a>
+                    </li>
+                    @for (int i = 1; i <= Model.TotalPages; i++)
+                    {
+                        <li class="page-item @(i == Model.Page ? "active" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new { status = Model.Status, search = Model.Search, page = i })">
+                                @i
+                            </a>
+                        </li>
+                    }
+                    <li class="page-item @(Model.Page < Model.TotalPages ? "" : "disabled")">
+                        <a class="page-link"
+                           href="@Url.Action("Index", new { status = Model.Status, search = Model.Search, page = Model.Page + 1 })">
+                            &raquo;
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        }
+    </div>
+</div>
+
+
+
+

@@ -1,0 +1,22 @@
+# Visual Studio
+.vs/
+*.db
+*.db-shm
+*.db-wal
+
+# Build
+bin/
+obj/
+
+# User specific
+*.user
+*.suo
+
+# Logs
+*.log
+
+# Publish folder
+publish/
+
+
+

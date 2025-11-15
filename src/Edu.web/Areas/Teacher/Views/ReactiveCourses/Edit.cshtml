@@ -1,0 +1,86 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.ReactiveCourseEditVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = L["ReactiveCourse.EditReactiveCourse"];
+}
+
+<h3>@ViewData["Title"]</h3>
+
+<form asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Edit" enctype="multipart/form-data" method="post" class="mt-3">
+    @Html.AntiForgeryToken()
+    <input asp-for="Id" type="hidden" />
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="mb-3">
+                <label asp-for="Title" class="form-label">@L["ReactiveCourse.Title"]</label>
+                <input asp-for="Title" class="form-control" />
+                <span asp-validation-for="Title" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label">@L["ReactiveCourse.Description"]</label>
+                <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label asp-for="PricePerMonth" class="form-label">@L["ReactiveCourse.PricePerMonth"]</label>
+                    <input asp-for="PricePerMonth" class="form-control" />
+                    <span asp-validation-for="PricePerMonth" class="text-danger"></span>
+                </div>
+
+                <div class="col-md-4 mb-3">
+                    <label asp-for="DurationMonths" class="form-label">@L["ReactiveCourse.Months"]</label>
+                    <input asp-for="DurationMonths" class="form-control" />
+                </div>
+
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Capacity" class="form-label">@L["ReactiveCourse.Capacity"]</label>
+                    <input asp-for="Capacity" class="form-control" />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="IntroVideoUrl" class="form-label">@L["ReactiveCourse.IntroVideoUrl"]</label>
+                <input asp-for="IntroVideoUrl" class="form-control" />
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label asp-for="NewCoverImage" class="form-label">@L["Admin.CoverImage"]</label>
+                <input asp-for="NewCoverImage" type="file" class="form-control" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(Model.ExistingCoverPublicUrl))
+            {
+                <div class="mb-3">
+                    <label class="form-label">@L["ReactiveCourse.CurrentPhoto"]</label>
+                    <div><img src="@Model.ExistingCoverPublicUrl" class="img-fluid rounded" alt="@Model.Title" /></div>
+                </div>
+            }
+
+            <div class="mb-3">
+                <label asp-for="StartDate" class="form-label">@L["ReactiveCourse.StartDate"]</label>
+                <input asp-for="StartDate" type="date" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="EndDate" class="form-label">@L["ReactiveCourse.EndDate"]</label>
+                <input asp-for="EndDate" type="date" class="form-control" />
+            </div>
+
+            <button class="btn btn-primary w-100">@L["ReactiveCourse.SaveChanges"]</button>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+
+
+

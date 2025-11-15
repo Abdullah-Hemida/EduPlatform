@@ -1,0 +1,357 @@
+﻿@using System.Globalization
+@using Edu.Web.Resources
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Identity
+@using System.Text.Json
+@inject IAntiforgery Antiforgery
+@inject UserManager<Edu.Domain.Entities.ApplicationUser> UserManager
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> Localizer
+
+@{
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var isRtl = dir == "rtl";
+    var user = (User?.Identity?.IsAuthenticated ?? false) ? await UserManager.GetUserAsync(User) : null;
+    var displayName = user?.FullName?.Split(' ').FirstOrDefault() ?? user?.UserName ?? Localizer["Admin.Guest"];
+    var photoUrl = !string.IsNullOrEmpty(user?.PhotoUrl) ? user!.PhotoUrl : Url.Content("~/images/default-avatar.png");
+
+    var dt_search = Localizer["DataTable.Search"].Value;
+    var dt_length = Localizer["DataTable.ShowEntries"].Value;
+    var dt_info = Localizer["DataTable.Info"].Value;
+    var dt_pag_prev = Localizer["DataTable.Previous"].Value;
+    var dt_pag_next = Localizer["DataTable.Next"].Value;
+
+    // helper to mark server-side active state (set ViewData["ActivePage"] in controllers)
+    string active(string name) => (ViewData["ActivePage"] as string)?.Equals(name, StringComparison.OrdinalIgnoreCase) == true ? "active" : "";
+
+    // role checks
+    var isAdmin = User.IsInRole("Admin");
+    var isTeacher = User.IsInRole("Teacher");
+    var isStudent = User.IsInRole("Student");
+}
+
+<!doctype html>
+<html lang="@lang" dir="@dir">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
+    <title>@ViewData["Title"] - @Localizer["Admin.SiteTitle"]</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/dataTables.bootstrap5.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/admin.css" />
+</head>
+<body class="bg-light">
+    <div id="wrapper" class="d-flex min-vh-100">
+        <!-- Sidebar -->
+        <nav id="sidebar-wrapper" class="bg-dark text-white d-flex flex-column" role="navigation" aria-label="Main sidebar">
+@*             <div class="sidebar-brand py-3 border-bottom text-center">
+                <img src="~/uploads/images/AdminDashboard/adminlogo.png" alt="logo" style="height:28px" class="me-2" />
+                <strong class="d-none d-md-inline">@Localizer["Admin.SiteTitleShort"]</strong>
+            </div> *@
+            <div class=" d-flex align-items-center justify-content-center p-3 gap-2 border-button">
+                <img src="~/uploads/images/AdminDashboard/adminlogo.png" alt="logo" style="height:28px" class="me-2" />
+                <a asp-area="" asp-controller="Home" asp-action="Index" target="_blank" rel="noopener"
+                   class="d-flex align-items-center text-decoration-none text-white sidebar-public-link">
+                    @* <i class="fas fa-external-link-alt nav-icon" aria-hidden="true"></i> *@
+                    <strong class="nav-text ms-2">@Localizer["Nav.PublicSite"]</strong>
+                </a>
+            </div>
+            <ul class="nav flex-column p-1 mb-0">
+                @* --- ADMIN LINKS --- *@
+                @if (isAdmin)
+                {
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="Dashboard" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("AdminDashboard")" title="@Localizer["Nav.AdminDashboard"]">
+                            <i class="fas fa-tachometer-alt nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.AdminDashboard"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="ManageUsers" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("Users")" title="@Localizer["Admin.Users"]">
+                            <i class="fas fa-users nav-icon" aria-hidden="true"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.Users"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="Curricula" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("Curricula")" title="@Localizer["Admin.Curricula"]">
+                            <i class="fas fa-book-open nav-icon" aria-hidden="true"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.Curricula"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="Levels" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("Levels")" title="@Localizer["Admin.Levels"]">
+                            <i class="fas fa-layer-group nav-icon" aria-hidden="true"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.Levels"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="Categories" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("Categories")" title="@Localizer["Admin.Categories"]">
+                            <i class="fas fa-tags nav-icon" aria-hidden="true"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.Categories"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="Bookings" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("The Bookings")" title="@Localizer["Admin.TheBookings"]">
+                            <i class="fas fa-calendar-check nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Booking.SessionBookings"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="PurchaseRequests" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2  @active("PurchaseRequests")" title="@Localizer["Admin.PurchaseRequests"]">
+                            <i class="fas fa-shopping-cart nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.PurchaseRequests"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="PrivateCourses" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("Private Courses")" title="@Localizer["Nav.PrivateCourses"]">
+                            <i class="fas fa-user-lock nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.RecordedCourses"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="ReactiveEnrollmentPayments" asp-action="Pending"
+                           class="nav-link d-flex align-items-center gap-2 @active("ReactiveEnrollments")" title="@Localizer["Admin.ReactiveEnrollments"]">
+                            <i class="fas fa-user-graduate nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.ReactiveEnrollments"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="Earnings" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2  @active("Earnings")" title="@Localizer["Admin.Earnings"]">
+                            <i class="fas fa-chart-line nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.Earnings"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="HomeSections" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("HomeSectionsController")"
+                           title="@Localizer["Nav.Home"]">
+                            <i class="fas fa-house nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.Home"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="FooterContacts" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("FooterContacts")"
+                           title="@Localizer["Admin.FooterContacts"]">
+                            <i class="fas fa-address-book nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.FooterContacts"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="SocialLinks" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("SocialLinks")"
+                           title="@Localizer["Admin.SocialLinks"]">
+                            <i class="fab fa-share-alt nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.SocialLinks"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="HeroSections" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("HeroSections")"
+                           title="@Localizer["Admin.HeroSections"]">
+                            <i class="fas fa-image nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.HeroSections"]</span>
+                        </a>
+                    </li>
+                }
+
+                @* --- TEACHER LINKS --- *@
+                @if (isTeacher)
+                {
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="Dashboard" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("TeacherDashboard")" title="@Localizer["Nav.TeacherDashboard"]">
+                            <i class="fas fa-tachometer-alt nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.TeacherDashboard"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("MyPrivateCourses")" title="@Localizer["Nav.MyPrivateCourses"]">
+                            <i class="fas fa-video nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.MyPrivateCourses"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2  @active("PurchaseRequests")" title="@Localizer["Admin.PurchaseRequests"]">
+                            <i class="fas fa-shopping-cart nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.PurchaseRequests"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("MyReactiveCourses")" title="@Localizer["Nav.ReactiveCourses"]">
+                            <i class="fas fa-broadcast-tower nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.ReactiveCourses"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="ReactiveEnrollments" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("ReactiveEnrollments")" title="@Localizer["Nav.ReactiveEnrollments"]">
+                            <i class="fas fa-user-friends nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.ReactiveEnrollments"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="Bookings" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("TheBookings")" title="@Localizer["Admin.Bookings"]">
+                            <i class="fas fa-calendar-check nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Booking.SessionBookings"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="Slots" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("Slots")" title="@Localizer["Slots.Index.Title"]">
+                            <i class="fas fa-clock nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Slots.Index.Title"]</span>
+                        </a>
+                    </li>
+                }
+
+                @* --- STUDENT LINKS --- *@
+                @if (isStudent)
+                {
+
+                    <li class="nav-item">
+                        <a asp-area="Student" asp-controller="PrivateCourses" asp-action="MyPurchases"
+                           class="nav-link d-flex align-items-center gap-2 @active("MyPurchaseRequests")" title="@Localizer["Nav.RecordedCourses"]">
+                            <i class="fas fa-receipt nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.RecordedCourses"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="MyEnrollments"
+                           class="nav-link d-flex align-items-center gap-2 @active("MyEnrollments")" title="@Localizer["ReactiveCourse.LiveClasses"]">
+                            <i class="fas fa-user-check nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["ReactiveCourse.LiveClasses"]</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="Student" asp-controller="Bookings" asp-action="MyBookings"
+                           class="nav-link d-flex align-items-center gap-2 @active("Bookings")" title="@Localizer["Booking.SessionBookings"]">
+                            <i class="fas fa-calendar-check nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Booking.SessionBookings"]</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </nav>
+
+        <!-- Sidebar client-side enhancements -->
+        <script>
+            (function () {
+                document.querySelectorAll('#sidebar-wrapper .nav-link').forEach(function (a) {
+                    a.addEventListener('click', function () {
+                        document.querySelectorAll('#sidebar-wrapper .nav-link.active').forEach(function (el) { el.classList.remove('active'); });
+                        a.classList.add('active');
+                    });
+                    a.setAttribute('tabindex', 0);
+                    a.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') a.click(); });
+                });
+            })();
+        </script>
+
+        <!-- Page content -->
+        <div id="page-content-wrapper" class="flex-grow-1">
+            <!-- Topbar -->
+            <nav class="navbar navbar-expand navbar-light bg-white border-bottom shadow-sm">
+                <div class="container-fluid">
+                    <button class="btn btn-outline-secondary me-3" id="sidebarToggle" aria-label="Toggle sidebar">
+                        <i class="fas fa-bars"></i>
+                    </button>
+
+                    <div class="ms-auto d-flex align-items-center gap-3 flex-row-reverse">
+                        <!-- Language selector -->
+                        @await Component.InvokeAsync("LanguageSelector", new { returnUrl = Context.Request.Path + Context.Request.QueryString })
+
+                        <!-- User menu -->
+                        @if (user != null)
+                        {
+                            <div class="dropdown">
+                                <a class="d-flex align-items-center text-decoration-none" href="#" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <img src="@photoUrl" alt="avatar" class="rounded-circle me-2 border" style="width:36px;height:36px;object-fit:cover" />
+                                    <span class="fw-semibold d-none d-sm-inline">@displayName</span>
+                                    <i class="fas fa-chevron-down ms-1 small text-muted d-none d-sm-inline"></i>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="userMenu">
+                                    <li class="px-3 py-2 border-bottom">
+                                        <div class="d-flex align-items-center">
+                                            <img src="@photoUrl" alt="avatar" class="rounded-circle me-2" style="width:48px;height:48px;object-fit:cover" />
+                                            <div>
+                                                <div class="fw-semibold">@displayName</div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <li><a class="dropdown-item" href="/Identity/Account/Manage"><i class="fas fa-user me-2"></i>@Localizer["Nav.Profile"]</a></li>
+                                    <li>
+                                        <form method="post" asp-area="Identity" asp-page="/Account/Logout" class="m-0">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item text-danger"><i class="fas fa-sign-out-alt me-2"></i>@Localizer["Account.Logout"]</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        }
+                        else
+                        {
+                            <a class="btn btn-outline-primary btn-sm" href="/Identity/Account/Login">@Localizer["Account.Login"]</a>
+                        }
+                    </div>
+                </div>
+            </nav>
+            <!-- Content -->
+            <main class="container-fluid p-2 pt-1">
+                @RenderBody()
+            </main>
+            <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
+                <div id="alert-container" class="toast-container position-static"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/jquery/dist/datatables.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- your admin script -->
+    <script src="~/js/layout.js"></script>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
+
+
+
+

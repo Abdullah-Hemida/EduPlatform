@@ -1,0 +1,62 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.ReactiveCourseDeleteVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = L["ReactiveCourse.DeleteCourse"];
+}
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">@L["ReactiveCourse.DeleteCourse"]</h4>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>@L["ReactiveCourse.DeleteWarningTitle"]:</strong>
+            @L["ReactiveCourse.DeleteWarningMessage"]
+        </div>
+
+        <dl class="row">
+            <dt class="col-sm-3">@L["ReactiveCourse.Title"]</dt>
+            <dd class="col-sm-9">@Model.Title</dd>
+
+            <dt class="col-sm-3">@L["ReactiveCourse.StartDate"]</dt>
+            <dd class="col-sm-9">@Model.StartDate.ToString("d")</dd>
+
+            <dt class="col-sm-3">@L["ReactiveCourse.EndDate"]</dt>
+            <dd class="col-sm-9">@Model.EndDate.ToString("d")</dd>
+        </dl>
+
+        @if (!string.IsNullOrEmpty(Model.CoverPublicUrl))
+        {
+            <div class="mb-3 text-center">
+                <img src="@Model.CoverPublicUrl" alt="@Model.Title" class="img-fluid rounded shadow-sm" style="max-height:250px; object-fit:cover;" />
+            </div>
+        }
+
+        <form asp-action="DeleteConfirmed" method="post">
+            <input type="hidden" asp-for="Id" />
+
+            <div class="mb-3">
+                <label asp-for="Note" class="form-label fw-semibold">@L["ReactiveCourse.DeleteNote"]</label>
+                <textarea asp-for="Note" class="form-control" rows="3" placeholder="@L["ReactiveCourse.DeleteNotePlaceholder"]"></textarea>
+            </div>
+
+            <div class="form-check mb-3">
+                <input type="checkbox" class="form-check-input" id="forceDelete" name="forceDelete" value="true" />
+                <label for="forceDelete" class="form-check-label text-danger fw-semibold">
+                    @L["ReactiveCourse.DeleteForceDelete"]
+                </label>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a asp-action="Index" class="btn btn-secondary">@L["Button.Cancel"]</a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash-alt me-1"></i> @L["ReactiveCourse.DeleteConfirm"]
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+

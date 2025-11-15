@@ -1,0 +1,97 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.PurchaseRequestListVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.PurchaseRequests"] ?? "Purchase Requests";
+    string crop(string? s, int len = 60) => string.IsNullOrEmpty(s) ? "" : (s.Length <= len ? s : s.Substring(0, len) + "…");
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h3 class="mb-0">@ViewData["Title"]</h3>
+        <div class="small text-muted">@(L["Admin.PurchaseRequestsSubtitle"] ?? "Purchase requests for your private courses (view only)")</div>
+    </div>
+
+    <div class="d-flex align-items-center mb-3">
+        <form method="get" class="d-flex align-items-center">
+            <label class="me-2">@L["Status"]:</label>
+            <select asp-for="FilterStatus"
+                    class="form-select form-select-sm me-2"
+                    asp-items="@((SelectList?)ViewData["StatusOptions"])">
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary">@L["Button.Submit"]</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        @if (!Model.Requests.Any())
+        {
+            <div class="text-muted small">@L["Admin.NoRecords"]</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>@L["Teacher.RecordedCourses"]</th>
+                            <th>@L["Admin.Student"]</th>
+                            <th class="text-end">@L["Purchase.Amount"]</th>
+                            <th>@L["Admin.Status"]</th>
+                            <th>@L["Booking.RequestDate"]</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.Requests)
+                        {
+                            <tr>
+                                <td>@r.Id</td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        @if (!string.IsNullOrEmpty(r.CourseCoverUrl))
+                                        {
+                                            <img src="@r.CourseCoverUrl" alt="@r.CourseTitle" style="width:64px;height:40px;object-fit:cover" class="rounded" />
+                                        }
+                                        <div>
+                                            <div class="fw-semibold">@r.CourseTitle</div>
+                                            <div class="small text-muted">@crop(r.CourseTitle, 60)</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">@r.StudentName</div>
+                                    <div class="small text-muted">@r.StudentEmail</div>
+                                </td>
+                                <td class="text-end fw-semibold">@r.AmountLabel</td>
+                                <td>
+                                    @if (r.Status == PurchaseStatus.Pending)
+                                    {
+                                        <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+                                    }
+                                    else if (r.Status == PurchaseStatus.Completed)
+                                    {
+                                        <span class="badge bg-success">@L["Status.Completed"]</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">@L["Status.Rejected"]</span>
+                                    }
+                                </td>
+                                <td class="small text-muted">@r.RequestDateUtc.ToLocalTime().ToString("g")</td>
+                                <td class="text-end">
+                                    <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Details" asp-route-id="@r.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+

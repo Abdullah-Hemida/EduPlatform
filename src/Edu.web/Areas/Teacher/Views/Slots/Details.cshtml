@@ -1,0 +1,71 @@
+﻿@* @model Edu.Web.Areas.Teacher.ViewModels.SlotDetailsVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource>L
+
+    @{
+        ViewData["Title"] = L["Slots.Details"] ?? "Slot details";
+    }
+
+    <div class="d-flex align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">@L["Slots.Details"]</h4>
+            <div class="small text-muted">@($"{Model.StartUtc.ToLocalTime():g} — {Model.EndUtc.ToLocalTime():t}")</div>
+        </div>
+        <div class="ms-auto">
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-secondary btn-sm">@L["Button.Edit"]</a>
+            <form asp-action="Delete" method="post" class="d-inline ms-1" onsubmit="return confirm('@L["ConfirmDelete"]');">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <button class="btn btn-danger btn-sm">@L["Button.Delete"]</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5>@L["Slots.Capacity"] : <span class="badge bg-info">@Model.Capacity</span></h5>
+                    <div class="small text-muted">@L["Slots.HourlyRate"]: @((Model.HourlyRate.HasValue) ? Model.HourlyRate.Value.ToString("C") : "-")</div>
+                    <div class="mt-2">@L["Slots.LocationUrl"]: @(!string.IsNullOrEmpty(Model.LocationUrl) ? Html.Raw($"<a href=\"{Model.LocationUrl}\" target=\"_blank\">{L["OpenMeet"]}</a>") : "-")</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><strong>@L["Slots.Bookings"]</strong></div>
+                <div class="card-body">
+                    @if (!Model.Bookings.Any())
+                    {
+                        <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                    }
+                    else
+                    {
+                        <ul class="list-group">
+                            @foreach (var b in Model.Bookings)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="fw-semibold">@b.StudentName</div>
+                                        <div class="small text-muted">@($"{b.RequestedDateUtc.ToLocalTime():g}")</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="small">@b.Status</div>
+                                        <a asp-controller="Bookings" asp-action="Details" asp-area="Teacher" asp-route-id="@b.Id" class="btn btn-sm btn-outline-primary mt-1">@L["Button.View"]</a>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-body small text-muted">
+                    <div><strong>@L["Slots.Type"]:</strong> @Model.Type</div>
+                    <div class="mt-2"><strong>@L["Slots.Times"]:</strong><br />@($"{Model.StartUtc.ToLocalTime():f}") — @($"{Model.EndUtc.ToLocalTime():f}")</div>
+                </div>
+            </div>
+        </div>
+    </div> *@
+

@@ -1,0 +1,92 @@
+﻿@page
+@model Edu.Web.Areas.Identity.Pages.Account.RegisterModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Edu.Web.Areas.Identity.Pages.Account.RegisterModel> L
+
+@{
+    Layout = "/Views/Shared/_MentorLayout.cshtml";
+    ViewData["Title"] = L["Account.Register"];
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h3 class="card-title mb-3">@L["Account.Register"]</h3>
+
+                    <form method="post" asp-route-returnUrl="@Model.ReturnUrl">
+                        @Html.AntiForgeryToken()
+                        <partial name="_ValidationScriptsPartial" />
+
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.Email" class="form-label"></label>
+                            <input asp-for="Input.Email" class="form-control" />
+                            <span asp-validation-for="Input.Email" class="text-danger"></span>
+                        </div>
+
+                        <!-- In your Register.cshtml -->
+                        <div class="mb-3">
+                            <label asp-for="Input.Password" class="form-label"></label>
+                            <div class="input-group">
+                                <input asp-for="Input.Password" class="form-control" type="password" />
+                                <button type="button" class="btn btn-outline-secondary toggle-password" data-target="Input_Password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="Input.Password" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.ConfirmPassword" class="form-label"></label>
+                            <div class="input-group">
+                                <input asp-for="Input.ConfirmPassword" class="form-control" type="password" />
+                                <button type="button" class="btn btn-outline-secondary toggle-password" data-target="Input_ConfirmPassword">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100">@L["Account.Register"]</button>
+                    </form>
+
+                    <hr />
+                    <div class="text-center mt-3">
+                        <span class="small">@L["Account.AlreadyHaveAccount"]</span>
+                        <a href="@Url.Page("/Account/Login", new { ReturnUrl = Model.ReturnUrl })" class="ms-1">@L["Account.Login"]</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleButtons = document.querySelectorAll('.toggle-password');
+
+            toggleButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetId = this.getAttribute('data-target');
+                    const passwordInput = document.getElementById(targetId);
+                    const icon = this.querySelector('i');
+
+                    if (passwordInput.type === 'password') {
+                        passwordInput.type = 'text';
+                        icon.classList.remove('bi-eye');
+                        icon.classList.add('bi-eye-slash');
+                    } else {
+                        passwordInput.type = 'password';
+                        icon.classList.remove('bi-eye-slash');
+                        icon.classList.add('bi-eye');
+                    }
+                });
+            });
+        });
+    </script>
+}
+ 

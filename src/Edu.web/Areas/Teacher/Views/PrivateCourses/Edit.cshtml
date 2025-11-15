@@ -1,0 +1,148 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.TeacherCourseEditVm
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Button.Edit"] + " - " + L["Nav.TeacherDashboard"];
+    var categories = ViewBag.CategorySelect as SelectList;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3 mt-2">
+    <h4 class="mb-0">@L["Button.Edit"]</h4>
+    <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-outline-secondary btn-sm">@L["Admin.BackToList"]</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <!-- Main edit form: posts to Teacher.PrivateCourses.Edit (POST) -->
+        <form asp-action="Edit" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" novalidate id="editCourseForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+
+            <!-- Validation summary -->
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label small">@L["ReactiveCourse.Title"]</label>
+                    <input asp-for="Title" class="form-control form-control-sm" />
+                    <span asp-validation-for="Title" class="text-danger small"></span>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small">@L["Admin.Description"]</label>
+                    <textarea asp-for="Description" class="form-control form-control-sm" rows="4"></textarea>
+                    <span asp-validation-for="Description" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small">@L["Admin.Category"]</label>
+                    <select asp-for="CategoryId" asp-items="ViewBag.CategorySelect" class="form-select form-select-sm"></select>
+                    <span asp-validation-for="CategoryId" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="mb-2">
+                        <label class="form-label small">@L["Admin.CoverImage"]</label>
+                        <input asp-for="CoverImage" type="file" class="form-control form-control-sm" />
+                        <div class="form-text small text-muted">@L["Admin.CoverImageHelp"]</div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.ExistingCoverPublicUrl))
+                    {
+                        <div class="mt-2">
+                            <div class="small text-muted">@L["Profile.CurrentPhoto"]</div>
+                            <img src="@Model.ExistingCoverPublicUrl" alt="cover" class="rounded mt-2" style="height:80px;object-fit:cover" />
+                        </div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small">@L["Course.Price"]</label>
+                    <input asp-for="Price" class="form-control form-control-sm" />
+                    <span asp-validation-for="Price" class="text-danger small"></span>
+                </div>
+
+                <!-- Publish-request status shown; RequestPublish remains a separate POST form -->
+                <div class="col-12">
+                    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+                        <!-- Request / Cancel Publish - separate from Save form -->
+                        <div class="d-inline-block">
+                            @if (Model.IsPublishRequested)
+                            {
+                                <form asp-area="Teacher" asp-controller="PrivateCourses" asp-action="CancelRequestPublish" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@Model.Id" />
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                        <i class="fa fa-ban me-1" aria-hidden="true"></i>
+                                        @(L["Admin.CancelPublishRequest"] ?? "Cancel request")
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form asp-area="Teacher" asp-controller="PrivateCourses" asp-action="RequestPublish" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@Model.Id" />
+                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                        <i class="fa fa-upload me-1" aria-hidden="true"></i>
+                                        @(L["Admin.RequestPublish"] ?? "Request publish")
+                                    </button>
+                                </form>
+                            }
+                        </div>
+
+
+                        <div class="d-flex gap-2">
+                            <!-- Save / Cancel buttons -->
+                            <button type="submit" class="btn btn-primary" id="saveCourseBtn">
+                                <i class="fa fa-save me-1" aria-hidden="true"></i> @(L["Button.Save"] ?? "Save")
+                            </button>
+
+                            <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-light border">
+                                @(L["Button.Cancel"] ?? "Cancel")
+                            </a>
+
+                            <!-- Request/Cancel publish: separate small form so it doesn't submit Edit -->
+                            <form asp-action="RequestPublish" asp-route-id="@Model.Id" method="post" class="d-inline ms-1">
+                                @Html.AntiForgeryToken()
+                                @if (Model.IsPublishRequested)
+                                {
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                        @(L["Admin.CancelPublishRequest"] ?? "Cancel request")
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                        @(L["Admin.RequestPublish"] ?? "Request publish")
+                                    </button>
+                                }
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function(){
+            var form = document.getElementById('editCourseForm');
+            var btn = document.getElementById('saveCourseBtn');
+            if(!form || !btn) return;
+            var savingbutton = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Button.Save"].Value ?? "Saving..."))
+            form.addEventListener('submit', function(){
+                // disable save button to prevent double submit
+                btn.disabled = true;
+                btn.innerHTML = savingbutton;
+            });
+        })();
+    </script>
+}
+
+

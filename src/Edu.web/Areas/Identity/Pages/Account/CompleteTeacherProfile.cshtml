@@ -1,0 +1,103 @@
+﻿@page
+@model Edu.Web.Areas.Identity.Pages.Account.CompleteTeacherProfileModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Edu.Web.Areas.Identity.Pages.Account.CompleteTeacherProfileModel> L
+
+@{
+    Layout = "/Views/Shared/_MentorLayout.cshtml";
+    ViewData["Title"] = L["ProfileComplete.Teacher.Title"];
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h3 class="card-title mb-3">@L["ProfileComplete.Teacher.Title"]</h3>
+
+                    <form method="post" enctype="multipart/form-data">
+                        @Html.AntiForgeryToken()
+                        <partial name="_ValidationScriptsPartial" />
+
+                        <div class="mb-3">
+                            <label asp-for="Input.FullName" class="form-label">@L["Profile.DisplayNameLabel"]</label>
+                            <input asp-for="Input.FullName" class="form-control" />
+                            <span asp-validation-for="Input.FullName" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.PhoneNumber" class="form-label">@L["Profile.PhoneLabel"]</label>
+                            <input asp-for="Input.PhoneNumber" class="form-control" />
+                            <span asp-validation-for="Input.PhoneNumber" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.DateOfBirth" class="form-label">@L["Profile.DateOfBirth"]</label>
+                            <input asp-for="Input.DateOfBirth" class="form-control" type="date" />
+                            <span asp-validation-for="Input.DateOfBirth" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">@L["Profile.UploadPhotoLabel"]</label>
+                            <input type="file" asp-for="Photo" class="form-control" />
+                            @if (!string.IsNullOrEmpty(Model.Input.PhotoUrl))
+                            {
+                                <div class="mt-2"><small class="text-muted">@L["Profile.CurrentPhoto"]</small></div>
+                                <img src="@Model.Input.PhotoUrl" class="rounded mt-2" style="width:120px;height:120px;object-fit:cover" />
+                            }
+                        </div>
+
+                        <hr />
+
+                        <h5>@L["Manage.TeacherSectionTitle"]</h5>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.JobTitle" class="form-label">@L["Profile.JobTitleLabel"]</label>
+                            <input asp-for="Input.JobTitle" class="form-control" />
+                            <span asp-validation-for="Input.JobTitle" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.ShortBio" class="form-label">@L["Profile.ShortBioLabel"]</label>
+                            <textarea asp-for="Input.ShortBio" class="form-control" rows="4"></textarea>
+                            <span asp-validation-for="Input.ShortBio" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.IntroVideoUrl" class="form-label">@L["Profile.IntroVideoLabel"]</label>
+                            <input asp-for="Input.IntroVideoUrl" class="form-control" />
+                            <div class="form-text">@L["Profile.IntroVideoPlaceholder"]</div>
+                            <span asp-validation-for="Input.IntroVideoUrl" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">@L["Profile.UploadCVLabel"]</label>
+                            <input type="file" asp-for="CVFile" class="form-control" />
+                            @if (!string.IsNullOrEmpty(Model.Input.CVUrl))
+                            {
+                                <div class="mt-2">
+                                    <small class="text-muted">@L["Profile.CurrentCV"]</small>
+                                    <div><a href="@Model.Input.CVUrl" target="_blank">@L["Profile.DownloadCV"]</a></div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a asp-page="/Account/Manage/Index" class="btn btn-outline-secondary">@L["Button.Cancel"]</a>
+                            <button type="submit" class="btn btn-success">@L["ProfileComplete.SaveButton"]</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            @if (TempData["ProfileSaved"] != null)
+            {
+                <div class="alert alert-success mt-3">@TempData["ProfileSaved"]</div>
+            }
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

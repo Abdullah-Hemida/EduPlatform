@@ -1,0 +1,144 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.ReactiveEnrollmentDetailsVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["ReactiveCourse.PaymentDetails"] ?? "Enrollment Details & Payments";
+    string defaultCover = Url.Content("~/images/default-course-cover.png");
+}
+
+<div class="d-flex align-items-center justify-content-between  mt-2 mb-3">
+    <div>
+        <h3 class="mb-0">@ViewData["Title"]</h3>
+        <div class="small text-muted">@L["ReactiveCourse.PaymentDetailsSubtitle"] ?? ""</div>
+    </div>
+
+    <div class="me-3">
+        <a asp-area="Teacher" asp-controller="ReactiveEnrollments" asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
+            <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
+            @L["Common.Back"]
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body d-flex gap-3">
+                <div style="width:140px;flex-shrink:0;">
+                    @{
+                        var imgSrc = !string.IsNullOrEmpty(Model.CourseCoverUrl) ? Model.CourseCoverUrl : defaultCover;
+                    }
+                    <img src="@imgSrc"
+                         alt="@Model.CourseTitle"
+                         class="rounded shadow-sm"
+                         style="width:140px;height:88px;object-fit:cover;"
+                         onerror="this.onerror=null;this.src='@defaultCover';" />
+                </div>
+
+                <div class="flex-grow-1">
+                    <h5 class="mb-1">@Model.CourseTitle</h5>
+                    <div class="small text-muted mb-2">@Model.StudentName (@Model.StudentEmail)</div>
+
+                    <dl class="row">
+                        <dt class="col-sm-4 text-muted">@L["ReactiveCourse.EnrolledAt"] ?? "Enrolled at"</dt>
+                        <dd class="col-sm-8 small text-muted">@Model.CreatedAtUtc.ToLocalTime().ToString("f")</dd>
+
+                        <dt class="col-sm-4 text-muted">@L["Status"]</dt>
+                        <dd class="col-sm-8">
+                            @if (Model.IsPaid)
+                            {
+                                <span class="badge bg-success">@L["Status.Paid"] ?? "Paid"</span>
+                            }
+                            else if (Model.IsApproved)
+                            {
+                                <span class="badge bg-primary">@L["Status.Accepted"] ?? "Approved"</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning text-dark">@L["Status.Pending"] ?? "Pending"</span>
+                            }
+                        </dd>
+
+                        <dt class="col-sm-4 text-muted">@L["ReactiveCourse.TotalPaid"] ?? "Total paid"</dt>
+                        <dd class="col-sm-8 fw-semibold">@Model.TotalPaidLabel</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div><strong>@L["ReactiveCourse.PaymentDetails"]</strong></div>
+                <div class="small text-muted">@L["ReactiveCourse.Months"]</div>
+            </div>
+            <div class="card-body">
+                @if (!Model.MonthPayments.Any())
+                {
+                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var mp in Model.MonthPayments)
+                        {
+                            <div class="list-group-item d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="fw-semibold">@L["ReactiveCourse.Month"] @mp.MonthIndex</div>
+                                    <div class="small text-muted">@mp.AmountLabel</div>
+                                    @if (!string.IsNullOrEmpty(mp.PaymentReference))
+                                    {
+                                        <div class="small text-muted">Ref: @mp.PaymentReference</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(mp.AdminNote))
+                                    {
+                                        <div class="small text-muted mt-1">Note: @mp.AdminNote</div>
+                                    }
+                                </div>
+
+                                <div class="text-end">
+                                    <div class="small text-muted">@mp.CreatedAtUtc.ToLocalTime().ToString("g")</div>
+                                    <div class="mt-1">
+                                        @if (mp.Status == EnrollmentMonthPaymentStatus.Paid)
+                                        {
+                                            <span class="badge bg-success">@L["Status.Paid"] ?? "Paid"</span>
+                                        }
+                                        else if (mp.Status == EnrollmentMonthPaymentStatus.Pending)
+                                        {
+                                            <span class="badge bg-warning text-dark">@L["ReactiveCourse.PendingPayments"] ?? "Pending"</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">@L["Status.Rejected"] ?? "Rejected"</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <aside class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <h6>@L["Student"]</h6>
+                <div class="small text-muted">@Model.StudentName</div>
+                <div class="small text-muted">@Model.StudentEmail</div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6>@L["Course.Info"]</h6>
+                <div class="small text-muted">@Model.CourseTitle</div>
+                <div class="small text-muted mt-2">@L["ReactiveCourse.Duration"]</div>
+            </div>
+        </div>
+    </aside>
+</div>
+
+
+

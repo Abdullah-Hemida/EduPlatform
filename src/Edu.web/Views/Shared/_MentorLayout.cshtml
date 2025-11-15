@@ -1,0 +1,273 @@
+﻿@using System.Globalization
+@using Edu.Domain.Entities
+@using Microsoft.AspNetCore.Localization
+@using Microsoft.AspNetCore.Identity
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> Localizer
+@inject UserManager<ApplicationUser> UserManager
+@{
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var userIsAuthenticated = User?.Identity?.IsAuthenticated ?? false;   
+    ApplicationUser? currentUser = null;
+    string? profileImageUrl = null;
+    string? displayName = null;
+    string? defaultAvatarUrl = Url.Content("~/uploads/images/pngtree-character-default-avatar-image_2237203.jpg");
+    if (userIsAuthenticated)
+    {
+        try
+        {
+            currentUser = await UserManager.GetUserAsync(User);
+            profileImageUrl = currentUser?.PhotoUrl;
+            if (!string.IsNullOrEmpty(currentUser?.FullName))
+            {
+                var names = currentUser.FullName.Split(' ');
+                displayName = names[0];
+            }
+            else
+            {
+                displayName = currentUser?.UserName;
+            }
+        }
+        catch (Exception ex)
+        {
+            // log if you have logger injected; for now fallback gracefully
+            displayName = User.Identity?.Name ?? "User";
+        }
+    }
+
+    string? dashboardUrl = null;
+    if (User.IsInRole("Admin"))
+    {
+        dashboardUrl = Url.Action("Index", "Dashboard", new { area = "Admin" });
+    }
+    else if (User.IsInRole("Teacher"))
+    {
+        dashboardUrl = Url.Action("Index", "Dashboard", new { area = "Teacher" });
+    }
+    else if (User.IsInRole("Student"))
+    {
+        dashboardUrl = Url.Action("MyPurchases", "PrivateCourses", new { area = "Student" });
+    }
+
+    // Check if we're on a profile completion page to avoid redirect loops
+    var isProfileCompletionPage = ViewContext.RouteData.Values["page"]?.ToString()?
+        .Contains("/Account/Complete") == true ||
+        ViewContext.RouteData.Values["page"]?.ToString()?
+        .Contains("/Account/ChooseRole") == true;
+}
+
+@functions {
+    private string IsActivePage(string action, string controller)
+    {
+        var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+        var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+        return (currentAction == action && currentController == controller) ? "active" : "";
+    }
+}
+
+<!DOCTYPE html>
+<html lang="@System.Threading.Thread.CurrentThread.CurrentUICulture.TwoLetterISOLanguageName" dir="@ViewData["Direction"]">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - Edu Platform</title>
+
+    <!-- Bootstrap core CSS (from lib) -->
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <!-- Font Awesome (Icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />   
+    <!-- Localization (RTL/LTR support) -->
+    @if (ViewData["Direction"]?.ToString() == "rtl")
+    {
+        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.rtl.min.css" />
+    }
+    <!-- Custom Overrides -->
+    <link rel="stylesheet" href="~/vendor/Mentor/css/mentor.css" />
+    <link rel="stylesheet" href="~/css/site.css" />
+    @RenderSection("Styles", required: false)
+</head>
+
+<body>   
+    <nav id="header" class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top py-2">
+        <div class="container-fluid px-3 px-md-4">
+
+            <!-- Brand -->
+            <a class="navbar-brand fw-bold d-flex align-items-center text-decoration-none order-1" href="/">
+                <i class="fas fa-graduation-cap me-2 text-primary fa-lg"></i>
+                <span class="brand-gradient">@Localizer["Site.Title"]</span>
+            </a>
+
+            <!-- Mobile toggle -->
+            <button class="navbar-toggler border-0 order-2" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- Navbar Links -->
+            <div class="collapse navbar-collapse order-3" id="mainNav">
+
+                <!-- Centered navigation links -->
+                <ul class="navbar-nav mx-auto mb-2 mb-lg-0 gap-lg-2">
+                    <li class="nav-item">
+                        <a asp-area="" asp-controller="Home" asp-action="Index" class="nav-link px-3 text-nowrap @IsActivePage("Index", "Home")">
+                            <i class="fas fa-home me-1 text-muted"></i> @Localizer["Nav.Home"]
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a asp-area="" asp-controller="School" asp-action="Index" class="nav-link px-3 text-nowrap @IsActivePage("Index", "School")">
+                            <i class="fas fa-school me-1 text-muted"></i> @Localizer["Nav.School"]
+                        </a>
+                    </li>
+
+                    <!-- Dropdown for Courses when screen is small -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle px-3 text-nowrap" href="#" id="coursesDropdown" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-book-open me-1 text-muted"></i> @Localizer["Nav.Courses"]
+                        </a>
+                        <ul class="dropdown-menu shadow-sm border-0 rounded-3" style="width:180px;" aria-labelledby="coursesDropdown">
+                            <li>
+                                <a class="dropdown-item" asp-area="" asp-controller="Teachers" asp-action="Index">
+                                    <i class="fas fa-chalkboard-teacher me-2 text-success"></i> @Localizer["Nav.Teachers"]
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" asp-area="" asp-controller="PrivateCourses" asp-action="Index">
+                                    <i class="fas fa-video me-2 text-danger"></i> @Localizer["Nav.RecordedCourses"]
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" asp-area="" asp-controller="ReactiveCourses" asp-action="Index">
+                                    <i class="fas fa-people-group me-2 text-warning"></i> @Localizer["Nav.ReactiveCourses"]
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <!-- Right side items -->
+                <ul class="navbar-nav ms-lg-auto align-items-lg-center gap-2">
+
+                    <!-- Language Selector -->
+                    <li class="nav-item me-lg-2">
+                        @await Component.InvokeAsync("LanguageSelector", new { returnUrl = Context.Request.Path + Context.Request.QueryString })
+                    </li>
+
+                    @if (!userIsAuthenticated)
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link px-3 text-secondary" href="/Identity/Account/Login">
+                                <i class="fas fa-sign-in-alt me-1"></i> @Localizer["Account.Login"]
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="btn btn-primary btn-sm px-3 py-2 fw-semibold rounded-pill shadow-sm"
+                               href="/Identity/Account/Register">
+                                <i class="fas fa-user-plus me-1"></i> @Localizer["Account.Register"]
+                            </a>
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center p-1" href="#" data-bs-toggle="dropdown">
+                                <img src="@(!string.IsNullOrEmpty(profileImageUrl) ? profileImageUrl : defaultAvatarUrl)"
+                                     class="rounded-circle me-2 shadow-sm" style="width: 36px; height: 36px; object-fit: cover;" />
+                                <span class="fw-semibold text-dark">@displayName</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 rounded-3">
+                                <li>
+                                    <a class="dropdown-item" href="/Identity/Account/Manage">
+                                        <i class="fas fa-user-circle me-2 text-primary"></i> @Localizer["Nav.Profile"]
+                                    </a>
+                                </li>
+
+                                @if (!string.IsNullOrEmpty(dashboardUrl))
+                                {
+                                    <li>
+                                        <a class="dropdown-item" href="@dashboardUrl">
+                                            <i class="fas fa-gauge me-2 text-success"></i>
+                                            @if (User.IsInRole("Admin"))
+                                            {
+                                                @Localizer["Nav.ControlPannel"]
+                                            }
+                                            else if (User.IsInRole("Teacher"))
+                                            {
+
+                                                @Localizer["Nav.ControlPannel"]
+                                            }
+                                            else
+                                            {
+
+                                                @Localizer["Nav.ControlPannel"]
+                                            }
+                                        </a>
+                                    </li>
+                                }
+
+                                <li><hr class="dropdown-divider my-1" /></li>
+                                <li>
+                                    <form method="post" asp-area="Identity" asp-page="/Account/Logout">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="dropdown-item text-danger">
+                                            <i class="fas fa-sign-out-alt me-2"></i> @Localizer["Account.Logout"]
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section (outside main container) -->
+    @RenderSection("Hero", required: false)
+
+    <main role="main" class="container py-4">
+        @RenderBody()
+    </main>
+    @await Component.InvokeAsync("Footer")
+
+    <a href="#" class="scroll-top d-inline-flex align-items-center justify-content-center"
+       role="button" aria-label="Scroll to top" tabindex="0">
+        <i class="fas fa-arrow-up" aria-hidden="true"></i>
+    </a>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+    <!-- Bootstrap bundle (only one copy — keep this one) -->
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Mentor theme JS (after bootstrap) -->
+    <script src="~/vendor/mentor/js/mentor.js"></script>
+
+    <!-- jQuery Validation (after jQuery) -->
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js"></script>
+
+    @RenderSection("Scripts", required: false)
+
+    <script>
+        // Smooth navbar scroll effect
+        document.addEventListener('DOMContentLoaded', function () {
+            const navbar = document.querySelector('.navbar');
+
+            window.addEventListener('scroll', function () {
+                if (window.scrollY > 10) {
+                    navbar.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.15)';
+                    navbar.style.background = 'rgba(255, 255, 255, 0.98)';
+                } else {
+                    navbar.style.boxShadow = '0 2px 15px rgba(0, 0, 0, 0.08)';
+                    navbar.style.background = 'rgba(255, 255, 255, 0.95)';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
+
+

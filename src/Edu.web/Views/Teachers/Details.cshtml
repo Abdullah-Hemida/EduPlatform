@@ -1,0 +1,252 @@
+﻿@model TeacherDetailsVm
+@using System.Globalization
+@using Edu.Infrastructure.Helpers
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject Microsoft.AspNetCore.Identity.UserManager<Edu.Domain.Entities.ApplicationUser> UserManager
+
+@{
+    Layout = "~/Views/Shared/_MentorLayout.cshtml";
+    ViewData["Title"] = Model.FullName;
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var textAlign = lang == "ar" ? "right" : "left";
+    string dateOfBirthText = Model.DateOfBirth.HasValue ? Model.DateOfBirth.Value.ToString("d", CultureInfo.CurrentUICulture) : (L["Admin.NotProvided"] ?? "Not provided");
+}
+
+<div class="py-4" dir="@dir" style="text-align:@textAlign">
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card shadow-sm mb-3">
+
+                    <div class="d-flex gap-3 align-items-center">
+                        <img src="@Model.PhotoUrl" alt="@Model.FullName" class="rounded-circle" style="width:100px; height:100px" />
+                        <div>
+                            <h3 class="mb-0">@Model.FullName</h3>
+                            <div class="small text-muted">@Model.JobTitle</div>
+                        </div>
+                    </div>
+                    <div class="card-body d-flex gap-3">
+                        <div class="flex-grow-1">
+
+                            <div class="mt-2">@Model.ShortBio</div>
+
+                            <div class="mt-3 d-flex gap-2">
+                                @if (!string.IsNullOrEmpty(Model.CVUrl))
+                                {
+                                    <a href="@Model.CVUrl" class="btn btn-outline-secondary btn-sm" target="_blank">@(L["Profile.DownloadCV"] ?? "Download CV")</a>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.IntroVideoUrl))
+                                {
+                                    <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#introVideoCollapse">@(L["Profile.IntroVideoTitle"] ?? "Intro video")</button>
+                                }
+                            </div>
+
+                            <div class="mt-2 small text-muted">
+                                <strong>@L["Profile.DateOfBirth"]:</strong> @dateOfBirthText
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.IntroVideoUrl))
+                    {
+                        <div class="collapse" id="introVideoCollapse">
+                            <div class="card-body border-top">
+                                @{
+                                    var ytId = YouTubeHelper.ExtractYouTubeId(Model.IntroVideoUrl);
+                                }
+                                @if (!string.IsNullOrEmpty(ytId))
+                                {
+                                    <div class="ratio ratio-16x9 mb-3">
+                                        <iframe src="https://www.youtube.com/embed/@ytId" title="Intro video" frameborder="0" allowfullscreen></iframe>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="small text-muted">@(L["Admin.NoVideo"] ?? "No video")</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Reactive courses -->
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div><strong>@(L["Admin.ReactiveCourses"] ?? "Reactive courses")</strong></div>
+                        <div class="small text-muted">@Model.ReactiveCourses.Count()</div>
+                    </div>
+                    <div class="card-body">
+                        @if (!Model.ReactiveCourses.Any())
+                        {
+                            <div class="small text-muted">@L["Admin.NoRecords"]</div>
+                        }
+                        else
+                        {
+                            <div class="row g-3">
+                                @foreach (var rc in Model.ReactiveCourses)
+                                {
+                                    <div class="col-12 col-md-6">
+                                        <div class="card h-100">
+                                            @if (!string.IsNullOrEmpty(rc.CoverImageUrl))
+                                            {
+                                                <img src="@rc.CoverImageUrl" class="card-img-top" style="height:140px;object-fit:cover" alt="@rc.Title" />
+                                            }
+                                            <div class="card-body d-flex flex-column">
+                                                <div class="d-flex justify-content-between">
+                                                    <h6 class="mb-1">@rc.Title</h6>
+                                                    <div class="fw-semibold">@rc.PricePerMonthLabel</div>
+                                                </div>
+
+                                                <div>
+                                                    <p class="small text-muted mb-2">@rc.Description</p>
+                                                </div>
+                                                
+                                                <div class="mt-auto d-flex align-items-center justify-content-between">
+                                                    <div class="small text-muted">@rc.MonthsCount @(L["Teachers.Months"] ?? "months")</div>
+                                                    <div class="text-end">                                                      
+                                                        <a asp-area="Student" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@rc.Id" class="btn btn-sm btn-outline-primary ms-2">@L["Button.View"]</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Private courses -->
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div><strong>@L["Teacher.RecordedCourses"]</strong></div>
+                        <div class="small text-muted">@Model.PrivateCourses.Count()</div>
+                    </div>
+                    <div class="card-body">
+                        @if (!Model.PrivateCourses.Any())
+                        {
+                            <div class="small text-muted">@L["Admin.NoRecords"]</div>
+                        }
+                        else
+                        {
+                            <div class="row g-3">
+                                @foreach (var pc in Model.PrivateCourses)
+                                {
+                                    <div class="col-12 col-md-6 mb-2">
+                                        <div class="card h-100">
+                                            @if (!string.IsNullOrEmpty(pc.CoverImageUrl))
+                                            {
+                                                <img src="@pc.CoverImageUrl" class="card-img-top" style="height:120px;object-fit:cover" alt="@pc.Title" />
+                                            }
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">@pc.Title</h6>
+                                                <div class="small text-muted mb-2">@pc.Description</div>
+                                                <div class="mt-auto d-flex align-items-center justify-content-between">
+                                                    <div class="small text-muted">@pc.PriceLabel</div>
+                                                    <a class="btn btn-outline-primary btn-sm" asp-area="" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@pc.Id">@L["View"]</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column: Slots (server-side booking + cancel forms) -->
+            <aside class="col-lg-4">
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div><strong>@(L["Slots.Index.Title"] ?? "My Slots")</strong></div>
+                        <div class="small text-muted">@Model.Slots.Count()</div>
+                    </div>
+
+                    <div class="card-body">
+                        @if (!Model.Slots.Any())
+                        {
+                            <div class="small text-muted">@L["Admin.NoRecords"]</div>
+                        }
+                        else
+                        {
+                            <ul class="list-group shadow-sm rounded-3">
+                                @foreach (var s in Model.Slots)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center py-3 border-0 border-bottom">
+                                        <div>
+                                            <div class="fw-bold text-dark">
+                                                <i class="bi bi-calendar-event me-1 text-primary"></i>
+                                                @s.StartUtc.ToLocalTime().ToString("dddd, MMM dd")
+                                            </div>
+                                            <small class="text-muted">
+                                                <i class="bi bi-clock me-1"></i>
+                                                @s.StartUtc.ToLocalTime().ToString("h:mm tt")
+                                                <span class="mx-1">–</span>
+                                                @s.EndUtc.ToLocalTime().ToString("h:mm tt")
+                                                <span class="mx-1">•</span>@s.PriceLabel
+                                            </small>
+                                        </div>
+
+                                        <div class="text-end slot-action-wrap">
+                                            @if (User.IsInRole("Student"))
+                                            {
+                                                @if (s.IsBooked && s.CurrentBookingId.HasValue)
+                                                {
+                                                    <form asp-area="Student" asp-controller="Bookings" asp-action="Cancel" method="post" class="d-inline-block">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="id" value="@s.CurrentBookingId.Value" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary"
+                                                                onclick="return confirm('@(L["ConfirmDelete"] ?? "Are you sure you want to cancel this booking?")');">
+                                                            <i class="bi bi-x-circle me-1"></i> @(L["Booking.Cancel"] ?? "Cancel")
+                                                        </button>
+                                                    </form>
+                                                }
+                                                else
+                                                {
+                                                    <form asp-area="Student" asp-controller="Bookings" asp-action="Create" method="post" class="d-inline-block">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="SlotId" value="@s.Id" />
+                                                        <input type="hidden" name="Notes" value="" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-primary" @(s.AvailableSeats <= 0 ? "disabled" : "")>
+                                                            <i class="bi bi-calendar-plus me-1"></i> @(L["Teachers.BookSession"] ?? "Book")
+                                                        </button>
+                                                    </form>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Create", "Bookings", new { area = "Student", slotId = s.Id })">
+                                                    <i class="bi bi-calendar-plus me-1"></i> @(L["Booking.Request"] ?? "Request")
+                                                </a>
+                                            }
+                                        </div>
+
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-body small text-muted">
+                        @(L["Slots.Index.Subtitle"] ?? "Manage your available slots in the Teacher area.")
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+    </div>
+</div>
+
+    <style>
+        .object-fit-cover {
+            object-fit: cover;
+        }
+    </style>
+}
+
+
+

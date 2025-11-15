@@ -1,0 +1,774 @@
+﻿html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+/* Reduced container padding */
+.container-fluid.px-3.px-md-4 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+}
+
+@media (min-width: 768px) {
+    .container-fluid.px-3.px-md-4 {
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+}
+
+/* Brand gradient */
+.brand-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Sticky navigation */
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    backdrop-filter: blur(10px);
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    transition: all 0.3s ease;
+}
+
+/* Proper flexbox layout for desktop */
+@media (min-width: 992px) {
+    .navbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .navbar-brand.order-1 {
+        flex: 0 0 auto;
+        margin-right: 2rem;
+    }
+
+    .navbar-collapse.order-3 {
+        flex: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .navbar-nav.mx-auto {
+        position: static;
+        transform: none;
+        display: flex;
+        justify-content: center;
+        flex: 1;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    .navbar-nav.ms-lg-auto {
+        flex: 0 0 auto;
+        margin-left: auto !important;
+    }
+}
+
+/* Smooth animations for nav items */
+.nav-item-custom {
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    margin: 2px;
+    position: relative;
+}
+
+    .nav-item-custom:hover {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+/* Active state indicators */
+.nav-active-indicator {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 3px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.nav-item-custom.active .nav-active-indicator {
+    width: 60%;
+}
+
+.nav-item-custom.active {
+    color: #667eea !important;
+    font-weight: 600;
+}
+
+/* Button animations */
+.nav-btn-custom {
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+}
+
+    .nav-btn-custom:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+/* User avatar animations */
+.user-avatar {
+    width: 38px;
+    height: 38px;
+    object-fit: cover;
+    transition: all 0.3s ease;
+}
+
+.nav-user-toggle:hover .user-avatar {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Dropdown animations */
+.dropdown-menu {
+    border: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    border-radius: 12px;
+    transform: translateY(10px);
+    opacity: 0;
+    display: block;
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+    .dropdown-menu.show {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: all;
+    }
+
+.dropdown-item-custom {
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    margin: 2px 8px;
+    padding: 8px 12px !important;
+}
+
+    .dropdown-item-custom:hover {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        transform: translateX(5px);
+    }
+
+/* Mobile improvements */
+@media (max-width: 991.98px) {
+    .navbar-nav.mx-auto {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+
+    .navbar-collapse {
+        background: white;
+        margin-top: 10px;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+    }
+
+    .nav-item-custom {
+        margin: 5px 0;
+        padding: 10px 15px !important;
+        justify-content: center;
+    }
+
+    .nav-active-indicator {
+        bottom: 0;
+        left: 0;
+        transform: none;
+        height: 100%;
+        width: 4px;
+        transition: height 0.3s ease;
+    }
+
+    .nav-item-custom.active .nav-active-indicator {
+        width: 4px;
+        height: 100%;
+    }
+
+    .navbar-toggler {
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+        .navbar-toggler:hover {
+            background: rgba(102, 126, 234, 0.2);
+        }
+
+    /* Stack right-side items vertically on mobile */
+    .navbar-nav.ms-lg-auto {
+        width: 100%;
+        text-align: center;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+
+    .nav-divider {
+        display: none;
+    }
+}
+
+/* Better spacing and shadows */
+.nav-divider {
+    width: 1px;
+    height: 24px;
+    background: linear-gradient(to bottom, transparent, #dee2e6, transparent);
+}
+
+.shadow-sm {
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Logout button specific styles */
+.logout-btn {
+    padding: 8px 12px !important;
+    border-radius: 6px;
+    margin: 2px 8px;
+    width: calc(100% - 16px);
+}
+
+    .logout-btn:hover {
+        background: rgba(220, 53, 69, 0.1) !important;
+    }
+
+/*the teacher car*/
+.teacher-photo {
+    height: 240px;
+    width: 100%;
+    object-fit: cover;
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+}
+
+.teacher-card {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    cursor: pointer;
+    border-radius: 0.5rem;
+}
+
+    .teacher-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    }
+.alert-floating {
+    animation: fadeIn 0.5s ease, fadeOut 0.5s ease 3.5s forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+}
+
+
+/* Home page enhancements to blend with Mentor look */
+.hover-shadow-lg:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    transition: all 0.3s ease;
+}
+
+/* Slightly reduce title on very small screens to avoid squeeze */
+@media (max-width: 420px) {
+    .card-title-truncate {
+        font-size: 0.95rem;
+    }
+
+    .icon-wrap i {
+        font-size: 1.35rem !important;
+    }
+
+    .small-card {
+        min-height: 84px;
+    }
+}
+
+.section-img {
+    max-height: 420px;
+    object-fit: cover;
+    width: 100%;
+    border-radius: 8px;
+}
+
+.home-section .lead {
+    font-size: 1.05rem;
+}
+
+
+
+
+
+ /*new dynamic*/
+/* --- Section visuals --- */
+.home-section {
+    padding: 4rem 0;
+}
+
+    /* Title + subtitle */
+    .home-section .section-title {
+        font-size: 2rem;
+        letter-spacing: -0.4px;
+        margin-bottom: 0.25rem;
+        text-align: center;
+    }
+
+    .home-section .section-subtitle {
+        margin-bottom: 1.5rem;
+        color: #6b7280;
+        font-size: 1.02rem;
+        text-align: inherit;
+        max-width: 820px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* section layout */
+    .home-section .section-inner {
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    /* media */
+    .home-section .section-media {
+        flex: 1 1 48%;
+        min-width: 280px;
+    }
+
+        .home-section .section-media img {
+            width: 100%;
+            height: 100%;
+            max-height: 420px;
+            object-fit: cover;
+            border-radius: 12px;
+            box-shadow: 0 8px 18px rgba(18, 24, 30, .08);
+        }
+
+    /* section body */
+    .home-section .section-body {
+        flex: 1 1 48%;
+        min-width: 280px;
+    }
+
+/* --- Items: default (used when section has an image) --- */
+.home-items {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 0.9rem;
+}
+
+/* tablet+ */
+@media (min-width: 768px) {
+    .home-items {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* default card-style for items when section HAS image (horizontal card) */
+.home-item {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: .85rem;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(18,24,30,.04);
+    transition: transform .18s ease, box-shadow .18s ease;
+    border: none; /* using Bootstrap .card but keep subtle */
+}
+
+    .home-item:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 18px 40px rgba(18,24,30,.07);
+    }
+
+    /* small thumb in horizontal mode */
+    .home-item .thumb {
+        width: 96px;
+        height: 64px;
+        object-fit: cover;
+        border-radius: 8px;
+        flex-shrink: 0;
+        background: #f3f4f6;
+    }
+
+    /* meta text */
+    .home-item .meta .item-text {
+        margin-bottom: .4rem;
+        line-height: 1.35;
+        color: #1f2937;
+    }
+
+    .home-item .meta .read-more {
+        font-size: .85rem;
+        font-weight: 600;
+    }
+
+/* --- Items layout WHEN section has NO main image --- */
+/* Marker class .no-section-image changes layout to a responsive grid of cards */
+.home-items.no-section-image {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    align-items: stretch;
+}
+
+    /* card appearance in no-section-image mode: image on top, text below */
+    .home-items.no-section-image .home-item {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 0; /* use Bootstrap card spacing inside */
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 10px 28px rgba(18,24,30,0.06);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    /* image wrapper to keep consistent aspect ratio */
+    .home-items.no-section-image .item-thumb-wrap {
+        width: 100%;
+        aspect-ratio: 16/9; /* modern browsers */
+        overflow: hidden;
+        background: #f7fafc;
+    }
+
+        .home-items.no-section-image .item-thumb-wrap .thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+    /* card body inside */
+    .home-items.no-section-image .card-body {
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 120px;
+    }
+
+    /* smaller text and better spacing for cards */
+    .home-items.no-section-image .item-text {
+        color: #111827;
+        font-size: .96rem;
+        line-height: 1.4;
+    }
+
+    /* read-more as button under text (keeps LTR/RTL padding) */
+    .home-items.no-section-image .read-more {
+        align-self: start;
+    }
+
+/* alternating section background */
+.home-section.alt {
+    background: linear-gradient(180deg, rgba(247,250,252,1) 0%, rgba(255,255,255,1) 100%);
+}
+
+/* RTL adjustments */
+[dir="rtl"] .home-section .section-inner {
+    direction: rtl;
+}
+
+[dir="rtl"] .home-item {
+    direction: rtl;
+}
+
+    [dir="rtl"] .home-item .thumb {
+        margin-left: 0;
+        margin-right: .75rem;
+    }
+
+/* responsive tweaks */
+@media (max-width: 575px) {
+    .home-section {
+        padding: 2.25rem 0;
+    }
+
+        .home-section .section-title {
+            font-size: 1.5rem;
+        }
+}
+
+/* 1) Force navbar items to stay centered and not wrap */
+nav#header .navbar-collapse,
+nav#header .container-fluid {
+    align-items: center; /* vertical center everything */
+}
+
+/* ensure .navbar-nav stays a single-row flex container */
+nav#header .navbar-nav {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+}
+
+/* 2) Make nav-links inline flex so icon + text stay in one row */
+nav#header .nav-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: .45rem; /* spacing between icon and label */
+    white-space: nowrap; /* prevent wrap to next line */
+    padding-top: .45rem;
+    padding-bottom: .45rem;
+    line-height: 1; /* keep a compact line height */
+}
+
+    /* 3) Ensure icons are inline and vertically aligned */
+    nav#header .nav-link i.fas,
+    nav#header .nav-link i.far,
+    nav#header .nav-link i.fa {
+        display: inline-block !important;
+        line-height: 1 !important;
+        vertical-align: middle !important;
+        font-size: 0.95rem; /* adjust as needed */
+    }
+
+    /* 4) Logical margin for icon so it adapts to LTR/RTL (avoid me- / ms- conflicts) */
+    nav#header .nav-link .fa {
+        margin-inline-end: .45rem; /* space after icon (LTR) */
+    }
+
+/* In RTL we want icon on the right of text—use margin-inline-start instead */
+[dir="rtl"] nav#header .nav-link .fa {
+    margin-inline-end: 0;
+    margin-inline-start: .45rem;
+}
+
+/* 5) Keep brand and toggler order stable (defensive) */
+nav#header .navbar-brand {
+    order: 0;
+    flex: 0 0 auto;
+}
+
+nav#header .navbar-toggler {
+    order: 1;
+    flex: 0 0 auto;
+}
+
+nav#header .navbar-collapse {
+    order: 2;
+    flex: 1 1 auto;
+}
+
+/* 6) Constrain line-height for dropdown items (matching nav) */
+nav#header .dropdown-item {
+    line-height: 1.15;
+    white-space: nowrap;
+}
+
+/* 7) Very small screens: allow wrapping but keep icon + text together */
+@media (max-width: 575.98px) {
+    nav#header .nav-link {
+        white-space: normal;
+        gap: .4rem;
+    }
+}
+
+.site-footer {
+    background-color: #111827; /* darker navy-like */
+    color: #f8f9fa;
+    font-size: 0.95rem;
+}
+
+.footer-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #ffffff;
+    border-bottom: 2px solid #495057;
+    padding-bottom: .25rem;
+    margin-bottom: 1rem;
+}
+
+.footer-link {
+    color: #d1d5db;
+    text-decoration: none;
+    transition: color .2s ease-in-out;
+}
+
+    .footer-link:hover {
+        color: #fff;
+    }
+
+.footer-social {
+    color: #d1d5db;
+    transition: transform .2s, color .2s;
+    opacity: 100%;
+}
+
+    .footer-social:hover {
+        transform: translateY(-3px);
+        color: #fff;
+    }
+
+hr {
+    border-color: rgba(255,255,255,.2);
+}
+
+/* Ensure small metadata columns align properly on small screens in both directions */
+.card .card-body .small.text-muted {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* For details pages field lists — use text-start on small screens and text-end on md+ (Bootstrap handles flipping when bootstrap.rtl is loaded) */
+@media (min-width: 768px) {
+    .dl-right dt {
+        text-align: left;
+    }
+
+    .dl-right dd {
+        text-align: right;
+    }
+}
+
+@media (max-width: 767px) {
+    .dl-right dt, .dl-right dd {
+        text-align: left;
+    }
+}
+
+
+/* small tweak for icon + text buttons inside cards so icon doesn't drop above text in RTL in some older browsers */
+.card .icon-wrap {
+    line-height: 1;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.card .card-title {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: .5rem;
+    margin-right: .5rem;
+}
+/* Card image and truncation helpers */
+.course-card .card-img-top {
+    height: 160px;
+    object-fit: cover;
+}
+
+.course-card .card-body {
+    padding-bottom: .75rem;
+}
+
+.course-card .card-title {
+    font-size: 1.05rem;
+    margin-bottom: .25rem;
+    line-height: 1.15;
+}
+
+.course-card .meta {
+    font-size: .85rem;
+    color: #6c757d;
+}
+
+.course-card .desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 3.6em;
+}
+
+/* footer row inside card */
+.course-card .card-footer {
+    background: transparent;
+    border-top: 0;
+    padding: .75rem;
+}
+
+/* tidy search form on small screens */
+@media (max-width: 575.98px) {
+    .search-row .form-control {
+        min-width: 120px;
+    }
+
+    .search-row .form-select {
+        min-width: 120px;
+    }
+}
+
+.course-cover {
+    height: 300px;
+    object-fit: cover;
+    width: 100%;
+    display: block;
+}
+
+.course-header .small.meta {
+    color: #6c757d;
+}
+
+.course-action-row {
+    gap: .75rem;
+}
+
+.course-info dl {
+    margin: 0;
+}
+/* keep description comfortable on narrow screens */
+.course-desc {
+    white-space: pre-wrap;
+}
+/* sticky aside box spacing fix */
+.sticky-aside {
+    top: 88px;
+}
+/* keep below navbar height */
+@media (max-width: 991.98px) {
+    .sticky-aside {
+        position: static;
+        top: auto;
+    }
+}

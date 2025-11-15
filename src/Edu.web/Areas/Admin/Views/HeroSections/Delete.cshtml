@@ -1,0 +1,70 @@
+﻿@model Edu.Domain.Entities.HeroSection
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.DeleteHeroSection"] ?? "Delete Hero Section";
+}
+
+<h2 class="mb-4 text-danger">@L["Admin.DeleteHeroSection"]</h2>
+
+<div class="alert alert-warning">
+    <strong>@L["Admin.ConfirmDeleteHero"]</strong> @L["Admin.DeleteHeroSectionMessage"]
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">@L["Admin.Placement"]</dt>
+            <dd class="col-sm-9">@Model.Placement</dd>
+
+            <dt class="col-sm-3">@L["Admin.Title"]</dt>
+            <dd class="col-sm-9">
+                @if (!string.IsNullOrEmpty(Model.TitleEn))
+                {
+                    <div><strong>EN:</strong> @Model.TitleEn</div>
+                }
+                @if (!string.IsNullOrEmpty(Model.TitleIt))
+                {
+                    <div><strong>IT:</strong> @Model.TitleIt</div>
+                }
+                @if (!string.IsNullOrEmpty(Model.TitleAr))
+                {
+                    <div><strong>AR:</strong> @Model.TitleAr</div>
+                }
+            </dd>
+
+            <dt class="col-sm-3">@L["Admin.Image"]</dt>
+            <dd class="col-sm-9">
+                @if (!string.IsNullOrEmpty(Model.ImageStorageKey))
+                {
+                    var publicUrl = Url.Content(Model.ImageStorageKey);
+                    <img src="@publicUrl" alt="Hero Image" style="max-height:120px;object-fit:cover;border-radius:6px;" />
+                }
+            </dd>
+
+            <dt class="col-sm-3">@L["Admin.IsActive"]</dt>
+            <dd class="col-sm-9">
+                @if (Model.IsActive)
+                {
+                    <span class="badge bg-success">@L["Admin.Active"]</span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary">@L["Admin.Inactive"]</span>
+                }
+            </dd>
+
+            <dt class="col-sm-3">@L["Admin.Order"]</dt>
+            <dd class="col-sm-9">@Model.Order</dd>
+        </dl>
+    </div>
+</div>
+
+<form asp-action="DeleteConfirmed" asp-route-id="@Model.Id" method="post">
+    @Html.AntiForgeryToken()
+    <div class="d-flex gap-2">
+        <a asp-action="Index" class="btn btn-light">@L["Admin.Cancel"]</a>
+        <button type="submit" class="btn btn-danger">@L["Admin.Delete"]</button>
+    </div>
+</form>
+

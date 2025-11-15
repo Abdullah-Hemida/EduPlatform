@@ -1,0 +1,27 @@
+﻿@model ModuleCreateViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+     
+}
+<div class="card">
+    <div class="card-body">
+        <h4>@L["Admin.AddModule"]</h4>
+        <form asp-action="Create" asp-area="Admin" method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="CurriculumId" />
+            <div class="col-12">
+                <label class="form-label">@L["Admin.Title"]</label>
+                <input asp-for="Title" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">@L["Admin.Order"]</label>
+                <input asp-for="Order" class="form-control" />
+            </div>
+            <div class="col-12">
+                <button class="btn btn-primary">@L["Admin.AddModule"]</button>
+                <a asp-action="Details" asp-controller="Curricula" asp-area="Admin" asp-route-id="@Model.CurriculumId" class="btn btn-link">@L["Button.Cancel"]</a>
+            </div>
+        </form>
+    </div>
+</div>
+

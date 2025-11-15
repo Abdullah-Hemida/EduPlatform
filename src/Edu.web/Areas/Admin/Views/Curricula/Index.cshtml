@@ -1,0 +1,65 @@
+﻿@model IEnumerable<Edu.Domain.Entities.Curriculum>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+     
+    ViewData["Title"] = L["Admin.Curricula"];
+    var levels = ViewBag.Levels as IEnumerable<Edu.Domain.Entities.Level> ?? Enumerable.Empty<Edu.Domain.Entities.Level>();
+    var selectedLevel = ViewBag.SelectedLevelId as int?;
+}
+
+<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+    <div>
+        <h4 class="mb-1">@L["Admin.Curricula"]</h4>
+        <div class="small text-muted">@L["Admin.CurriculaSubtitle"]</div>
+    </div>
+
+    <div>
+        <form method="get" class="d-flex align-items-center" id="levelFilterForm">
+            <label class="me-2 small text-muted my-0">@L["Admin.Level"]</label>
+            <select name="levelId" class="form-select form-select-sm me-2" onchange="document.getElementById('levelFilterForm').submit()">
+                <option value="">@L["Common.All"]</option>
+                @foreach (var l in levels)
+                {
+                    <option value="@l.Id" selected="@(selectedLevel == l.Id ? "selected" : null)">@l.Name</option>
+                }
+            </select>
+        </form>
+    </div>
+    <div class="ms-2 me-2">
+        <a asp-action="Create" asp-area="Admin" class="btn text-nowrap btn-primary ps-3 pe-3 btn-sm">@L["Admin.CreateCurriculum"] +</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    @foreach (var c in Model)
+    {
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                @if (!string.IsNullOrEmpty(c.CoverImageUrl))
+                {
+                    <img src="@c.CoverImageUrl" class="card-img-top" style="height:140px;object-fit:cover" />
+                }
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h5 class="card-title mb-0">@c.Title</h5>
+                        <small class="text-muted ms-2">@c.Level?.Name</small>
+                    </div>
+                    <p class="card-text text-muted small">@(!string.IsNullOrEmpty(c.Description) ? c.Description : "")</p>
+
+                    <div class="mt-auto d-flex gap-1">
+                        <a asp-action="Details" asp-route-id="@c.Id" asp-area="Admin" class="btn btn-outline-primary btn-sm">@L["Button.View"]</a>
+                        <a asp-action="Edit" asp-route-id="@c.Id" asp-area="Admin" class="btn btn-outline-secondary btn-sm">@L["Button.Edit"]</a>
+                        <form asp-action="Delete" asp-route-id="@c.Id" asp-area="Admin" method="post" class="d-inline ms-auto" onsubmit="return confirm('@L["Admin.ConfirmDelete"]');">
+                            @Html.AntiForgeryToken()
+                            <button class="btn btn-sm btn-danger">@L["Admin.Delete"]</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+
+
+

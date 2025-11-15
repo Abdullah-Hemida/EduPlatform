@@ -1,0 +1,492 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.ReactiveCourseDetailsVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = Model.Title;
+}
+
+<div id="alert-container" class="mb-3"></div>
+
+<div class="d-flex align-items-center mb-3 justify-content-between">
+    <div>
+        <h3 class="mb-0">@Model.Title</h3>
+        <div class="small text-muted">@Model.Description</div>
+    </div>
+
+    <a asp-area="Teacher"
+       asp-controller="ReactiveCourses"
+       asp-action="Index"
+       class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
+        <span class="d-inline ltr-only"><i class="fas fa-arrow-left"></i></span>
+        <span class="d-inline rtl-only"><i class="fas fa-arrow-right"></i></span>
+        <span>@L["Common.Back"]</span>
+    </a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="small text-muted">@L["ReactiveCourse.PricePerMonth"]</div>
+                    <div class="h5">@Model.PricePerMonthLabel</div>
+                </div>
+                <div class="text-end">
+                    <div class="small text-muted">@L["ReactiveCourse.Duration"]</div>
+                    <div class="fw-semibold">@Model.DurationMonths @L["ReactiveCourse.Months"]</div>
+                </div>
+            </div>
+        </div>
+
+        @foreach (var month in Model.Months)
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong>@L["ReactiveCourse.Month"] @month.MonthIndex</strong>
+                        <div class="small text-muted">@month.LessonsCount @L["Course.Lessons"]</div>
+                    </div>
+
+                    <div class="d-flex gap-2 align-items-center mb-3">
+                        <button class="btn btn-sm btn-outline-primary js-add-lesson"
+                                data-monthid="@month.Id"
+                                data-courseid="@Model.Id">
+                            @L["ReactiveCourse.AddLesson"]
+                        </button>
+
+                        <form asp-area="Teacher"
+                              asp-controller="ReactiveCourses"
+                              asp-action="SetMonthReady"
+                              method="post"
+                              class="d-inline js-set-month-ready-form"
+                              data-monthid="@month.Id">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="monthId" value="@month.Id" />
+                            <input type="hidden" name="ready" value="@(!month.IsReadyForPayment ? "true" : "false")" />
+
+                            <button type="button"
+                                    class="btn btn-sm js-toggle-month-ready @(month.IsReadyForPayment ? "btn-success" : "btn-outline-secondary")"
+                                    data-monthid="@month.Id"
+                                    data-isready="@(month.IsReadyForPayment ? "true" : "false")"
+                                    aria-pressed="@(month.IsReadyForPayment ? "true" : "false")">
+                                @(month.IsReadyForPayment? L["ReactiveCourse.MonthReady"] : L["ReactiveCourse.MarkReady"])
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (!month.Lessons.Any())
+                    {
+                        <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var lesson in month.Lessons)
+                            {
+                                <div class="list-group-item d-flex align-items-start justify-content-between">
+                                    <div>
+                                        <div class="fw-semibold">@lesson.Title</div>
+                                        <div class="small text-muted">
+                                            @(lesson.ScheduledUtc.HasValue? lesson.ScheduledUtc.Value.ToLocalTime().ToString("g") : L["ReactiveCourse.NoSchedule"])
+                                        </div>
+                                        <div class="small mt-1">@(!string.IsNullOrEmpty(lesson.Notes) ? lesson.Notes : "")</div>
+                                    </div>
+
+                                    <div class="text-end d-flex gap-1">
+                                        @if (!string.IsNullOrEmpty(lesson.MeetUrl))
+                                        {
+                                            <a href="@lesson.MeetUrl" target="_blank" class="btn btn-sm btn-outline-primary mb-1">@L["ReactiveCourse.OpenMeet"]</a>
+                                        }
+
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-secondary js-edit-lesson"
+                                                    data-lessonid="@lesson.Id"
+                                                    data-monthid="@month.Id"
+                                                    data-courseid="@Model.Id"
+                                                    data-title="@lesson.Title"
+                                                    data-scheduled="@lesson.ScheduledUtc?.ToString("o")"
+                                                    data-meet="@lesson.MeetUrl"
+                                                    data-notes="@lesson.Notes">
+                                                @L["Button.Edit"]
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <aside class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <h6>@L["ReactiveCourse.Info"]</h6>
+                <dl class="row small">
+                    <dt class="col-6 text-muted">@L["ReactiveCourse.Capacity"]</dt>
+                    <dd class="col-6 text-end">@Model.Capacity</dd>
+
+                    <dt class="col-6 text-muted">@L["ReactiveCourse.IntroVideo"]</dt>
+                    <dd class="col-6 text-end">@(!string.IsNullOrEmpty(Model.IntroVideoUrl) ? L["Yes"] : L["No"])</dd>
+                </dl>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<div class="modal fade" id="lessonModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form id="lessonModalForm" class="modal-content">
+            @Html.AntiForgeryToken()
+            <div class="modal-header d-flex align-items-center justify-content-between">
+                <h5 class="modal-title" id="lessonModalTitle">@Html.Raw(L["ReactiveCourse.AddLesson"].Value ?? "")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modalCourseId" name="ReactiveCourseId" />
+                <input type="hidden" id="modalMonthId" name="ReactiveCourseMonthId" />
+                <input type="hidden" id="modalLessonId" name="lessonId" />
+
+                <div class="mb-3">
+                    <label class="form-label">@L["ReactiveCourse.LessonTitle"]</label>
+                    <input id="modalTitle" name="Title" class="form-control" />
+                    <div class="invalid-feedback" id="titleError"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">@L["ReactiveCourse.LessonScheduled"]</label>
+                    <input id="modalScheduled" name="ScheduledUtc" type="datetime-local" class="form-control" />
+                    <div class="invalid-feedback" id="scheduledError"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">@L["ReactiveCourse.LessonMeetUrl"]</label>
+                    <input id="modalMeet" name="MeetUrl" class="form-control" />
+                    <div class="invalid-feedback" id="meetError"></div>
+                    <div class="form-text">@L["ReactiveCourse.LessonMeetUrlHelp"]</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">@L["ReactiveCourse.Notes"]</label>
+                    <textarea id="modalNotes" name="Notes" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@L["Button.Cancel"]</button>
+                <button id="modalSaveBtn" type="button" class="btn btn-primary">@L["Button.Save"]</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            // localized strings injected into JS
+            const txt = {
+                addLesson: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.AddLesson"].Value ?? "Add lesson")),
+                editLesson: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.EditLesson"].Value ?? "Edit lesson")),
+                titleRequired: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.Validation.TitleRequired"].Value ?? "Title is required")),
+                meetUrlInvalid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.Validation.MeetUrlInvalid"].Value ?? "Invalid meeting URL")),
+                serverError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ServerError"].Value ?? "Server error")),
+                operationFailed: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.OperationFailed"].Value ?? "Operation failed")),
+                monthReady: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.MonthReady"].Value ?? "Ready")),
+                markReady: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.MarkReady"].Value ?? "Mark ready")),
+                commonSuccess: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Success"].Value ?? "Success")),
+                commonUpdated: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Updated"].Value ?? "Updated")),
+                commonError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Error"].Value ?? "Error"))
+            };
+
+            // helper: read antiforgery token
+            function getAntiForgeryToken() {
+                const el = document.querySelector('input[name="__RequestVerificationToken"]');
+                return el ? el.value : '';
+            }
+
+            // show floating alert
+            function showAlert(message, type = 'success') {
+                const container = document.getElementById('alert-container');
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type} alert-dismissible fade show`;
+                alert.role = 'alert';
+                alert.innerHTML = `${message} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+                container.appendChild(alert);
+                setTimeout(() => {
+                    try { alert.remove(); } catch (e) { /* ignore */ }
+                }, 4000);
+            }
+
+            // basic URL heuristic
+            function looksLikeUrl(v) {
+                if (!v) return true;
+                try {
+                    const u = new URL(v);
+                    return !!u.host;
+                } catch (e) {
+                    try {
+                        return /zoom|meet|teams|gotomeeting|webex/i.test(v);
+                    } catch (_) {
+                        return false;
+                    }
+                }
+            }
+
+            // modal setup
+            const modalEl = document.getElementById('lessonModal');
+            let bsModal = null;
+            function ensureModal() { if (!bsModal) bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' }); }
+
+            const modalTitleEl = document.getElementById('lessonModalTitle');
+            const modalCourseId = document.getElementById('modalCourseId');
+            const modalMonthId = document.getElementById('modalMonthId');
+            const modalLessonId = document.getElementById('modalLessonId');
+            const modalTitleInput = document.getElementById('modalTitle');
+            const modalScheduled = document.getElementById('modalScheduled');
+            const modalMeet = document.getElementById('modalMeet');
+            const modalNotes = document.getElementById('modalNotes');
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+
+            function resetErrors() {
+                ['titleError','scheduledError','meetError'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = '';
+                });
+                [modalTitleInput, modalScheduled, modalMeet].forEach(el => {
+                    if (el) el.classList.remove('is-invalid');
+                });
+            }
+
+            // open "Add Lesson" modal
+            document.querySelectorAll('.js-add-lesson').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    ensureModal();
+                    resetErrors();
+                    modalTitleEl.textContent = txt.addLesson;
+                    modalCourseId.value = this.getAttribute('data-courseid') || '';
+                    modalMonthId.value = this.getAttribute('data-monthid') || '';
+                    modalLessonId.value = '';
+                    modalTitleInput.value = '';
+                    modalScheduled.value = '';
+                    modalMeet.value = '';
+                    modalNotes.value = '';
+                    bsModal.show();
+                });
+            });
+
+            // open "Edit Lesson" modal
+            document.querySelectorAll('.js-edit-lesson').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    ensureModal();
+                    resetErrors();
+                    modalTitleEl.textContent = txt.editLesson;
+                    modalCourseId.value = this.getAttribute('data-courseid') || '';
+                    modalMonthId.value = this.getAttribute('data-monthid') || '';
+                    modalLessonId.value = this.getAttribute('data-lessonid') || '';
+                    modalTitleInput.value = this.getAttribute('data-title') || '';
+                    const sched = this.getAttribute('data-scheduled');
+                    modalScheduled.value = sched ? new Date(sched).toISOString().slice(0,16) : '';
+                    modalMeet.value = this.getAttribute('data-meet') || '';
+                    modalNotes.value = this.getAttribute('data-notes') || '';
+                    bsModal.show();
+                });
+            });
+
+            // Ajax add/edit lesson
+            modalSaveBtn.addEventListener('click', async function (ev) {
+                ev.preventDefault();
+                resetErrors();
+
+                const modalToken = getAntiForgeryToken();
+
+                const payload = {
+                    ReactiveCourseId: modalCourseId.value,
+                    ReactiveCourseMonthId: modalMonthId.value,
+                    Title: modalTitleInput.value ? modalTitleInput.value.trim() : '',
+                    ScheduledUtc: modalScheduled.value ? new Date(modalScheduled.value).toISOString() : null,
+                    MeetUrl: modalMeet.value ? modalMeet.value.trim() : '',
+                    Notes: modalNotes.value ? modalNotes.value.trim() : ''
+                };
+
+                let hasErr = false;
+                if (!payload.Title) {
+                    modalTitleInput.classList.add('is-invalid');
+                    document.getElementById('titleError').textContent = txt.titleRequired;
+                    hasErr = true;
+                }
+                if (payload.MeetUrl && !looksLikeUrl(payload.MeetUrl)) {
+                    modalMeet.classList.add('is-invalid');
+                    document.getElementById('meetError').textContent = txt.meetUrlInvalid;
+                    hasErr = true;
+                }
+                if (hasErr) return;
+
+                const isEdit = modalLessonId.value && modalLessonId.value.length > 0;
+                const url = isEdit
+                    ? '@Url.Action("EditLessonAjax", "ReactiveCourses", new { area = "Teacher" })'
+                    : '@Url.Action("AddLessonAjax", "ReactiveCourses", new { area = "Teacher" })';
+
+                if (isEdit) payload.lessonId = parseInt(modalLessonId.value, 10);
+
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': modalToken,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const text = await resp.text();
+                    let data = null;
+                    try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+
+                    if (!resp.ok) {
+                        const msg = (data && (data.errors || data.message)) || text || txt.serverError;
+                        showAlert(msg, 'danger');
+                        return;
+                    }
+
+                    if (data && (data.success === true || data.success === "true")) {
+                        bsModal.hide();
+                        location.reload();
+                        return;
+                    }
+
+                    if (data && data.success === false && data.errors) {
+                        if (data.errors.Title) {
+                            modalTitleInput.classList.add('is-invalid');
+                            document.getElementById('titleError').textContent = data.errors.Title;
+                        }
+                        if (data.errors.MeetUrl) {
+                            modalMeet.classList.add('is-invalid');
+                            document.getElementById('meetError').textContent = data.errors.MeetUrl;
+                        }
+                        if (data.errors.General) {
+                            showAlert(data.errors.General, 'danger');
+                        }
+                        return;
+                    }
+
+                    showAlert(txt.operationFailed, 'danger');
+                } catch (err) {
+                    showAlert(txt.serverError, 'danger');
+                }
+            });
+
+            // Toggle month ready via AJAX (single unified handler)
+            async function postToggleReady(monthId, desiredReady) {
+                const url = '@Url.Action("SetMonthReadyAjax", "ReactiveCourses", new { area = "Teacher" })';
+                const token = getAntiForgeryToken();
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ monthId: monthId, ready: desiredReady })
+                    });
+
+                    const text = await resp.text();
+                    let data = null;
+                    try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+
+                    if (!resp.ok) {
+                        const msg = (data && (data.message || data.errors && data.errors.General)) || text || txt.serverError;
+                        return { success: false, message: msg, data: data };
+                    }
+
+                    if (data && (data.success === true || data.success === "true")) {
+                        return { success: true, data: data };
+                    }
+
+                    const msg = (data && data.message) || txt.operationFailed;
+                    return { success: false, message: msg, data: data };
+                } catch (e) {
+                    return { success: false, message: txt.serverError, data: null };
+                }
+            }
+
+            // attach toggle handlers (optimistic UI + revert on failure)
+            document.querySelectorAll('.js-toggle-month-ready').forEach(btn => {
+                btn.addEventListener('click', async function (e) {
+                    e.preventDefault();
+
+                    const currentlyReady = this.dataset.isready === 'true';
+                    const desiredReady = !currentlyReady;
+                    const monthId = parseInt(this.dataset.monthid, 10);
+
+                    const originalClass = this.className;
+                    const originalText = this.textContent;
+                    this.disabled = true;
+
+                    if (desiredReady) {
+                        this.classList.remove('btn-outline-secondary');
+                        this.classList.add('btn-success');
+                        this.textContent = txt.monthReady;
+                    } else {
+                        this.classList.remove('btn-success');
+                        this.classList.add('btn-outline-secondary');
+                        this.textContent = txt.markReady;
+                    }
+
+                    const result = await postToggleReady(monthId, desiredReady);
+
+                    if (result.success) {
+                        this.dataset.isready = desiredReady ? 'true' : 'false';
+                        this.setAttribute('aria-pressed', desiredReady ? 'true' : 'false');
+                        showAlert(desiredReady ? txt.commonSuccess : txt.commonUpdated, 'success');
+                    } else {
+                        this.className = originalClass;
+                        this.textContent = originalText;
+                        this.dataset.isready = currentlyReady ? 'true' : 'false';
+                        this.setAttribute('aria-pressed', currentlyReady ? 'true' : 'false');
+                        const msg = result.message || txt.operationFailed;
+                        showAlert(msg, 'danger');
+                    }
+
+                    this.disabled = false;
+                });
+            });
+
+            // small helper to hide/show icons using dir attribute (LTR/RTL)
+            (function dirHelpers() {
+                const htmlDir = document.documentElement.getAttribute('dir') || 'ltr';
+                if (htmlDir === 'rtl') {
+                    document.querySelectorAll('.ltr-only').forEach(el => el.style.display = 'none');
+                } else {
+                    document.querySelectorAll('.rtl-only').forEach(el => el.style.display = 'none');
+                }
+            })();
+
+        })();
+    </script>
+
+    <style>
+        /* minimal direction helpers (no external CSS required) */
+        .ltr-only {
+            display: inline;
+        }
+
+        .rtl-only {
+            display: inline;
+        }
+    </style>
+}
+
+
+
+
+
+
+
+

@@ -1,0 +1,243 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.HomeSectionEditVm
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<SharedResource> Localizer
+
+@{
+    var cultures = new[] { "en", "it", "ar" };
+}
+
+<h2>@Localizer["Admin.HomeSection.EditTitle"]</h2>
+
+<form asp-action="Edit" method="post" enctype="multipart/form-data" id="sectionForm">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+
+    <div class="mb-3">
+        <label class="form-label">@Localizer["Admin.Order"]</label>
+        <input asp-for="Order" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">@Localizer["Admin.SectionImage"]</label>
+        <input type="file" name="SectionImageFile" id="SectionImageFile" class="form-control" accept="image/*" />
+        @if (!string.IsNullOrEmpty(Model.ExistingSectionImageUrl))
+        {
+            <div class="mt-2">
+                <img src="@Model.ExistingSectionImageUrl" id="sectionImagePreview" style="max-width:320px; border-radius:8px;" />
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="removeSectionImage" name="RemoveSectionImage" value="true" />
+                    <label class="form-check-label" for="removeSectionImage">@Localizer["Admin.RemoveExistingImage"]</label>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="mt-2">
+                <img id="sectionImagePreview" style="display:none; max-width:320px; border-radius:8px;" />
+            </div>
+        }
+    </div>
+
+    <hr />
+    <h4>@Localizer["Admin.SectionTranslations"]</h4>
+
+    <div class="row g-3">
+        @for (int t = 0; t < Model.Translations.Count; t++)
+        {
+            var tr = Model.Translations[t];
+            <div class="col-md-4">
+                <div class="card p-2 h-100">
+                    <div class="card-body">
+                        <input type="hidden" name="Translations[@t].Culture" value="@tr.Culture" />
+                        <h6 class="mb-2">@tr.Culture.ToUpper()</h6>
+
+                        <div class="mb-2">
+                            <label class="form-label">@Localizer["Admin.HomeSectionTitle"]</label>
+                            <input name="Translations[@t].Title" class="form-control" value="@tr.Title" />
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label">@Localizer["Admin.Subtitle"]</label>
+                            <textarea name="Translations[@t].Subtitle" class="form-control" rows="3">@tr.Subtitle</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <hr />
+    <h4>@Localizer["Admin.Items"]</h4>
+
+    <div id="itemsList">
+        @for (int i = 0; i < Model.Items.Count; i++)
+        {
+            var item = Model.Items[i];
+            <div class="card mb-3 item-card" data-index="@i">
+                <div class="card-body">
+                    <input type="hidden" name="Items[@i].Id" value="@item.Id" />
+                    <div class="row mb-2">
+                        <div class="col-md-9">
+                            <label class="form-label">@Localizer["Admin.ItemFallbackText"]</label>
+                            <input name="Items[@i].Text" class="form-control" value="@item.Text" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Localizer["Admin.Order"]</label>
+                            <input name="Items[@i].Order" type="number" class="form-control" value="@item.Order" />
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label">@Localizer["Admin.ItemLink"]</label>
+                            <input name="Items[@i].LinkUrl" class="form-control" value="@item.LinkUrl" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">@Localizer["Admin.ItemImage"]</label>
+                            <input name="Items[@i].ImageFile" type="file" class="form-control item-image-input" accept="image/*" />
+                            @if (!string.IsNullOrEmpty(item.ExistingImageUrl))
+                            {
+                                <div class="mt-2 d-flex align-items-center">
+                                    <img src="@item.ExistingImageUrl" style="width:96px;height:64px;object-fit:cover;border-radius:6px;margin-right:10px" />
+                                    <div class="form-check">
+                                        <input class="form-check-input" name="Items[@i].RemoveImage" type="checkbox" value="true" />
+                                        <label class="form-check-label">@Localizer["Admin.RemoveExistingImage"]</label>
+                                    </div>
+                                </div>
+                            }
+                            <div class="item-image-preview mt-2" style="display:none;"></div>
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <div class="mb-2"><strong>@Localizer["Admin.ItemTranslations"]</strong></div>
+
+                    <div class="row g-2">
+                        @for (int tc = 0; tc < item.Translations.Count; tc++)
+                        {
+                            var itTr = item.Translations[tc];
+                            <div class="col-md-4">
+                                <div class="card p-2">
+                                    <div class="card-body">
+                                        <input type="hidden" name="Items[@i].Translations[@tc].Culture" value="@itTr.Culture" />
+                                        <h6 class="mb-2">@itTr.Culture.ToUpper()</h6>
+                                        <label class="form-label">@Localizer["Admin.TextItem"]</label>
+                                        <textarea name="Items[@i].Translations[@tc].Text" class="form-control" rows="3">@itTr.Text"</textarea>
+                                       
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-danger btn-remove-item">@Localizer["Admin.RemoveItem"]</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <button type="button" id="btnAddItem" class="btn btn-outline-secondary mb-3">@Localizer["Admin.AddItem"]</button>
+
+    <div>
+        <button type="submit" class="btn btn-primary">@Localizer["Admin.SaveChanges"]</button>
+        <a asp-action="Index" class="btn btn-light">@Localizer["Admin.Cancel"]</a>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+                (function () {
+                    // Section image preview
+                    const sectionFile = document.getElementById('SectionImageFile');
+                    const sectionPreview = document.getElementById('sectionImagePreview');
+                    sectionFile?.addEventListener('change', function () {
+                        const f = this.files && this.files[0];
+                        if (!f) { sectionPreview.style.display = 'none'; return; }
+                        sectionPreview.src = URL.createObjectURL(f); sectionPreview.style.display = 'block';
+                    });
+
+                    const itemsList = document.getElementById('itemsList');
+
+                    document.getElementById('btnAddItem').addEventListener('click', function () {
+                        const idx = itemsList.querySelectorAll('.item-card').length;
+                        // create a default translations block for en/it/ar
+                        const itemHtml = `
+        <div class="card mb-3 item-card" data-index="${idx}">
+          <div class="card-body">
+            <input type="hidden" name="Items[${idx}].Id" value="0" />
+            <div class="row mb-2">
+              <div class="col-md-9">
+                <label class="form-label">@Localizer["Admin.ItemFallbackText"]</label>
+                <input name="Items[${idx}].Text" class="form-control" />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">@Localizer["Admin.Order"]</label>
+                <input name="Items[${idx}].Order" type="number" class="form-control" value="0" />
+              </div>
+            </div>
+            <div class="row mb-2">
+              <div class="col-md-6">
+                <label class="form-label">@Localizer["Admin.ItemLink"]</label>
+                <input name="Items[${idx}].LinkUrl" class="form-control" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">@Localizer["Admin.ItemImage"]</label>
+                <input name="Items[${idx}].ImageFile" type="file" class="form-control item-image-input" accept="image/*" />
+                <div class="item-image-preview mt-2" style="display:none;"></div>
+              </div>
+            </div>
+            <hr />
+            <div class="mb-2"><strong>@Localizer["Admin.ItemTranslations"]</strong></div>
+            <div class="row g-2">
+              <div class="col-md-4"><div class="card p-2"><div class="card-body"><input type="hidden" name="Items[${idx}].Translations[0].Culture" value="en"/><h6>EN</h6><label>@Localizer["Admin.Text"]</label><input name="Items[${idx}].Translations[0].Text" class="form-control"/></div></div></div>
+              <div class="col-md-4"><div class="card p-2"><div class="card-body"><input type="hidden" name="Items[${idx}].Translations[1].Culture" value="it"/><h6>IT</h6><label>@Localizer["Admin.Text"]</label><input name="Items[${idx}].Translations[1].Text" class="form-control"/></div></div></div>
+              <div class="col-md-4"><div class="card p-2"><div class="card-body"><input type="hidden" name="Items[${idx}].Translations[2].Culture" value="ar"/><h6>AR</h6><label>@Localizer["Admin.Text"]</label><input name="Items[${idx}].Translations[2].Text" class="form-control"/></div></div></div>
+            </div>
+            <div class="mt-2"><button type="button" class="btn btn-sm btn-danger btn-remove-item">@Localizer["Admin.RemoveItem"]</button></div>
+          </div>
+        </div>`;
+                        itemsList.insertAdjacentHTML('beforeend', itemHtml);
+                    });
+
+                    // delegate remove
+                    itemsList.addEventListener('click', function (e) {
+                        if (e.target.matches('.btn-remove-item')) {
+                            const card = e.target.closest('.item-card');
+                            if (!card) return;
+                            if (confirm('@Localizer["Admin.ConfirmRemoveItem"]')) card.remove();
+                            reIndexItems();
+                        }
+                    });
+
+                    // preview item image
+                    itemsList.addEventListener('change', function (e) {
+                        if (!e.target.matches('.item-image-input')) return;
+                        const input = e.target;
+                        const file = input.files && input.files[0];
+                        const preview = input.closest('.card-body').querySelector('.item-image-preview');
+                        if (!file) { preview.style.display = 'none'; return; }
+                        preview.innerHTML = `<img src="${URL.createObjectURL(file)}" style="width:96px;height:64px;object-fit:cover;border-radius:6px;" />`;
+                        preview.style.display = 'block';
+                    });
+
+                    function reIndexItems() {
+                        const cards = itemsList.querySelectorAll('.item-card');
+                        cards.forEach((card, i) => {
+                            card.setAttribute('data-index', i);
+                            card.querySelectorAll('[name]').forEach(el => {
+                                const name = el.getAttribute('name');
+                                if (!name) return;
+                                el.setAttribute('name', name.replace(/Items\[\d+\]/, `Items[${i}]`));
+                            });
+                        });
+                    }
+
+                    document.getElementById('sectionForm').addEventListener('submit', function () { reIndexItems(); });
+                })();
+    </script>
+}
+
+

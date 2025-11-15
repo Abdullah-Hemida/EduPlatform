@@ -1,0 +1,51 @@
+﻿
+@model AdminHeroVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+<h2>@L["Admin.CreateHero"]</h2>
+
+<form method="post" enctype="multipart/form-data">
+    @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <label class="form-label">@L["Admin.Placement"]</label>
+        <select asp-for="Placement" class="form-select">
+            <option value="0">Home</option>
+            <option value="1">School</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Image</label>
+        <input asp-for="ImageFile" type="file" class="form-control" />
+        <div class="form-text">@L["Admin.HeroImageHelp"]</div>
+    </div>
+
+    <h5>Title (English)</h5>
+    <input asp-for="TitleEn" class="form-control mb-2" />
+
+    <h5>Title (Italiano)</h5>
+    <input asp-for="TitleIt" class="form-control mb-2" />
+
+    <h5>Title (عربى)</h5>
+    <input asp-for="TitleAr" class="form-control mb-2" />
+
+    <h6>@L["Description"]</h6>
+    <textarea asp-for="DescriptionEn" class="form-control mb-2" rows="3" placeholder="English"></textarea>
+    <textarea asp-for="DescriptionIt" class="form-control mb-2" rows="3" placeholder="Italiano"></textarea>
+    <textarea asp-for="DescriptionAr" class="form-control mb-2" rows="3" placeholder="العربية"></textarea>
+
+    <div class="form-check mb-3">
+        <input asp-for="IsActive" class="form-check-input" />
+        <label class="form-check-label">@L["Admin.Active"]</label>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">@L["Admin.Order"]</label>
+        <input asp-for="Order" class="form-control" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">@L["Admin.Save"]</button>
+    <a asp-action="Index" class="btn btn-light">@L["Admin.Cancel"]</a>
+</form>
+

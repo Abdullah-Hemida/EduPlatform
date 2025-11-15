@@ -1,0 +1,224 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.AdminDashboardVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{   
+    ViewData["Title"] = L["Admin.Dashboard"];    
+}
+
+<!-- Summary cards -->
+<div class="row g-3 mb-3 mt-1">
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-users fa-2x text-primary"></i>
+                <div class="small text-muted">@L["Admin.TotalRegisteredUsers"]</div>
+                <div class="h5 mb-0">@Model.TotalUsers</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-chalkboard-teacher fa-2x text-success"></i>
+                <div class="small text-muted">@L["Admin.NumOfTeachers"]</div>
+                <div class="h5 mb-0">@Model.TotalTeachers</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-user-graduate fa-2x text-info"></i>
+                <div class="small text-muted">@L["Admin.NumOfStudents"]</div>
+                <div class="h5 mb-0">@Model.TotalStudents</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-hourglass-half fa-2x text-warning"></i>
+                <div class="small text-muted">@L["Teacher.Pending"]</div>
+                <div class="h5 mb-0">@Model.PendingTeacherApplications</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-video fa-2x text-danger"></i>
+                <div class="small text-muted">@L["Admin.NumOfRecordedCourses"]</div>
+                <div class="h5 mb-0">@Model.TotalPrivateCourses</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-book-open fa-2x text-secondary"></i>
+                <div class="small text-muted">@L["Admin.NumOfCurricula"]</div>
+                <div class="h5 mb-0">@Model.TotalCurricula</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-rotate-right fa-2x text-success"></i>
+                <div class="small text-muted">@L["Admin.NumOfReactiveCourses"]</div>
+                <div class="h5 mb-0">@Model.TotalReactiveCourses</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center">
+            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-cart-shopping fa-2x text-warning"></i>
+                <div class="small text-muted">@L["Admin.NumOfBendingPurchaseRequests"]</div>
+                <div class="h5 mb-0">@Model.PendingPurchaseRequests</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div><strong>@L["Admin.Bookings"]</strong></div>
+            </div>
+            <div class="card-body">
+                @if (!Model.RecentBookings.Any())
+                {
+                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var b in Model.RecentBookings)
+                        {
+                            <div class="list-group-item d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="fw-semibold">@(b.StudentName ?? ("#" + b.Id))</div>
+                                    <div class="small text-muted">@b.RequestedDateUtc.ToLocalTime().ToString("g")</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted">@b.TeacherName</div>
+                                    <div class="mt-1">
+                                        <a asp-area="Admin" asp-controller="Bookings" asp-action="Details" asp-route-id="@b.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div><strong>@L["Admin.PurchaseRequestsSubtitle"]</strong></div>
+            </div>
+            <div class="card-body">
+                @if (!Model.RecentPurchaseRequests.Any())
+                {
+                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var pr in Model.RecentPurchaseRequests)
+                        {
+                            <div class="list-group-item d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="fw-semibold">@pr.CourseTitle</div>
+                                    <div class="small text-muted">@pr.StudentName</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted">@pr.RequestDateUtc.ToLocalTime().ToString("g")</div>
+                                    <div class="mt-1">
+                                        <a asp-area="Admin" asp-controller="PurchaseRequests" asp-action="Details" asp-route-id="@pr.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div><strong>@L["Admin.ReactiveEnrollments"]</strong></div>
+            </div>
+            <div class="card-body">
+                @if (!Model.RecentReactiveEnrollments.Any())
+                {
+                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var e in Model.RecentReactiveEnrollments)
+                        {
+                            <div class="list-group-item d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="fw-semibold">@e.CourseTitle</div>
+                                    <div class="small text-muted">@e.StudentName</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted">@e.CreatedAtUtc.ToLocalTime().ToString("g")</div>
+                                    <div class="mt-1">
+                                        <a asp-area="Admin" asp-controller="ReactiveEnrollments" asp-action="Details" asp-route-id="@e.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><strong>@L["Admin.TeacherInfo"]</strong></div>
+            <div class="card-body">
+                @if (!Model.RecentTeacherApplications.Any())
+                {
+                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var t in Model.RecentTeacherApplications)
+                        {
+                            <div class="list-group-item d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="fw-semibold">@t.FullName</div>
+                                    <div class="small text-muted">@t.Email</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted">@t.Status</div>
+                                    <div class="mt-1">
+                                        <a asp-controller="ManageUsers" asp-action="Details" asp-route-id="@t.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+

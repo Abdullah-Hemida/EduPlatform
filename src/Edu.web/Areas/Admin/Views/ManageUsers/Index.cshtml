@@ -1,0 +1,320 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.UserIndexViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Edu.Web.Areas.Admin.Controllers.ManageUsersController> L
+@inject Microsoft.AspNetCore.Identity.UserManager<Edu.Domain.Entities.ApplicationUser> UserManager
+
+@{
+     
+    ViewData["Title"] = L["Admin.Users"];
+    var currentUserId = UserManager.GetUserId(User);
+}
+
+<div class="admin-header d-flex flex-column flex-md-row align-items-start align-items-md-center mb-3 gap-3">
+    <div class="header-center d-flex align-items-center flex-wrap gap-2 mx-md-3">
+        <div class="btn-group role-filters-group d-flex gap-2" role="group" aria-label="Role filters">
+            <a class="btn btn-outline-secondary rounded role-filter @(Model.CurrentRoleFilter == "All" ? "active" : "")"
+               href="@Url.Action("Index", new { role = "All", showDeleted = Model.ShowDeleted, search = Model.Search })"
+               title="@L["Common.All"]" aria-label="@L["Common.All"]">
+                <i class="fa fa-list me-1" aria-hidden="true"></i>
+                <span class="d-none d-md-inline">@L["Common.All"]</span>
+                <span class="badge bg-secondary mt-1 ms-2 d-inline-block">@Model.TotalCount</span>
+            </a>
+
+            <a class="btn btn-outline-secondary rounded role-filter @(Model.CurrentRoleFilter == "Admin" ? "active" : "")"
+               href="@Url.Action("Index", new { role = "Admin", showDeleted = Model.ShowDeleted, search = Model.Search })"
+               title="@L["Admin.Admin"]" aria-label="@L["Admin.Admin"]">
+                <i class="fa fa-user-shield me-1" aria-hidden="true"></i>
+                <span class="d-none d-md-inline">@L["Admin.Admin"]</span>
+                <span class="badge bg-danger mt-1 ms-2 d-inline-block">@Model.AdminCount</span>
+            </a>
+
+            <a class="btn btn-outline-secondary rounded role-filter @(Model.CurrentRoleFilter == "Teacher" ? "active" : "")"
+               href="@Url.Action("Index", new { role = "Teacher", showDeleted = Model.ShowDeleted, search = Model.Search })"
+               title="@L["Admin.Teacher"]" aria-label="@L["Admin.Teacher"]">
+                <i class="fa fa-chalkboard-teacher me-1" aria-hidden="true"></i>
+                <span class="d-none d-md-inline">@L["Admin.Teacher"]</span>
+                <span class="badge bg-primary mt-1 ms-2 d-inline-block">@Model.TeacherCount</span>
+            </a>
+
+            <a class="btn btn-outline-secondary rounded btn-sm role-filter @(Model.CurrentRoleFilter == "Student" ? "active" : "")"
+               href="@Url.Action("Index", new { role = "Student", showDeleted = Model.ShowDeleted, search = Model.Search })"
+               title="@L["Admin.Student"]" aria-label="@L["Admin.Student"]">
+                <i class="fa fa-user-graduate me-1" aria-hidden="true"></i>
+                <span class="d-none d-md-inline">@L["Admin.Student"]</span>
+                <span class="badge bg-success mt-1 ms-2 d-inline-block">@Model.StudentCount</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="header-right ms-md-auto d-flex align-items-center gap-2">
+        <div class="d-none d-md-flex align-items-center text-muted small">
+            <span class="fw-semibold me-1">@L["Admin.Total"]:</span>
+            <span class="badge bg-primary me-2">@Model.TotalCount</span>
+        </div>
+
+        <!-- Deleted filter buttons (added) -->
+        <div class="btn-group gap-1 me-2" role="group" aria-label="Deleted filter">
+            <a class="btn btn-outline-secondary btn-sm rounded deleted-filter @(Model.ShowDeleted ? "" : "active")"
+               href="@Url.Action("Index", new { role = Model.CurrentRoleFilter, showDeleted = false, search = Model.Search })">
+                @(L["Admin.ActiveShort"] ?? "Active")
+            </a>
+            <a class="btn btn-outline-secondary btn-sm rounded deleted-filter @(Model.ShowDeleted ? "active" : "")"
+               href="@Url.Action("Index", new { role = Model.CurrentRoleFilter, showDeleted = true, search = Model.Search })">
+                @(L["Admin.DeletedShort"] ?? "Deleted")
+            </a>
+        </div>
+
+        <form class="d-flex" method="get" asp-action="Index" asp-area="Admin">
+            <input type="hidden" name="role" value="@Model.CurrentRoleFilter" />
+            <input type="hidden" name="showDeleted" value="@(Model.ShowDeleted ? "true" : "false")" />
+            <input type="text" name="search" value="@Model.Search" class="form-control form-control-sm me-2 w-auto" placeholder="@L["DataTable.Search"]" />
+            <button class="btn btn-sm btn-primary ms-1 me-1" type="submit">@L["DataTable.Search"]</button>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="usersTable" class="table table-hover align-middle w-100">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>@L["Admin.Image"]</th>
+                        <th>@L["Admin.FullName"]</th>
+                        <th>@L["Admin.Phone"]</th>
+                        <th>@L["Admin.Roles"]</th>
+                        <th>@L["Admin.Actions"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items == null || !Model.Items.Any())
+                    {
+                        <tr><td colspan="6" class="text-center text-muted">— @(L["Admin.NoUsersFound"] ?? "No users found") —</td></tr>
+                    }
+                    else
+                    {
+                        var idx = (Model.PageIndex - 1) * Model.PageSize;
+                        foreach (var row in Model.Items)
+                        {
+                            idx++;
+                            <tr class="@(Model.ShowDeleted ? "table-secondary" : "")">
+                                <td>@idx</td>
+                                <td>
+                                    <img src="@(row.PhotoUrl ?? Url.Content("~/images/default-avatar.png"))" class="rounded-circle" style="width:42px;height:42px;object-fit:cover" alt="">
+                                </td>
+                                <td>
+                                    <div class="fw-semibold small text-truncate" style="max-width:220px;">@row.FullName</div>
+                                    <div class="small text-muted">@row.Email</div>
+                                </td>
+                                <td>@(string.IsNullOrEmpty(row.PhoneNumber) ? "<span class=\"text-muted\">—</span>" : row.PhoneNumber)</td>
+                                <td>@Html.Raw(System.Net.WebUtility.HtmlEncode(row.Roles))</td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="ManageUsers" asp-action="Details" asp-route-id="@row.Id">@L["Button.View"]</a>
+
+                                        @* Approve/Unapprove (single toggle button) *@
+                                        @if ((row.Roles ?? "").Split(',').Select(r => r.Trim()).Contains("Teacher"))
+                                        {
+                                            if (string.Equals(row.TeacherStatus, "Approved", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="UnapproveTeacher" class="m-0 d-inline confirm"
+                                                      data-confirm="@L["Admin.ConfirmUnapprove"]">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@row.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning">@L["Admin.Unapprove"]</button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="ApproveTeacher" class="m-0 d-inline confirm"
+                                                      data-confirm="@L["Admin.ConfirmApprove"]">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@row.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-success">@L["Button.Approve"]</button>
+                                                </form>
+                                            }
+                                        }
+                                        @* Inside the foreach row rendering in ManageUsers Index view *@
+                                        @if (row.IsAllowed.HasValue)
+                                        {
+                                            <form method="post"
+                                                  asp-area="Admin"
+                                                  asp-controller="ManageUsers"
+                                                  asp-action="ToggleStudentAllowedAjax"
+                                                  class="student-allow-form m-0 d-inline"
+                                                  data-user-id="@row.Id">
+                                                @Html.AntiForgeryToken()
+
+                                                @* Hidden field for setTo (we will toggle) *@
+                                                <input type="hidden" name="id" value="@row.Id" />
+                                                <input type="hidden" name="setTo" value="@(row.IsAllowed.Value ? "false" : "true")" class="setToInput" />
+
+                                                <button type="submit"
+                                                        class="btn btn-sm student-allow-btn @(row.IsAllowed.Value ? "btn-success" : "btn-outline-secondary")"
+                                                        title="@(row.IsAllowed.Value? L["Admin.RevokeAccess"] : L["Admin.AllowAccess"])">
+                                                    <i class="fa @(row.IsAllowed.Value ? "fa-check-circle" : "fa-user-lock") me-1" aria-hidden="true"></i>
+                                                    <span class="d-none d-md-inline">@((row.IsAllowed.Value ? L["Admin.Allowed"] : L["Admin.NotAllowed"]))</span>
+                                                </button>
+                                            </form>
+                                        }
+                                        @* Soft-delete / Restore (toggle) *@
+                                        <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="SoftDelete" class="m-0 d-inline ms-1 confirm"
+                                              data-confirm="@(Model.ShowDeleted ? (L["Admin.ConfirmRestore"] ?? "Restore this user?") : (L["Admin.ConfirmSuspend"] ?? "Suspend this user?"))">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@row.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                @(Model.ShowDeleted? L["Admin.Restore"] : L["Admin.Suspend"])
+                                            </button>
+                                        </form>
+
+                                        @* Hard delete (only when viewing deleted users) *@
+                                        @if (Model.ShowDeleted)
+                                        {
+                                            <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="HardDelete" class="m-0 d-inline ms-1 confirm"
+                                                  data-confirm="@L["Admin.ConfirmDelete"]">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@row.Id" />
+                                                <button type="submit" class="btn btn-sm btn-danger">@L["Admin.DeletePermanently"]</button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* Pagination block (unchanged) *@
+        <nav aria-label="Page navigation">
+            <ul class="pagination">
+                <li class="page-item @(Model.Items?.HasPreviousPage == true ? "" : "disabled")">
+                    <a class="page-link" href="@Url.Action("Index", new { role = Model.CurrentRoleFilter, showDeleted = Model.ShowDeleted, search = Model.Search, pageIndex = Model.PageIndex - 1, pageSize = Model.PageSize })" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+
+                @for (int p = 1; p <= (Model.Items?.TotalPages ?? 1); p++)
+                {
+                    <li class="page-item @(p == Model.PageIndex ? "active" : "")">
+                        <a class="page-link" href="@Url.Action("Index", new { role = Model.CurrentRoleFilter, showDeleted = Model.ShowDeleted, search = Model.Search, pageIndex = p, pageSize = Model.PageSize })">@p</a>
+                    </li>
+                }
+
+                <li class="page-item @(Model.Items?.HasNextPage == true ? "" : "disabled")">
+                    <a class="page-link" href="@Url.Action("Index", new { role = Model.CurrentRoleFilter, showDeleted = Model.ShowDeleted, search = Model.Search, pageIndex = Model.PageIndex + 1, pageSize = Model.PageSize })" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Auto-dismiss server TempData alerts after 30 seconds (30_000 ms)
+        (function() {
+            var dismissMs = 10000;
+            if (window.jQuery) {
+                setTimeout(function() {
+                    $('.admin-temp-alert').each(function() {
+                        try { $(this).alert('close'); } catch (e) { $(this).remove(); }
+                    });
+                }, dismissMs);
+            } else {
+                setTimeout(function() {
+                    document.querySelectorAll('.admin-temp-alert').forEach(function(el) {
+                        if (window.bootstrap && bootstrap.Alert) {
+                            try { bootstrap.Alert.getOrCreateInstance(el).close(); } catch (e) { el.remove(); }
+                        } else {
+                            el.remove();
+                        }
+                    });
+                }, dismissMs);
+            }
+        })();
+    </script>
+    <script>
+        // Localized strings (JSON-encoded to guarantee correct characters & escaping)
+        var txtAllowed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.Allowed"].Value ?? "Allowed"));
+        var txtNotAllowed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.NotAllowed"].Value ?? "Not allowed"));
+        var txtAllowAccess = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.AllowAccess"].Value ?? "Allow access"));
+        var txtRevokeAccess = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.RevokeAccess"].Value ?? "Revoke access"));
+        var txtToggleFailed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ToggleFailed"].Value ?? "Failed to update access. Please try again."));
+
+        (function ($) {
+            // helper: show inline temporary alert (bootstrap style) in top of page
+            function showTempAlert(message, type = 'success', timeout = 4000) {
+                const $alert = $('<div class="alert alert-' + type + ' admin-temp-alert" role="alert" style="position:fixed;top:20px;right:20px;z-index:1055;min-width:220px;">' + message + '</div>');
+                $('body').append($alert);
+                setTimeout(function () { $alert.fadeOut(300, function () { $(this).remove(); }); }, timeout);
+            }
+
+            // Submit handler
+            $(document).on('submit', '.student-allow-form', function (e) {
+                e.preventDefault();
+                var $form = $(this);
+                var action = $form.attr('action');
+                if (!action) action = window.location.href;
+
+                var id = $form.find('input[name="id"]').val();
+                var setTo = $form.find('input[name="setTo"]').val();
+                var token = $form.find('input[name="__RequestVerificationToken"]').val();
+
+                var $btn = $form.find('.student-allow-btn');
+                $btn.prop('disabled', true);
+
+                $.ajax({
+                    url: action,
+                    method: 'POST',
+                    data: { id: id, setTo: setTo },
+                    headers: { 'RequestVerificationToken': token },
+                    success: function (resp) {
+                        if (resp && resp.success) {
+                            var newSetTo = (setTo === 'true' || setTo === 'True') ? 'false' : 'true';
+                            $form.find('input.setToInput').val(newSetTo);
+
+                            var isAllowed = resp.isAllowed === true || resp.isAllowed === 'true';
+                            if (isAllowed) {
+                                $btn.removeClass('btn-outline-secondary').addClass('btn-success');
+                                $btn.find('i').removeClass('fa-user-lock').addClass('fa-check-circle');
+                                $btn.attr('title', txtRevokeAccess);
+                                $btn.find('span').text(txtAllowed);
+                            } else {
+                                $btn.removeClass('btn-success').addClass('btn-outline-secondary');
+                                $btn.find('i').removeClass('fa-check-circle').addClass('fa-user-lock');
+                                $btn.attr('title', txtAllowAccess);
+                                $btn.find('span').text(txtNotAllowed);
+                            }
+
+                            showTempAlert(resp.message || txtAllowed, 'success', 2500);
+                        } else {
+                            showTempAlert((resp && resp.message) ? resp.message : txtToggleFailed, 'danger', 4000);
+                        }
+                    },
+                    error: function (xhr) {
+                        var msg = txtToggleFailed;
+                        try {
+                            var json = xhr.responseJSON;
+                            if (json && json.message) msg = json.message;
+                        } catch (e) { /* ignore parse error */ }
+                        showTempAlert(msg, 'danger', 5000);
+                    },
+                    complete: function () {
+                        $btn.prop('disabled', false);
+                    }
+                });
+            });
+        })(jQuery);
+    </script>
+}
+
+
+
+
+
+
+
+

@@ -1,0 +1,30 @@
+﻿@model List<Edu.Web.Areas.Student.ViewModels.StudentReactiveCourseListItemVm>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Teachers.ReactiveCourses"];
+}
+
+<div class="row">
+    @foreach (var c in Model)
+    {
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                @if (!string.IsNullOrEmpty(c.CoverPublicUrl))
+                {
+                    <img src="@c.CoverPublicUrl" alt="@c.Title" class="card-img-top" style="height:160px;object-fit:cover" />
+                }
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">@c.Title</h5>
+                    <p class="card-text text-truncate">@c.Description</p>
+                    <div class="d-flex justify-content-between">
+                        <span class="small text-muted">@L["ReactiveCourse.PricePerMonth"] : @c.PricePerMonthLabel</span>
+                        <a asp-area="Student" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@c.Id" class="btn btn-primary btn-sm float-end">@L["Button.View"]</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+

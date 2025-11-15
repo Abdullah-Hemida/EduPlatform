@@ -1,0 +1,52 @@
+﻿@model List<Edu.Web.Areas.Teacher.ViewModels.SlotListItemVm>
+@using Edu.Domain.Entities
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Slots.Index.Title"];
+}
+
+<div class="d-flex justify-content-between mb-3">
+    <h4>@L["Slots.Index.Title"]</h4>
+    <a asp-action="Create" class="btn btn-primary">@L["Slots.Create"]</a>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">@L["Admin.NoRecords"]</div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>@L["Slots.Times"]</th>
+                <th>@L["Slots.Capacity"]</th>
+                <th>@L["Slots.Price"]</th>
+                <th>@L["Slots.LocationUrl"]</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in Model)
+            {
+                <tr>
+                    <td>@s.StartLocal.ToString("g") - @s.EndLocal.ToString("g")</td>
+                    <td>@s.Capacity (@s.AvailableSeats available)</td>
+                    <td>@(s.PriceLabel)</td>
+                    <td>@(string.IsNullOrEmpty(s.LocationUrl) ? "-" : s.LocationUrl)</td>
+                    <td class="text-end">
+                        <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-secondary">@L["Button.Edit"]</a>
+                        <form asp-action="Delete" method="post" class="d-inline ms-1" onsubmit="return confirm('@L["ConfirmDelete"]')">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@s.Id" />
+                            <button class="btn btn-sm btn-danger">@L["Button.Delete"]</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+

@@ -1,0 +1,50 @@
+﻿@using Edu.Domain.Entities
+@model List<Edu.Web.Areas.Student.ViewModels.MyEnrollmentVm>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["ReactiveCourse.MyEnrollments"] ?? "My Enrollments";
+}
+
+<div>
+    <h3>@L["ReactiveCourse.MyEnrollments"]</h3>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">@(L["ReactiveCourse.NoEnrollments"] ?? "You have no enrollments yet.")</div>
+    }
+    else
+    {
+        @foreach (var e in Model)
+        {
+            <div class="card mb-2">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5>@e.CourseTitle</h5>
+                        </div>
+                        <div>
+                            <a asp-area="Student" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@e.CourseId" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        @foreach (var m in e.Months)
+                        {
+                            var cls = "bg-secondary";
+                            if (m.PaymentStatus == EnrollmentMonthPaymentStatus.Paid) cls = "bg-success";
+                            else if (m.PaymentStatus == EnrollmentMonthPaymentStatus.Pending) cls = "bg-warning";
+
+                            // label to show for status
+                            var statusLabel = m.PaymentStatus == null ? (L["NotRequested"] ?? "Not requested") : m.PaymentStatus.ToString();
+                               <span class="badge @cls me-1">
+                               @L["Month"] @m.MonthIndex - @statusLabel
+                              </span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+

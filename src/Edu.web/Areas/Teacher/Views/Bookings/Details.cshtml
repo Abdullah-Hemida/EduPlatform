@@ -1,0 +1,84 @@
+﻿@model Edu.Web.Areas.Shared.ViewModels.BookingDetailsVm
+@using Edu.Domain.Entities
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Booking.Details"] ?? "Booking details";
+    var csrfToken = Context.Request.Headers["RequestVerificationToken"].ToString();
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h4>@L["Booking.Details"]</h4>
+
+                <dl class="row">
+                    <dt class="col-sm-3">@L["Slots.Times"]</dt>
+                    <dd class="col-sm-9">@Model.SlotTimes</dd>
+
+                    <dt class="col-sm-3">@L["Booking.Student"]</dt>
+                    <dd class="col-sm-9">@Model.StudentName (@Model.StudentEmail)</dd>
+                    <dd class="col-sm-9">@Model.StudentPhoneNumber</dd>
+
+                    <dt class="col-sm-3">@L["Booking.Status"]</dt>
+                    <dd class="col-sm-9">
+                        <span id="booking-status" class="badge @(Model.Status == BookingStatus.Paid ? "bg-success" : Model.Status == BookingStatus.Pending ? "bg-warning text-dark" : "bg-secondary")">
+                            @Model.Status
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-3">@L["Booking.Meet"]</dt>
+                    <dd class="col-sm-9" id="meet-section">
+                        @if (!string.IsNullOrEmpty(Model.MeetUrl))
+                        {
+                            <a id="meet-link" href="@Model.MeetUrl" class="btn btn-sm btn-primary" target="_blank">@L["Booking.OpenMeet"]</a>
+                        }
+                        else
+                        {
+                            <span class="text-muted">@L["Booking.NoMeetUrl"]</span>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-3">@L["Booking.Notes"]</dt>
+                    <dd class="col-sm-9">@Model.Notes</dd>
+                </dl>
+
+                <div class="mt-3 d-flex gap-2">
+                    <a asp-action="Index" class="btn btn-light">
+                        <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
+                        <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>@L["Common.Back"]
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <h5>@L["Admin.Notes"]</h5>
+        <ul class="list-group mb-3" id="moderation-logs">
+            @foreach (var log in Model.ModerationLogs)
+            {
+                <li class="list-group-item">
+                    <div class="small text-muted">@log.CreatedAtUtc.ToLocalTime():g — @log.ActorName</div>
+                    <div><strong>@log.Action</strong> — @log.Note</div>
+                </li>
+            }
+        </ul>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card sticky-top">
+            <div class="card-body">
+                <h6>@L["Booking.UpdateMeet"]</h6>
+                <form id="updateMeetForm" asp-action="UpdateMeetUrl" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="BookingId" value="@Model.Id" />
+                    <div class="mb-2">
+                        <label class="form-label">@L["Booking.MeetUrl"]</label>
+                        <input name="MeetUrl" value="@Model.MeetUrl" class="form-control" />
+                    </div>
+                    <button type="submit" class="btn btn-primary">@L["Booking.UpdateMeet"]</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

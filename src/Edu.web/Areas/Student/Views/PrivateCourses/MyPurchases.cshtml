@@ -1,0 +1,33 @@
+﻿@model Edu.Web.Areas.Student.ViewModels.MyPurchasesVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Purchase.MyRequests"] ?? "My Purchases";
+}
+
+<h3>@L["Purchase.MyRequests"]</h3>
+
+@if (!Model.Purchases.Any())
+{
+    <div class="alert alert-info">@L["Admin.NoRecords"]</div>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var p in Model.Purchases)
+        {
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-semibold">@p.CourseTitle</div>
+                    <div class="small text-muted">@p.TeacherName • @p.RequestDateUtc.ToLocalTime().ToString("g")</div>
+                </div>
+                <div class="text-end">
+                    <span class="badge @(p.Status == PurchaseStatus.Completed ? "bg-success" : p.Status == PurchaseStatus.Pending ? "bg-warning text-dark" : "bg-secondary")">@p.Status</span>
+                    <a asp-area="Student" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@p.PrivateCourseId" class="btn btn-sm btn-outline-secondary ms-2">@L["Button.View"]</a>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+

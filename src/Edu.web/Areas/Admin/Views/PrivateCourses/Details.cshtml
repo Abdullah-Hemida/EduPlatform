@@ -1,0 +1,284 @@
+﻿@model PrivateCourseDetailsVm
+@using Edu.Application.IServices
+@inject IFileStorageService FileStorage
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@{
+
+    ViewData["Title"] = L["Admin.CurriculumDetails"];
+    var course = Model;
+    string crop(string? s, int len = 260) => string.IsNullOrEmpty(s) ? "" : (s.Length <= len ? s : s.Substring(0, len) + "…");
+}
+
+<div class="row mb-3 mt-3 align-items-center">
+    <div class="col-md-6">
+        <div class="d-flex align-items-start gap-3">
+            @if (!string.IsNullOrEmpty(Model.CoverImageUrl))
+            {
+                <img src="@Model.CoverImageUrl" alt="@Model.Title" class="rounded" style="width:160px;height:100px;object-fit:cover" />
+            }
+            <div>
+                <h3 class="mb-1">@course.Title</h3>
+                <div class="small text-muted">@L["Admin.Categories"]: @course.CategoryName</div>
+                <p class="mt-2 text-muted">@crop(course.Description, 400)</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 text-md-end mt-2 mt-md-0">
+        <div class="btn-group" role="group" aria-label="Course actions">
+            <!-- Approve -->
+            <form asp-action="Approve" asp-route-id="@course.Id" asp-area="Admin" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-success btn-sm px-3">
+                    <i class="bi bi-check-circle me-1"></i> @L["Button.Approve"]
+                </button>
+            </form>
+
+            <!-- Unapprove (opens modal) -->
+            <button type="button" id="openRejectModalBtn"
+                    class="btn btn-warning btn-sm px-3 text-nowrap"
+                    data-bs-toggle="modal" data-bs-target="#rejectModal">
+                <i class="bi bi-x-circle me-1"></i> @L["Admin.Unapprove"]
+            </button>
+
+            <!-- Delete -->
+            @{
+                var confirmMsg = System.Text.Json.JsonSerializer.Serialize(L["Admin.ConfirmDelete"].Value);
+            }
+            <form asp-action="Delete" asp-route-id="@course.Id" asp-area="Admin" method="post" class="d-inline" onsubmit="return confirm(@confirmMsg);">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-danger btn-sm px-3">
+                    <i class="bi bi-trash me-1"></i> @L["Admin.Delete"]
+                </button>
+            </form>
+
+            <!-- Back -->
+            <a asp-action="Index" asp-area="Admin" class="btn btn-secondary btn-sm px-3">
+                <i class="bi bi-arrow-left-circle me-1"></i> @L["Admin.BackToList"]
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        @if (Model.Modules?.Any() == true)
+        {
+            @foreach (var m in Model.Modules)
+            {
+                <div class="card mb-3">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div>
+                            <strong>@m.Title</strong>
+                            <span class="small text-muted ms-2">(@L["Admin.ModuleOrder"]: @m.Order)</span>
+                        </div>
+                        <div class="small text-muted">@(m.Lessons?.Count ?? 0) @L["Admin.Lessons"]</div>
+                    </div>
+                    <div class="card-body">
+                        @if (m.Lessons?.Any() == true)
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var l in m.Lessons.OrderBy(x => x.Order))
+                                {
+                                    <div class="list-group-item d-flex gap-3 align-items-start">
+                                        <div style="width:240px;">
+                                            @if (!string.IsNullOrEmpty(l.YouTubeVideoId))
+                                            {
+                                                @await Html.PartialAsync("_YouTubeEmbed", l.YouTubeVideoId)
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-light border rounded p-2 small text-center">@L["Admin.NoVideo"]</div>
+                                            }
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-semibold">@l.Title</div>
+                                            <div class="small text-muted">@L["Admin.LessonOrder"]: @l.Order</div>
+
+                                            <div class="mt-2">
+                                                <span class="badge bg-secondary">@l.ContentLabel</span>
+                                            </div>
+
+                                            @if (l.HasFiles && l.Files != null && l.Files.Any())
+                                            {
+                                                <div class="mt-2 small">
+                                                    <strong>@L["Admin.Files"]:</strong>
+                                                    <ul class="list-unstyled mb-0">
+                                                        @foreach (var f in l.Files)
+                                                        {
+                                                            <li>
+                                                                <a asp-controller="FileResources" asp-action="Download" asp-area="Admin" asp-route-id="@f.Id">@f.Name</a>
+                                                                <span class="text-muted small">(@f.FileType)</span>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-muted small">@L["Admin.NoLessonsYet"]</div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="card mb-3"><div class="card-body">@L["Admin.NoModulesYet"]</div></div>
+        }
+
+        @* standalone lessons *@
+        @if (Model.StandaloneLessons?.Any() == true)
+        {
+            <h4 class="mt-3">@L["Admin.Lessons"]</h4>
+            @foreach (var l in Model.StandaloneLessons.OrderBy(x => x.Order))
+            {
+                <div class="card mb-3">
+                    <div class="card-body d-flex gap-3">
+                        <div style="width:240px;">
+                            @if (!string.IsNullOrEmpty(l.YouTubeVideoId))
+                            {
+                                @await Html.PartialAsync("_YouTubeEmbed", l.YouTubeVideoId)
+                            }
+                            else
+                            {
+                                <div class="bg-light border rounded p-2 small text-center">@L["Admin.NoVideo"]</div>
+                            }
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold">@l.Title</div>
+                            <div class="small text-muted">@L["Admin.LessonOrder"]: @l.Order</div>
+                            <div class="mt-2"><span class="badge bg-secondary">@l.ContentLabel</span></div>
+
+                            @if (l.HasFiles && l.Files != null && l.Files.Any())
+                            {
+                                <div class="mt-2 small">
+                                    <strong>@L["Admin.Files"]:</strong>
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach (var f in l.Files)
+                                        {
+                                            <li>
+                                                <a asp-controller="FileResources" asp-action="Download" asp-area="Admin" asp-route-id="@f.Id">@f.Name</a>
+                                                <span class="text-muted small">(@f.FileType)</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <aside class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><strong>@L["Admin.TeacherInfo"]</strong></div>
+            <div class="card-body">
+                <div class="fw-semibold">@Model.Teacher?.FullName</div>
+                <div class="small text-muted">@Model.Teacher?.Email</div>
+            </div>
+        </div>
+
+        <div class="card mb-3 shadow-sm border-0">
+            <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center">
+                <strong class="m-0">@L["Admin.Notes"]</strong>
+                <small class="text-muted">@(Model.ModerationLogs?.Count ?? 0)</small>
+            </div>
+
+            <div class="card-body p-2">
+                @if (Model.ModerationLogs == null || !Model.ModerationLogs.Any())
+                {
+                    <div class="text-muted small">@L["Admin.NoNotes"]</div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var log in Model.ModerationLogs.OrderByDescending(l => l.CreatedAtUtc))
+                        {
+                            var actionKey = $"Admin.Action.{log.Action}";
+                            var actionLabel = L[actionKey].ResourceNotFound ? L["Admin.Action.Unknown"].Value : L[actionKey].Value;
+
+                            <li class="list-group-item py-2 px-2 border-0 mb-1 rounded bg-light-subtle">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="d-flex  flex-column gap-2">
+                                        <span class="badge bg-primary text-white rounded-pill px-2 py-1" style="font-size: 0.7rem; min-width: 100px;">
+                                            @actionLabel
+                                        </span>
+                                        <div>
+                                            <div class="small text-muted lh-sm">
+                                                @log.CreatedAtUtc.ToLocalTime().ToString("g")
+                                            </div>
+
+                                            @if (!string.IsNullOrWhiteSpace(log.Note))
+                                            {
+                                                <div class="small mt-1 lh-sm">@Html.Raw(log.Note)</div>
+                                            }
+                                    </div>
+                                </div>
+
+                                <div class="text-end small text-muted lh-sm">
+                                    @(
+                                                                    !string.IsNullOrEmpty(log.AdminName)
+                                                                    ? log.AdminName
+                                                                    : !string.IsNullOrEmpty(log.AdminEmail)
+                                                                    ? log.AdminEmail
+                                                                    : log.AdminId
+                                                                    )
+                                </div>
+                            </div>
+                        </li>
+                                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+    </aside>
+</div>
+
+@* Reject modal (place near the bottom of the page, outside other forms) *@
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            @* We use an explicit action URL instead of relying on asp-route-id on form element *@
+            <form id="rejectForm" action="@Url.Action("Reject", "PrivateCourses", new { area = "Admin" })" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-header">
+                    <h5 class="modal-title" id="rejectModalLabel">@L["Admin.Reject"]</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small">@L["Purchase.AdminNote"]</label>
+                        <textarea id="adminNoteField" class="form-control" name="adminNote" rows="4"
+                                  placeholder="@L["Admin.NoNotes"]"></textarea>
+                    </div>
+                    <div id="rejectFormAlert" class="alert d-none" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@L["Button.Cancel"]</button>
+                    <button type="submit" id="rejectSubmitBtn" class="btn btn-danger">@L["Admin.SendReject"]</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('.modal').forEach(function (m) {
+            if (m.parentElement !== document.body) {
+                document.body.appendChild(m);
+            }
+        });
+
+    </script>
+}

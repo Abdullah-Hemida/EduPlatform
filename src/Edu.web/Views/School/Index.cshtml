@@ -1,0 +1,280 @@
+﻿@model Edu.Web.ViewModels.SchoolIndexVm
+@using System.Globalization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["School.Title"] ?? "School";
+
+    var currentLevelId = Model.SelectedLevelId;
+    var currentPage = Model.Page;
+    var currentPageSize = Model.PageSize;
+    // Two-letter language
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+}
+
+@section Hero {
+    @await Html.PartialAsync("_HeroSchoolSection", Model.SchoolHero)
+}
+
+
+<style>
+    /* Small card styles for filter cards */
+    .filter-cards {
+        display: flex;
+        gap: 0.75rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0.25rem;
+    }
+
+    .filter-card {
+        min-width: 160px;
+        max-width: 260px;
+        flex: 0 0 auto;
+        border-radius: 12px;
+        transition: transform .14s ease, box-shadow .14s ease;
+        cursor: pointer;
+    }
+
+        .filter-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+        }
+
+        .filter-card.active {
+            box-shadow: 0 16px 40px rgba(0,0,0,0.09);
+        }
+
+        /* Keep the card content compact */
+        .filter-card .card-body {
+            padding: .9rem;
+        }
+
+        .filter-card .count {
+            font-weight: 600;
+            opacity: .85;
+        }
+
+    /* Line under the cards (title + controls) */
+    .filter-meta {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding-top: .5rem;
+        flex-wrap: wrap;
+    }
+
+    /* Make the small pagination summary look subtle */
+    .pagination-summary {
+        color: #6b7280;
+        font-size: .95rem;
+    }
+
+    /* ensure filter group spacing in RTL works (we set dir dynamically) */
+    [dir="rtl"] .filter-card {
+        text-align: right;
+    }
+</style>
+
+    <!-- 1) Cards row -->
+    <div class="mb-2 mt-2">
+        <div class="filter-cards" id="filterCards" role="list" aria-label="@L["School.FilterByLevel"]">
+            @* "All" card *@
+            <div class="card filter-card @(Model.SelectedLevelId == null ? "active border-primary" : "border")" data-levelid="">
+                <div class="card-body d-flex align-items-center flex-column justify-content-between">
+                    <div>
+                        <div class="small text-muted">@L["Common.All"]</div>
+                        <div class="count">@Model.TotalCount</div>
+                    </div>
+                    <div class="text-muted small">@L["Admin.Curricula"]</div>
+                </div>
+            </div>
+
+            @foreach (var level in Model.AllLevels)
+            {
+                var isActive = Model.SelectedLevelId.HasValue && Model.SelectedLevelId.Value == level.Id;
+                <div class="card filter-card @(isActive ? "active border-primary" : "border")" data-levelid="@level.Id">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between flex-column">
+                            <div>
+                                <div class="fw-semibold">@level.Name</div>
+                                @* <div class="small text-muted">@level.CurriculaCountText</div> *@
+                            </div>
+                            <div class="text-end">
+                                <div class="count">@level.CurriculaCountText.Split(' ')[0]</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- 2) Line under cards: Filter title + pageSize selector + pagination summary -->
+    <div class="filter-meta mb-3 justify-content-between">
+        <div class="">
+            <h5 class="mb-0">@L["School.FilterByLevel"]</h5>
+            <small class="text-muted">@L["School.FilterHelp"]</small>
+        </div>
+
+        <div class="d-flex align-items-center justify-content-between gap-2">
+            <form id="pageSizeForm" method="get" asp-action="Index" class="d-flex align-items-center gap-2">
+                <input type="hidden" name="levelId" id="ps-levelId" value="@(currentLevelId?.ToString() ?? "")" />
+                <input type="hidden" name="page" value="1" />
+                <label class="form-label mb-0 small w-auto text-nowrap">@L["DataTable.ShowEntries"]</label>
+                <select id="pageSizeSelect" name="pageSize" class="form-select form-select-sm">
+                    @{
+                        var sizes = new[] { 6, 9, 12, 20 };
+                        foreach (var s in sizes)
+                        {
+                            <option value="@s" selected="@(s == currentPageSize ? "selected" : null)">@s</option>
+                        }
+                    }
+                </select>
+                <noscript><button type="submit" class="btn btn-sm btn-primary ms-2">@(L["Button.Apply"] ?? "Apply")</button></noscript>
+            </form>
+
+            <div class="pagination-summary small text-muted" id="paginationSummary">
+                @(L["School.Showing"] ?? "Showing")
+                <span id="summaryRange">@( ((Model.Page - 1) * Model.PageSize) + 1)-@((Math.Min(Model.TotalCount, Model.Page * Model.PageSize)))</span>
+                @(L["School.Of"] ?? "of")
+                <strong id="summaryTotal">@Model.TotalCount</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3) Curricula container: initial render via partial (so server render + AJAX updates) -->
+    <div id="curriculaContainer">
+        @await Html.PartialAsync("_CurriculaGridPartial", Model)
+    </div>
+
+<script>
+    (function () {
+        const container = document.getElementById('curriculaContainer');
+        const cards = document.querySelectorAll('.filter-card');
+        const pageSizeSelect = document.getElementById('pageSizeSelect');
+        const pageSizeForm = document.getElementById('pageSizeForm');
+        const psLevelInput = document.getElementById('ps-levelId');
+
+        // helper to build URL for the List endpoint
+        function buildListUrl(levelId, page, pageSize) {
+            const params = new URLSearchParams();
+            if (levelId !== null && levelId !== undefined && levelId !== '') params.set('levelId', levelId);
+            if (page) params.set('page', page);
+            if (pageSize) params.set('pageSize', pageSize);
+            params.set('ajax', '1'); // optional flag so server can treat it as AJAX
+            return `${window.location.origin}${'@Url.Action("List", "School")'}?${params.toString()}`;
+        }
+
+        // Highlight active card (UI only)
+        function setActiveCard(levelId) {
+            cards.forEach(c => {
+                const id = c.getAttribute('data-levelid') || '';
+                if ((id === '' && (levelId === null || levelId === '')) || id === String(levelId)) {
+                    c.classList.add('active');
+                    c.classList.add('border-primary');
+                } else {
+                    c.classList.remove('active');
+                    c.classList.remove('border-primary');
+                }
+            });
+        }
+
+        // Update pagination summary text
+        function updatePaginationSummary(from, to, total) {
+            const range = document.getElementById('summaryRange');
+            const totalEl = document.getElementById('summaryTotal');
+            if (range) range.textContent = `${from}-${to}`;
+            if (totalEl) totalEl.textContent = total;
+        }
+
+        // perform the AJAX load and update container + URL (history)
+        async function loadList(levelId, page = 1, pageSize = @Model.PageSize) {
+            try {
+                const url = buildListUrl(levelId, page, pageSize);
+                const res = await fetch(url, { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('Request failed');
+                const html = await res.text();
+                container.innerHTML = html;
+
+                // Update active card UI
+                setActiveCard(levelId);
+
+                // Update pageSize selector hidden level value
+                psLevelInput.value = levelId ?? '';
+
+                // update history so links are deep-linkable
+                const newUrl = `${window.location.pathname}?${new URLSearchParams({ levelId: levelId ?? '', page: page, pageSize: pageSize }).toString()}`;
+                history.pushState({ levelId, page, pageSize }, '', newUrl);
+
+                // scroll to curricula container for better UX on mobile
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (err) {
+                console.error(err);
+                alert('@L["Common.Error"] ?? "Error loading content"');
+            }
+        }
+
+        // attach click handlers to filter cards
+        cards.forEach(c => {
+            c.addEventListener('click', function (e) {
+                const levelId = c.getAttribute('data-levelid') || '';
+                // reset to page 1
+                loadList(levelId === '' ? '' : levelId, 1, Number(pageSizeSelect.value));
+            });
+        });
+
+        // handle pageSize changes (AJAX)
+        pageSizeSelect.addEventListener('change', function (e) {
+            // submit via AJAX: keep current level filter from active card
+            const active = document.querySelector('.filter-card.active');
+            const levelId = active ? (active.getAttribute('data-levelid') || '') : '';
+            loadList(levelId, 1, Number(pageSizeSelect.value));
+        });
+
+        // handle browser back/forward (popstate)
+        window.addEventListener('popstate', function (e) {
+            const s = e.state;
+            if (s) {
+                // state carries levelId,page,pageSize
+                loadList(s.levelId ?? '', s.page ?? 1, s.pageSize ?? @Model.PageSize);
+            } else {
+                // fallback: reload entire page if no state
+                window.location.reload();
+            }
+        });
+
+        // INITIAL: ensure active card is styled correctly
+        setActiveCard('@(Model.SelectedLevelId?.ToString() ?? "")');
+
+        // === Dynamic direction switching helper ===
+        // Set direction based on a two-letter language code (e.g. "ar")
+        window.setDirection = function (lang) {
+            const isRtl = (lang === 'ar');
+
+            // set html dir attribute
+            document.documentElement.setAttribute('dir', isRtl ? 'rtl' : 'ltr');
+
+            // swap bootstrap CSS if you added both links in layout with ids bs-ltr and bs-rtl
+            try {
+                const ltr = document.getElementById('bs-ltr');
+                const rtl = document.getElementById('bs-rtl');
+                if (ltr && rtl) {
+                    if (isRtl) {
+                        ltr.disabled = true;
+                        rtl.disabled = false;
+                    } else {
+                        ltr.disabled = false;
+                        rtl.disabled = true;
+                    }
+                }
+            } catch (e) { /* ignore if layout not wired */ }
+        };
+
+        // run at load (ensures direction is correct)
+        window.setDirection('@lang');
+    })();
+</script>
+
+
+

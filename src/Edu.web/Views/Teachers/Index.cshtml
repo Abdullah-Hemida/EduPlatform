@@ -1,0 +1,167 @@
+﻿@model TeacherIndexVm
+@using System.Globalization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "~/Views/Shared/_MentorLayout.cshtml";
+    ViewData["Title"] = L["Nav.Teachers"] ?? "Teachers";
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var textAlign = lang == "ar" ? "right" : "left";
+}
+
+<div class="pt-0" dir="@dir" style="text-align:@textAlign">   
+        <div class="d-flex align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-2">@L["Nav.Teachers"]</h1>
+                <div class="small text-muted">@(L["Teachers.Subtitle"] ?? "Browse our teachers and their courses")</div>
+            </div>
+
+            <div class="ms-auto d-flex gap-2 align-items-center">
+                <form method="get" class="d-flex" asp-controller="Teachers" asp-action="Index">
+                    <input name="q" value="@Model.Query" class="form-control form-control-sm" style="width:350px" placeholder="@L["Search.Placeholder"]" />
+                    <button class="btn btn-primary btn-sm ms-2">@L["button.Search"]</button>
+                </form>
+            </div>
+        </div>
+
+        @if (!Model.Teachers.Any())
+        {
+            <div class="card shadow-sm">
+                <div class="card-body text-center text-muted">@L["Admin.NoRecords"]</div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-4">
+                @foreach (var t in Model.Teachers)
+                {
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="card border-0 shadow-sm teacher-card h-100"
+                             role="link" tabindex="0"
+                             data-href="@Url.Action("Details", "Teachers", new { id = t.Id })"
+                             aria-label="@($"{t.FullName} - {t.JobTitle}")">
+
+                            <!-- Large teacher image -->
+                            <div class="position-relative">
+                                <img src="@(t.PhotoUrl ?? "uploads/images/default-avatar.jpg")"
+                                     class="card-img-top teacher-photo"
+                                     alt="@t.FullName" />
+
+                            </div>
+
+                            <!-- Info section -->
+                            <div class="card-body text-center d-flex flex-column">
+                                <h5 class="fw-semibold text-dark mb-0">@t.FullName</h5>
+                                <small class="text-muted mb-3">@t.JobTitle</small>
+
+                                <!-- Stats -->
+                                <div class="d-flex justify-content-between gap-4 small text-muted mb-3">
+                                    <div>
+                                        <i class="bi bi-play-circle text-primary me-1"></i>
+                                        <div class="small text-secondary">@(L["Teacher.RecordedCourses"] ?? "Recorded")</div>
+                                        <span>@t.PrivateCoursesCount</span>                                        
+                                    </div>
+                                    <div>
+                                        <i class="bi bi-broadcast text-success me-1"></i>
+                                        <div class="small text-secondary">@(L["Admin.ReactiveCourses"] ?? "Reactive")</div>
+                                        <span>@t.ReactiveCoursesCount</span>                                        
+                                    </div>
+                                </div>
+
+                                <!-- Short Bio -->
+                                @if (!string.IsNullOrEmpty(t.ShortBio))
+                                {
+                                    <p class="text-muted small flex-grow-1 mb-3">
+                                        @(t.ShortBio.Length > 140 ? t.ShortBio.Substring(0, 140) + "…" : t.ShortBio)
+                                    </p>
+                                }
+
+                                <!-- Button -->
+                                <div class="mt-auto">
+                                    <a asp-action="Details" asp-controller="Teachers" asp-route-id="@t.Id"
+                                       class="btn btn-primary btn-sm rounded-pill px-4">
+                                        <i class="bi bi-person-lines-fill me-1"></i>@(L["View"] ?? "View")
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Pagination -->
+            <div class="mt-4 d-flex justify-content-between align-items-center">
+                <div class="small text-muted">@L["DataTable.Info"]</div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        @if (Model.Page > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-controller="Teachers" asp-action="Index" asp-route-page="@(Model.Page - 1)" asp-route-q="@Model.Query">«</a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="page-item disabled"><span class="page-link">«</span></li>
+                        }
+
+                        @for (int p = 1; p <= Model.TotalPages; p++)
+                        {
+                            if (p == Model.Page)
+                            {
+                                <li class="page-item active"><span class="page-link">@p</span></li>
+                            }
+                            else
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" asp-controller="Teachers" asp-action="Index" asp-route-page="@p" asp-route-q="@Model.Query">@p</a>
+                                </li>
+                            }
+                        }
+
+                        @if (Model.Page < Model.TotalPages)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-controller="Teachers" asp-action="Index" asp-route-page="@(Model.Page + 1)" asp-route-q="@Model.Query">»</a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="page-item disabled"><span class="page-link">»</span></li>
+                        }
+                    </ul>
+                </nav>
+            </div>
+        }
+</div>
+
+@section Scripts {
+    <style>
+        .hover-shadow { transition: box-shadow .18s ease; }
+        .hover-shadow:hover { box-shadow: 0 10px 25px rgba(0,0,0,0.08); transform: translateY(-3px); }
+        .object-fit-cover { object-fit: cover; }
+    </style>
+    <script>
+        // Make entire card clickable and keyboard accessible
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.teacher-card[data-href]').forEach(function (card) {
+                const href = card.getAttribute('data-href');
+                card.addEventListener('click', function (e) {
+                    // avoid clicking the inner button (anchor) twice
+                    if (e.target.closest('a')) return;
+                    window.location.href = href;
+                });
+                card.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        window.location.href = href;
+                    }
+                });
+            });
+        });
+    </script>
+}
+
+
+

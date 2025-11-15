@@ -1,0 +1,88 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.EarningsIndexVm
+@using System.Globalization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = L["Admin.Earnings"] ?? "Earnings";
+    var ci = CultureInfo.GetCultureInfo("it-IT"); // euro formatting per client
+    string monthName(int m) => CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(m);
+}
+
+<div class="d-flex align-items-center mb-3">
+    <div>
+        <h4 class="mb-0">@L["Admin.Earnings"]</h4>
+        <div class="small text-muted">@L["Admin.Overview"]</div>
+    </div>
+
+    <div class="ms-auto d-flex gap-2">
+        <form class="d-flex" method="get" asp-action="Index" asp-area="Admin">
+            <select name="year" class="form-select form-select-sm me-2">
+                @{
+                    var current = DateTime.UtcNow.Year;
+                    for (int y = current; y >= current - 5; y--)
+                    {
+                        <option value="@y" selected="@(Model.Year == y ? "selected" : null)">@y</option>
+                        ;
+                    }
+                }
+            </select>
+            <button class="btn btn-primary btn-sm">@L["Button.Search"]</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body table-responsive">
+        <table class="table table-sm table-striped">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:48px">#</th>
+                    <th>@L["Admin.FullName"]</th>
+                    <th class="text-center">@L["Admin.Phone"]</th>
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <th class="text-end">@CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(m)</th>
+                    }
+                    <th class="text-end">@L["Admin.Total"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Teachers.Any())
+                {
+                    <tr>
+                        <td colspan="15" class="text-center text-muted">@L["Admin.NoRecords"]</td>
+                    </tr>
+                }
+                else
+                {
+                    var idx = 1;
+                    foreach (var t in Model.Teachers)
+                    {
+                        <tr>
+                            <td>@idx</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-3">
+                                    <img src="@(!string.IsNullOrEmpty(t.PhotoUrl) ? t.PhotoUrl : Url.Content("~/images/default-avatar.png"))" alt="@t.FullName" class="rounded" style="width:48px;height:48px;object-fit:cover" />
+                                    <div>
+                                        <div class="fw-semibold">@t.FullName</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-center small text-muted">@(!string.IsNullOrEmpty(t.PhoneNumber) ? t.PhoneNumber : "-")</td>
+
+                            @for (int m = 0; m < 12; m++)
+                            {
+                                <td class="text-end">@t.FormatMoney(t.Months[m])</td>
+                            }
+
+                            <td class="text-end fw-semibold">@t.FormatMoney(t.Total)</td>
+                        </tr>
+                        idx++;
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+

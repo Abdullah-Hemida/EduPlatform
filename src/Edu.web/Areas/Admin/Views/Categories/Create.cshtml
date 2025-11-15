@@ -1,0 +1,34 @@
+﻿@model Edu.Domain.Entities.Category
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+     
+    ViewData["Title"] = L["Admin.AddCategory"];
+}
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h4 class="mb-3">@L["Admin.AddCategory"]</h4>
+
+        <form asp-action="Create" method="post" class="row g-3 needs-validation" novalidate>
+            @Html.AntiForgeryToken()
+
+            <div class="col-md-8">
+                <label asp-for="Name" class="form-label">@L["Admin.Name"]</label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger small"></span>
+            </div>
+
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">@L["Admin.Create"]</button>
+                <a asp-action="Index" class="btn btn-link">@L["Button.Cancel"]</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+
+

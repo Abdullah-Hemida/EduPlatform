@@ -1,0 +1,47 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.ModuleCreateVm
+@using Edu.Web.Resources
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = L["Admin.AddModule"];
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h4 class="mb-0">@L["Admin.AddModule"]</h4>
+        <div class="small text-muted">@L["Admin.AddModuleHint"]</div>
+    </div>
+    <div class="ms-auto">
+        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-outline-secondary btn-sm ps-3 pe-3">@L["Admin.BackToList"]</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form asp-action="Create" method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <input asp-for="PrivateCourseId" type="hidden" />
+
+            <div class="col-12">
+                <label class="form-label small">@L["Admin.ModuleTitle"]</label>
+                <input asp-for="Title" class="form-control form-control-sm" />
+                <span asp-validation-for="Title" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small">@L["Admin.Order"]</label>
+                <input asp-for="Order" class="form-control form-control-sm" />
+            </div>
+
+            <div class="col-12 text-end">
+                <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-outline-secondary btn-sm me-2">@L["Button.Cancel"]</a>
+                <button type="submit" class="btn btn-primary btn-sm">@L["Admin.AddModule"]</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

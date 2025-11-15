@@ -1,0 +1,93 @@
+﻿@model Edu.Web.ViewModels.LessonDetailsVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "~/Views/Shared/_MentorLayout.cshtml";
+    ViewData["Title"] = Model.Title;
+}
+
+<div class="container">
+    <div class="d-flex align-items-center justify-content-between mt-2 mb-3">
+        <div>
+            <h3 class="mb-0">@Model.Title</h3>
+            <div class="small text-muted">@Model.ModuleTitle • @Model.CurriculumTitle</div>
+        </div>
+
+        <div class="me-3">
+            <a asp-controller="School" asp-action="Curriculum" asp-route-id="@Model.Id" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
+                <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
+                @L["Common.Back"]
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card mb-3 shadow-sm">
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(Model.YouTubeVideoId))
+                    {
+                        <div class="ratio ratio-16x9 mb-3">
+                            <iframe src="https://www.youtube.com/embed/@Model.YouTubeVideoId" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(Model.VideoUrl))
+                    {
+                        <div class="ratio ratio-16x9 mb-3">
+                            <video controls src="@Model.VideoUrl" style="width:100%"></video>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <h6>@(L["Description"] ?? "Description")</h6>
+                        <p class="text-muted">@Model.Description</p>
+                    </div>
+
+                    @if (Model.Files?.Any() == true)
+                    {
+                        <div class="mb-3">
+                            <h6>@L["Admin.Files"]</h6>
+                            <ul class="list-group list-group-flush">
+                                @foreach (var f in Model.Files)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <i class="fas fa-file me-2"></i>
+                                            <span>@f.Name</span>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(f.PublicUrl))
+                                        {
+                                            <a class="btn btn-sm btn-outline-primary" href="@f.PublicUrl" target="_blank">@L["Button.View"]</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="small text-muted">@L["Admin.NotProvided"]</span>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <aside class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h6 class="mb-2">@(L["Lesson.Info"] ?? "Lesson info")</h6>
+                    <dl class="row small">
+                        <dt class="col-6 text-muted">@(L["Admin.Order"] ?? "Order")</dt>
+                        <dd class="col-6 text-end">@Model.Order</dd>
+
+                        <dt class="col-6 text-muted">@(L["Admin.Free"] ?? "Free")</dt>
+                        <dd class="col-6 text-end">@((Model.IsFree) ? L["Yes"] ?? "Common.Yes" : L["No"] ?? "No")</dd>
+                    </dl>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+

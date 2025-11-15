@@ -1,0 +1,74 @@
+﻿@model Edu.Web.Areas.Teacher.ViewModels.LessonEditVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    Layout = "/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = L["Admin.EditLesson"];
+    var moduleSelect = ViewBag.ModuleSelect as System.Collections.Generic.List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> ?? new();
+}
+
+<div class="d-flex align-items-center mb-3">
+    <div>
+        <h4 class="mb-0">@L["Admin.EditLesson"]</h4>
+    </div>
+    <div class="ms-auto">
+        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-outline-secondary btn-sm">@L["Admin.BackToList"]</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form asp-action="Edit" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input asp-for="Id" type="hidden" />
+            <input asp-for="PrivateCourseId" type="hidden" />
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label small">@L["Admin.Title"]</label>
+                    <input asp-for="Title" class="form-control form-control-sm" />
+                    <span asp-validation-for="Title" class="text-danger small"></span>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small">@L["Admin.Description"]</label>
+                    <textarea asp-for="Description" class="form-control form-control-sm" rows="3"></textarea>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small">@L["Admin.SelectModule"]</label>
+                    <select asp-for="PrivateModuleId" asp-items="moduleSelect" class="form-select form-select-sm">
+                        <option value="">-- @L["Admin.SelectModule"] --</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small">@L["Admin.LessonOrder"]</label>
+                    <input asp-for="Order" class="form-control form-control-sm" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small">@L["Admin.YouTubeUrl"]</label>
+                    <input asp-for="YouTubeUrl" class="form-control form-control-sm" />
+                    <div class="form-text small">@L["Admin.YouTubeHelp"]</div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small">@L["Admin.Files"]</label>
+                    <input asp-for="Files" type="file" multiple class="form-control form-control-sm" name="Files" />
+                    <div class="form-text small">@L["Admin.FilesHint"]</div>
+                </div>
+
+                <div class="col-12 text-end">
+                    <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-outline-secondary btn-sm me-2">@L["Button.Cancel"]</a>
+                    <button type="submit" class="btn btn-primary btn-sm">@L["Button.Save"]</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+
