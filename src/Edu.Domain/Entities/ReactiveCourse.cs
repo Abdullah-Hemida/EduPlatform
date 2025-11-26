@@ -12,7 +12,7 @@ namespace Edu.Domain.Entities
         public string? Title { get; set; }
         public string? Description { get; set; }
         public string? CoverImageKey { get; set; }   // storage key (IFileStorageService)
-        public string? IntroVideoUrl { get; set; }   // optional teacher-provided video or YouTube URL
+        public string? IntroVideoUrl { get; set; }   // optional teacher-provided YouTube URL
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public int DurationMonths { get; set; } 

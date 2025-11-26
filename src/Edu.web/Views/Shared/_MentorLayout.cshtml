@@ -2,68 +2,105 @@
 @using Edu.Domain.Entities
 @using Microsoft.AspNetCore.Localization
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Hosting
+@inject Edu.Application.IServices.IFileStorageService Storage
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> Localizer
 @inject UserManager<ApplicationUser> UserManager
+@inject Edu.Infrastructure.Data.ApplicationDbContext Db
+
+
 @{
     var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     var dir = lang == "ar" ? "rtl" : "ltr";
-    var userIsAuthenticated = User?.Identity?.IsAuthenticated ?? false;   
+    var userIsAuthenticated = User?.Identity?.IsAuthenticated ?? false;
     ApplicationUser? currentUser = null;
     string? profileImageUrl = null;
     string? displayName = null;
-    string? defaultAvatarUrl = Url.Content("~/uploads/images/pngtree-character-default-avatar-image_2237203.jpg");
+    string? dashboardUrl = null;
+    bool dashboardDisabled = false;
+    bool showPendingBanner = false;
+    string? defaultAvatarUrl = Url.Content("~/uploads/images/default-avatar.jpg");
+
     if (userIsAuthenticated)
     {
         try
         {
             currentUser = await UserManager.GetUserAsync(User);
-            profileImageUrl = currentUser?.PhotoUrl;
+            try
+            {
+                profileImageUrl = await Storage.GetPublicUrlAsync(currentUser.PhotoStorageKey);
+            }
+            catch
+            {
+                profileImageUrl = null;
+            }
+
             if (!string.IsNullOrEmpty(currentUser?.FullName))
             {
-                var names = currentUser.FullName.Split(' ');
-                displayName = names[0];
+                var names = currentUser!.FullName.Split(' ');
+                displayName = names.Length > 0 ? names[0] : currentUser.UserName;
             }
             else
             {
-                displayName = currentUser?.UserName;
+                displayName = currentUser?.UserName ?? User.Identity?.Name;
+            }
+
+            // Determine dashboard link and teacher status only after we have currentUser
+            if (User.IsInRole("Admin"))
+            {
+                dashboardUrl = Url.Action("Index", "Dashboard", new { area = "Admin" });
+            }
+            else if (User.IsInRole("Teacher") && currentUser != null)
+            {
+                // get teacher record
+                var teacher = await Db.Teachers.FindAsync(currentUser.Id);
+                if (teacher != null)
+                {
+                    if (teacher.Status == TeacherStatus.Approved)
+                    {
+                        dashboardUrl = Url.Action("Index", "Dashboard", new { area = "Teacher" });
+                    }
+                    else
+                    {
+                        // teacher exists but not approved -> disable link and show pending banner for Pending status
+                        dashboardUrl = "#";
+                        dashboardDisabled = true;
+                        if (teacher.Status == TeacherStatus.Pending)
+                        {
+                            showPendingBanner = true;
+                        }
+                    }
+                }
+                else
+                {
+                    // no teacher record (rare) — still show disabled link to indicate there's a dashboard
+                    dashboardUrl = "#";
+                    dashboardDisabled = true;
+                }
+            }
+            else if (User.IsInRole("Student"))
+            {
+                dashboardUrl = Url.Action("MyPurchases", "PrivateCourses", new { area = "Student" });
             }
         }
         catch (Exception ex)
         {
-            // log if you have logger injected; for now fallback gracefully
-            displayName = User.Identity?.Name ?? "User";
+            // optionally log if you have logger available; degrade gracefully
+            displayName = displayName ?? (User.Identity?.Name ?? "User");
+            dashboardUrl = null;
+            dashboardDisabled = false;
         }
     }
-
-    string? dashboardUrl = null;
-    if (User.IsInRole("Admin"))
-    {
-        dashboardUrl = Url.Action("Index", "Dashboard", new { area = "Admin" });
-    }
-    else if (User.IsInRole("Teacher"))
-    {
-        dashboardUrl = Url.Action("Index", "Dashboard", new { area = "Teacher" });
-    }
-    else if (User.IsInRole("Student"))
-    {
-        dashboardUrl = Url.Action("MyPurchases", "PrivateCourses", new { area = "Student" });
-    }
-
-    // Check if we're on a profile completion page to avoid redirect loops
-    var isProfileCompletionPage = ViewContext.RouteData.Values["page"]?.ToString()?
-        .Contains("/Account/Complete") == true ||
-        ViewContext.RouteData.Values["page"]?.ToString()?
-        .Contains("/Account/ChooseRole") == true;
+    // else: not authenticated -> dashboardUrl stays null
 }
 
-@functions {
-    private string IsActivePage(string action, string controller)
-    {
-        var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
-        var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
-        return (currentAction == action && currentController == controller) ? "active" : "";
+<!-- small CSS for disabled appearance -->
+<style>
+    .disabled-link {
+        pointer-events: none;
+        opacity: 0.5;
     }
-}
+</style>
 
 <!DOCTYPE html>
 <html lang="@System.Threading.Thread.CurrentThread.CurrentUICulture.TwoLetterISOLanguageName" dir="@ViewData["Direction"]">
@@ -110,13 +147,13 @@
                 <!-- Centered navigation links -->
                 <ul class="navbar-nav mx-auto mb-2 mb-lg-0 gap-lg-2">
                     <li class="nav-item">
-                        <a asp-area="" asp-controller="Home" asp-action="Index" class="nav-link px-3 text-nowrap @IsActivePage("Index", "Home")">
+                        <a asp-area="" asp-controller="Home" asp-action="Index" class="nav-link px-3 text-nowrap">
                             <i class="fas fa-home me-1 text-muted"></i> @Localizer["Nav.Home"]
                         </a>
                     </li>
 
                     <li class="nav-item">
-                        <a asp-area="" asp-controller="School" asp-action="Index" class="nav-link px-3 text-nowrap @IsActivePage("Index", "School")">
+                        <a asp-area="" asp-controller="School" asp-action="Index" class="nav-link px-3 text-nowrap">
                             <i class="fas fa-school me-1 text-muted"></i> @Localizer["Nav.School"]
                         </a>
                     </li>
@@ -173,7 +210,7 @@
                     {
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle d-flex align-items-center p-1" href="#" data-bs-toggle="dropdown">
-                                <img src="@(!string.IsNullOrEmpty(profileImageUrl) ? profileImageUrl : defaultAvatarUrl)"
+                                <img src="@(profileImageUrl ?? defaultAvatarUrl)"
                                      class="rounded-circle me-2 shadow-sm" style="width: 36px; height: 36px; object-fit: cover;" />
                                 <span class="fw-semibold text-dark">@displayName</span>
                             </a>
@@ -184,25 +221,19 @@
                                     </a>
                                 </li>
 
+                                @{
+                                    // compute optional CSS class & attributes
+                                    var dashboardCss = dashboardDisabled ? "disabled-link" : "";
+                                    var ariaDisabled = dashboardDisabled ? "true" : "false";
+                                    var tabIndex = dashboardDisabled ? "-1" : "0";
+                                }
+
                                 @if (!string.IsNullOrEmpty(dashboardUrl))
                                 {
                                     <li>
-                                        <a class="dropdown-item" href="@dashboardUrl">
+                                        <a class="dropdown-item @dashboardCss" href="@dashboardUrl" aria-disabled="@ariaDisabled" tabindex="@tabIndex">
                                             <i class="fas fa-gauge me-2 text-success"></i>
-                                            @if (User.IsInRole("Admin"))
-                                            {
-                                                @Localizer["Nav.ControlPannel"]
-                                            }
-                                            else if (User.IsInRole("Teacher"))
-                                            {
-
-                                                @Localizer["Nav.ControlPannel"]
-                                            }
-                                            else
-                                            {
-
-                                                @Localizer["Nav.ControlPannel"]
-                                            }
+                                            @Localizer["Nav.ControlPannel"]
                                         </a>
                                     </li>
                                 }
@@ -223,7 +254,30 @@
             </div>
         </div>
     </nav>
-
+    @{
+        var teacherPendingMsg = TempData["TeacherPending"] as string;
+        var profileSaved = TempData["ProfileSaved"] as string;
+    }
+    @if (!string.IsNullOrWhiteSpace(profileSaved))
+    {
+        <div class="container mt-3">
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @profileSaved
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        </div>
+    }
+    <!-- Pending banner shown to teachers after profile completion -->
+    @if (showPendingBanner)
+    {
+        <div class="container mt-3">
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <i class="fas fa-hourglass-half me-2"></i>
+                @Localizer["WelcomeTeacherPendingApproval"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        </div>
+    }
     <!-- Hero Section (outside main container) -->
     @RenderSection("Hero", required: false)
 

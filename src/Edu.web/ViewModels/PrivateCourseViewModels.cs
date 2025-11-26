@@ -4,9 +4,15 @@
     {
         public string? Query { get; set; }
         public int? SelectedCategoryId { get; set; }
+        public bool? ForChildrenOnly { get; set; }
+
         public List<CategoryVm> Categories { get; set; } = new();
         public List<PrivateCourseListItemVm> Courses { get; set; } = new();
+
+        public int PageNumber { get; set; }
+        public int TotalPages { get; set; }
     }
+
 
     public class CategoryVm
     {
@@ -19,10 +25,12 @@
         public int Id { get; set; }
         public string? Title { get; set; }
         public string? Description { get; set; }
+        public string? CoverImageKey { get; set; }
         public string? CoverPublicUrl { get; set; }
         public string? TeacherName { get; set; }
         public string? CategoryName { get; set; }
         public string? PriceLabel { get; set; }
+        public bool IsForChildren { get; set; }
     }
 
     public class PrivateCourseDetailsVm
@@ -31,6 +39,7 @@
         public string? Title { get; set; }
         public string? Description { get; set; }
         public string? CoverPublicUrl { get; set; }
+        public string? CoverImageKey { get; set; }
         public string? TeacherName { get; set; }
         public string? CategoryName { get; set; }
         public string? PriceLabel { get; set; }

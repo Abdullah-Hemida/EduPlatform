@@ -6,28 +6,42 @@
 @{
     ViewData["Title"] = L["Nav.Courses"];
     var q = Model.Query ?? HttpCtx.HttpContext?.Request.Query["q"].ToString() ?? "";
-    // Logical text alignment that works with bootstrap rtl file as well
     var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     var dir = lang == "ar" ? "rtl" : "ltr";
     var textAlign = lang == "ar" ? "right" : "left";
 }
 
-<div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3 gap-2" dir="@dir" style="text-align:@textAlign">
+<div class="d-flex align-items-center justify-content-between" dir="@dir" style="text-align:@textAlign">
     <div>
-        <h2 class="mb-0">@L["Nav.Courses"]</h2>
+        <h2 class="mb-2">@L["Nav.Courses"]</h2>
         <div class="small text-muted">@L["Nav.RecordedCourses"]</div>
     </div>
 
-    <form method="get" class="d-flex flex-wrap align-items-center gap-2 search-row">
+    <form method="get" class="d-flex flex-row align-items-center gap-2 search-row" style="width:auto">
+
         <select name="categoryId" class="form-select form-select-sm" style="min-width:140px;">
             <option value="">@L["All"]</option>
             @foreach (var cat in Model.Categories)
             {
-                <option value="@cat.Id" selected="@(Model.SelectedCategoryId == cat.Id)">@cat.Name</option>
+                <option value="@cat.Id" selected="@(Model.SelectedCategoryId == cat.Id)">
+                    @cat.Name
+                </option>
             }
         </select>
 
-        <input name="q" class="form-control form-control-sm flex-fill" placeholder="@L["Search.Placeholder"]" value="@q" />
+        <input name="q" class="form-control form-control-sm flex-fill"
+               placeholder="@L["Search.Placeholder"]"
+               value="@q" 
+               style="min-width:200px"/>
+
+        <!-- Filter: For Children -->
+        <div class="form-check form-check-sm ms-2 d-flex justify-content-between w-100">
+            <input class="form-check-input" type="checkbox" name="forChildren" value="true"
+                   @(Model.ForChildrenOnly == true ? "checked" : "") />
+            <label class="form-check-label me-2">
+                 @L["Teacher.ForChildren"]
+            </label>
+        </div>
 
         <button type="submit" class="btn btn-primary btn-sm">@L["button.Search"]</button>
     </form>
@@ -44,12 +58,25 @@ else
         {
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card h-100 shadow-sm course-card">
+
                     @if (!string.IsNullOrEmpty(c.CoverPublicUrl))
                     {
-                        <img src="@c.CoverPublicUrl" class="card-img-top" alt="@c.Title" />
+                        <div class="position-relative">
+                            <img src="@c.CoverPublicUrl" class="card-img-top" alt="@c.Title" />
+
+                            @if (c.IsForChildren)
+                            {
+                                <span class="badge bg-success position-absolute top-0 start-0 m-2 px-3 py-2 fs-6">
+                                    🎈 @L["ForChildren"]
+                                </span>
+                            }
+                        </div>
                     }
+
                     <div class="card-body d-flex flex-column">
+
                         <h5 class="card-title">@c.Title</h5>
+
                         <div class="meta mb-2">
                             <span class="me-2">@c.CategoryName</span>
                             <span class="text-muted">•</span>
@@ -61,14 +88,50 @@ else
                         <div class="mt-auto">
                             <div class="d-flex align-items-center justify-content-between gap-2">
                                 <div class="fw-semibold">@c.PriceLabel</div>
-                                <a class="btn btn-outline-primary btn-sm" asp-action="Details" asp-route-id="@c.Id">@L["View"]</a>
+                                <a class="btn btn-outline-primary btn-sm"
+                                   asp-action="Details"
+                                   asp-route-id="@c.Id">
+                                    @L["View"]
+                                </a>
                             </div>
                         </div>
+
                     </div>
                 </div>
             </div>
         }
     </div>
+
+    <!-- Pagination -->
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+
+            <li class="page-item @(Model.PageNumber <= 1 ? "disabled" : "")">
+                <a class="page-link"
+                   href="@Url.Action("Index", new { q = Model.Query, categoryId = Model.SelectedCategoryId, forChildren = Model.ForChildrenOnly, page = Model.PageNumber - 1 })">
+                    «
+                </a>
+            </li>
+
+            @for (int i = 1; i <= Model.TotalPages; i++)
+            {
+                <li class="page-item @(Model.PageNumber == i ? "active" : "")">
+                    <a class="page-link"
+                       href="@Url.Action("Index", new { q = Model.Query, categoryId = Model.SelectedCategoryId, forChildren = Model.ForChildrenOnly, page = i })">
+                        @i
+                    </a>
+                </li>
+            }
+
+            <li class="page-item @(Model.PageNumber >= Model.TotalPages ? "disabled" : "")">
+                <a class="page-link"
+                   href="@Url.Action("Index", new { q = Model.Query, categoryId = Model.SelectedCategoryId, forChildren = Model.ForChildrenOnly, page = Model.PageNumber + 1 })">
+                    »
+                </a>
+            </li>
+
+        </ul>
+    </nav>
 }
 
 

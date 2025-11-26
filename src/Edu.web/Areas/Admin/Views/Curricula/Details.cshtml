@@ -1,13 +1,12 @@
-﻿@model Edu.Web.Areas.Admin.ViewModels.CurriculumDetailsViewModel
-@using System.Globalization
+﻿@model CurriculumDetailsViewModel
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using Edu.Infrastructure.Helpers;
 
 @{
-     
     ViewData["Title"] = L["Admin.CurriculumDetails"];
     var curriculum = Model.Curriculum;
     var modules = Model.Modules ?? Enumerable.Empty<Edu.Domain.Entities.SchoolModule>();
-    // convenience small helpers
+    var directLessons = Model.DirectLessons ?? Enumerable.Empty<Edu.Domain.Entities.SchoolLesson>();
     string crop(string? s, int len = 140) => string.IsNullOrEmpty(s) ? "" : (s.Length <= len ? s : s.Substring(0, len) + "…");
 }
 
@@ -20,7 +19,7 @@
             }
             <div>
                 <h3 class="mb-1">@curriculum.Title</h3>
-                <div class="small text-muted">@L["Admin.Level"]: @curriculum.Level?.Name</div>
+                <div class="small text-muted">@L["Admin.Level"]: @LocalizationHelpers.GetLocalizedLevelName(curriculum.Level)</div>
                 <p class="mt-2 text-muted">@crop(curriculum.Description, 260)</p>
             </div>
         </div>
@@ -39,8 +38,70 @@
 </div>
 
 <div class="row">
-    <!-- Left: modules & lessons -->
+    <!-- Left: unassigned lessons, modules & lessons -->
     <div class="col-lg-8">
+
+        @* --- Direct (module-less) lessons --- *@
+        @if (directLessons.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <div><strong>@L["Admin.UnassignedLessons"]</strong></div>
+                    <div class="small text-muted">@L["Admin.UnassignedLessonsHint"]</div>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @foreach (var lesson in directLessons.OrderBy(l => l.Order))
+                        {
+                            <div class="list-group-item d-flex align-items-start gap-3">
+                                <div style="width:250px;">
+                                    @if (!string.IsNullOrEmpty(lesson.YouTubeVideoId))
+                                    {
+                                        @await Html.PartialAsync("_YouTubeEmbed", lesson.YouTubeVideoId)
+                                    }
+                                    else
+                                    {
+                                        <div class="bg-light border rounded p-2 small text-center">@L["Admin.NoVideo"]</div>
+                                    }
+                                </div>
+
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-start justify-content-between">
+                                        <div>
+                                            <div class="fw-semibold">@lesson.Title</div>
+                                            <div class="small text-muted">@crop(lesson.Description, 200)</div>
+                                            <div class="small text-muted mt-1">@L["Admin.LessonOrder"]: @lesson.Order</div>
+                                        </div>
+
+                                        <div class="btn-group gap-1 btn-group-sm ms-2">
+                                            <a asp-controller="Lessons" asp-action="Edit" asp-route-id="@lesson.Id" asp-area="Admin" class="btn rounded btn-outline-secondary">@L["Button.Edit"]</a>
+                                            <form asp-controller="Lessons" asp-action="Delete" asp-area="Admin" method="post" class="d-inline" onsubmit="return confirm('@L["Admin.ConfirmDelete"]');">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@lesson.Id" />
+                                                <input type="hidden" name="curriculumId" value="@curriculum.Id" />
+                                                <button class="btn rounded btn-outline-danger">@L["Admin.Delete"]</button>
+                                            </form>
+                                        </div>
+                                    </div>
+
+                                    @if (lesson.Files != null && lesson.Files.Any())
+                                    {
+                                        <div class="mt-2">
+                                            @foreach (var f in lesson.Files)
+                                            {
+                                                <a asp-controller="FileResources" asp-action="Download" asp-route-id="@f.Id" asp-area="Admin" class="me-2 small">@f.Name</a>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* --- Modules & their lessons --- *@
         @if (!modules.Any())
         {
             <div class="card mb-3">
@@ -90,7 +151,7 @@
 
                                         <div class="flex-grow-1">
                                             <div class="d-flex align-items-start justify-content-between">
-                                                <div class="">
+                                                <div>
                                                     <div class="fw-semibold">@lesson.Title</div>
                                                     <div class="small text-muted">@crop(lesson.Description, 200)</div>
                                                     <div class="small text-muted mt-1">@L["Admin.LessonOrder"]: @lesson.Order</div>
@@ -105,8 +166,6 @@
                                                         <button class="btn rounded btn-outline-danger">@L["Admin.Delete"]</button>
                                                     </form>
                                                 </div>
-
-                                                @* Files/download links *@
                                             </div>
 
                                             @if (lesson.Files != null && lesson.Files.Any())
@@ -150,7 +209,7 @@
                         <input name="Order" type="number" value="1" class="form-control form-control-sm" />
                     </div>
                     <div class="d-grid">
-                        <button class="btn btn-primary rounded btn-sm">@L["Admin.AddModule"]</button>
+                        <button class="btn btn-primary rounded btn-sm">@L["Admin.AddModule"] <i class="fas fa-plus-circle ms-1"></i></button>
                     </div>
                 </form>
             </div>
@@ -161,6 +220,9 @@
             <div class="card-body">
                 <form asp-controller="Lessons" asp-action="Create" asp-area="Admin" method="post" enctype="multipart/form-data">
                     @Html.AntiForgeryToken()
+
+                    <input type="hidden" name="CurriculumId" value="@curriculum.Id" />
+
                     <div class="mb-2">
                         <label class="form-label small">@L["Admin.SelectModule"]</label>
                         <select name="ModuleId" class="form-select form-select-sm">
@@ -197,7 +259,7 @@
                     </div>
 
                     <div class="d-grid">
-                        <button class="btn rounded btn-success btn-sm">@L["Admin.AddLesson"]</button>
+                        <button class="btn rounded btn-success btn-sm">@L["Admin.AddLesson"] <i class="fas fa-plus-circle ms-1"></i></button>
                     </div>
                 </form>
             </div>
@@ -207,7 +269,7 @@
 
 @section Scripts {
     <script>
-        // small UX: if only one module and user opens AddLesson, preselect it
+        // preselect module if only one is available
         (function () {
             try {
                 var moduleSelect = document.querySelector('select[name="ModuleId"]');
@@ -218,6 +280,7 @@
         })();
     </script>
 }
+
 
 
 

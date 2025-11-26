@@ -18,7 +18,7 @@
                 <input asp-for="Order" class="form-control" />
             </div>
             <div class="col-12">
-                <button class="btn btn-primary">@L["Admin.AddModule"]</button>
+                <button class="btn btn-primary">@L["Admin.AddModule"] <i class="fas fa-plus-circle ms-1"></i></button>
                 <a asp-action="Details" asp-controller="Curricula" asp-area="Admin" asp-route-id="@Model.CurriculumId" class="btn btn-link">@L["Button.Cancel"]</a>
             </div>
         </form>

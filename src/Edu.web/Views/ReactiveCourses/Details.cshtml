@@ -1,6 +1,6 @@
 ﻿@model Edu.Web.ViewModels.ReactiveCourseDetailsVm
 @using System.Globalization
-@using System.Text.RegularExpressions
+@using Edu.Domain.Entities
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Edu.Web.Resources.SharedResource> L
 
 @{
@@ -8,18 +8,29 @@
     var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     var dir = lang == "ar" ? "rtl" : "ltr";
     var textAlign = lang == "ar" ? "right" : "left";
-
 }
 
 <div class="row g-3" dir="@dir" style="text-align:@textAlign">
     <div class="col-lg-8">
+
+        @* Feedback (TempData) *@
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success">@TempData["Success"]</div>
+        }
+        else if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger">@TempData["Error"]</div>
+        }
+        else if (TempData["Info"] != null)
+        {
+            <div class="alert alert-info">@TempData["Info"]</div>
+        }
+
         <div class="card mb-3 shadow-sm">
             @if (!string.IsNullOrEmpty(Model.CoverPublicUrl))
             {
-                <img src="@Model.CoverPublicUrl"
-                     class="card-img-top"
-                     style="height:320px;object-fit:cover"
-                     alt="@Model.Title" />
+                <img src="@Model.CoverPublicUrl" class="card-img-top" style="height:320px;object-fit:cover" alt="@Model.Title" />
             }
             <div class="card-body">
                 <h2>@Model.Title</h2>
@@ -27,35 +38,26 @@
 
                 <div class="mt-3">@Html.Raw(Model.Description?.Replace("\n", "<br/>"))</div>
 
-                @* If there is an intro video embed it inline: prefer YouTube embed, fallback to HTML5 video *@
-                @if (!string.IsNullOrEmpty(Model.IntroVideoUrl))
+                @if (!string.IsNullOrEmpty(Model.IntroVideoUrl) || !string.IsNullOrEmpty(Model.IntroYouTubeId))
                 {
                     <div class="mt-4">
                         <h6 class="mb-2">@L["ReactiveCourse.IntroVideo"]</h6>
-                        @if (!string.IsNullOrEmpty(Model.IntroVideoUrl) || !string.IsNullOrEmpty(Model.IntroYouTubeId))
+                        @if (!string.IsNullOrEmpty(Model.IntroYouTubeId))
                         {
-                            <div class="mt-4">
-                                <h6 class="mb-2">@L["ReactiveCourse.IntroVideo"]</h6>
-
-                                @* Use YouTube embed if IntroYouTubeId exists, otherwise fallback to direct video tag *@
-                                @if (!string.IsNullOrEmpty(Model.IntroYouTubeId))
-                                {
-                                    <div class="ratio ratio-16x9 mb-3">
-                                        <iframe src="https://www.youtube.com/embed/@Model.IntroYouTubeId"
-                                                title="Intro video"
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                allowfullscreen></iframe>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="ratio ratio-16x9 mb-3">
-                                        <video controls style="width:100%;height:100%;object-fit:cover;">
-                                            <source src="@Model.IntroVideoUrl" />
-                                            @L["ReactiveCourse.VideoNotSupported"]
-                                        </video>
-                                    </div>
-                                }
+                            <div class="ratio ratio-16x9 mb-3">
+                                <iframe src="https://www.youtube.com/embed/@Model.IntroYouTubeId"
+                                        title="Intro video"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen></iframe>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="ratio ratio-16x9 mb-3">
+                                <video controls style="width:100%;height:100%;object-fit:cover;">
+                                    <source src="@Model.IntroVideoUrl" />
+                                    @L["ReactiveCourse.VideoNotSupported"]
+                                </video>
                             </div>
                         }
                     </div>
@@ -64,8 +66,9 @@
                 <div class="mt-4">
                     <h6>@L["ReactiveCourse.Months"]</h6>
                     <div class="small text-muted mb-2">@L["ReactiveCourse.Duration"] : @Model.DurationMonths</div>
+
                     <div class="list-group">
-                        @foreach (var m in Model.Months)
+                        @foreach (var m in Model.Months.OrderBy(x => x.MonthIndex))
                         {
                             <div class="list-group-item d-flex justify-content-between align-items-center" dir="@dir">
                                 <div class="me-2">
@@ -88,7 +91,6 @@
                 </div>
 
                 <div class="mt-4">
-                    @* Enrollment CTA *@
                     <div>
                         @if (User?.Identity?.IsAuthenticated != true)
                         {
@@ -97,32 +99,45 @@
                         }
                         else
                         {
-                            if (Model.IsEnrolled)
+                            // Prefer server-supplied flags in the VM
+                            var isEnrolled = Model.IsEnrolled;
+                            var hasAnyPaid = Model.IsPaidEnrollment;
+                            var hasPending = Model.HasPendingEnrollment;
+
+                            if (isEnrolled)
                             {
-                                if (Model.IsPaidEnrollment)
+                                if (hasAnyPaid)
                                 {
-                                    <a class="btn btn-success" href="/Student/ReactiveEnrollments/MyEnrollments">@L["ReactiveCourse.MyEnrollments"]</a>
+                                    <a asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="MyEnrollments" class="btn btn-success">
+                                        @L["ReactiveCourse.MyEnrollments"]
+                                    </a>
                                 }
-                                else if (Model.HasPendingEnrollment)
+                                else if (hasPending)
                                 {
-                                    <a class="btn btn-outline-secondary" href="/Student/ReactiveEnrollments/MyEnrollments">@L["ReactiveCourse.PendingPayments"]</a>
+                                    <a asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="MyEnrollments" class="btn btn-outline-secondary">
+                                        @L["ReactiveCourse.PendingPayments"]
+                                    </a>
                                 }
                                 else
                                 {
-                                    <a class="btn btn-outline-secondary" href="/Student/ReactiveEnrollments/MyEnrollments">@L["ReactiveCourse.EnrollmentRequested"]</a>
+                                    <a asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="MyEnrollments" class="btn btn-outline-secondary">
+                                        @L["ReactiveCourse.EnrollmentRequested"]
+                                    </a>
                                 }
                             }
                             else
                             {
-                                <form method="post" action="/Student/ReactiveEnrollments/RequestEnrollment" class="d-inline">
+                                @* Standard non-AJAX form POST to request enrollment (no month) *@
+                                <form asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="RequestEnrollOrRequestMonth" method="post" class="d-inline">
                                     @Html.AntiForgeryToken()
-                                    <input type="hidden" name="ReactiveCourseId" value="@Model.Id" />
-                                    <button type="submit" class="btn btn-primary">@(L["ReactiveCourse.Enroll"] ?? "Enroll")</button>
+                                    <input type="hidden" name="courseId" value="@Model.Id" />
+                                    <button type="submit" class="btn btn-primary">@L["ReactiveCourse.Enroll"]</button>
                                 </form>
                             }
                         }
                     </div>
                 </div>
+
             </div>
         </div>
 
@@ -144,6 +159,7 @@
                 </dl>
             </div>
         </div>
+
     </div>
 
     <aside class="col-lg-4">
@@ -151,22 +167,63 @@
             <div class="card-body">
                 <h6>@L["ReactiveCourse.Info"]</h6>
                 <p class="small text-muted">@L["ReactiveCourse.InfoForStudent"]</p>
-                @if (!string.IsNullOrEmpty(Model.IntroVideoUrl))
+                @if (!string.IsNullOrEmpty(Model.IntroVideoUrl) || !string.IsNullOrEmpty(Model.IntroYouTubeId))
                 {
                     <div class="mt-2">
-                        @* show a small inline preview button (since main embed is already in page) *@
                         <a class="btn btn-sm btn-outline-primary" href="#introVideo">@L["ReactiveCourse.IntroVideo"]</a>
                     </div>
                 }
             </div>
         </div>
 
-        <a asp-controller="ReactiveCourses" asp-action="Index" class="btn btn-light w-100">
-            <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
-            <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
-             @L["Common.Back"]
-        </a>
+        <a asp-controller="ReactiveCourses" asp-action="Index" class="btn btn-light w-100">@L["Common.Back"]</a>
     </aside>
 </div>
+
+@* Month list with request buttons (non-AJAX) — placed after primary content for easier UX *@
+<div class="row mt-4">
+    <div class="col-lg-8">
+        <h5 class="mb-3">@L["ReactiveCourse.Months"]</h5>
+
+        @foreach (var m in Model.Months.OrderBy(x => x.MonthIndex))
+        {
+            <div class="card mb-2">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>@L["ReactiveCourse.Month"] @m.MonthIndex</strong>
+                        <div class="small text-muted">@m.LessonsCount @L["ReactiveCourse.Lessons"]</div>
+                    </div>
+
+                    <div class="text-end">
+                        @if (!m.IsReadyForPayment)
+                        {
+                            <span class="badge bg-secondary">@(L["ReactiveCourse.NotReady"] ?? "Not ready")</span>
+                        }
+                        else
+                        {
+                            @* If student already has paid or pending status, the controller's VM flags will redirect user to MyEnrollments; but here we render the simple request form. *@
+                            <form asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="RequestEnrollOrRequestMonth" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="courseId" value="@Model.Id" />
+                                <input type="hidden" name="monthId" value="@m.Id" />
+                                <button type="submit" class="btn btn-primary btn-sm">@L["ReactiveCourse.RequestPayment"]</button>
+                            </form>
+                        }
+                    </div>
+                </div>
+
+                @* optionally show lessons preview only if you want (kept out for public) *@
+            </div>
+        }
+    </div>
+</div>
+
+@* No JS required for non-AJAX mode. Keep this section empty unless you later add client-side enhancements. *@
+@section Scripts {
+    <script>
+        // intentionally empty - non-AJAX flow uses plain form posts
+    </script>
+}
+
 
 

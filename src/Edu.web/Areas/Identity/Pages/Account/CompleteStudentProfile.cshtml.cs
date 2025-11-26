@@ -45,7 +45,9 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             public string FullName { get; set; } = string.Empty;
             public string? PhoneNumber { get; set; }
             public DateTime? DateOfBirth { get; set; }
-            public string? PhotoUrl { get; set; }
+
+            // ⬅ This will hold the display URL (computed, not stored)
+            public string? PhotoDisplayUrl { get; set; }
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -53,16 +55,21 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
             {
-                _logger.LogWarning("CompleteStudentProfile.OnGet: user is null. Claims: {Claims}",
-                    string.Join(", ", User.Claims.Select(c => $"{c.Type}={c.Value}")));
-                // Redirect to Login instead of Challenge
-                return RedirectToPage("/Account/Login", new { area = "Identity", returnUrl = Url.Page("/Account/CompleteStudentProfile") });
+                return RedirectToPage("/Account/Login", new
+                {
+                    area = "Identity",
+                    returnUrl = Url.Page("/Account/CompleteStudentProfile")
+                });
             }
 
             Input.FullName = user.FullName;
-            Input.PhoneNumber = await _userManager.GetPhoneNumberAsync(user); // small fix: make sure method name matches
+            Input.PhoneNumber = await _userManager.GetPhoneNumberAsync(user);
             Input.DateOfBirth = user.DateOfBirth;
-            Input.PhotoUrl = user.PhotoUrl;
+
+            // NEW: generate display URL
+            Input.PhotoDisplayUrl = await _files.GetPublicUrlAsync(
+                user.PhotoStorageKey ?? user.PhotoUrl
+            );
 
             return Page();
         }
@@ -72,7 +79,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
             {
-                _logger.LogWarning("CompleteStudentProfile.OnPost: user is null.");
                 return RedirectToPage("/Account/Login", new { area = "Identity" });
             }
 
@@ -82,6 +88,7 @@ namespace Edu.Web.Areas.Identity.Pages.Account
                 return Page();
             }
 
+            // PHOTO UPLOAD
             if (Photo != null)
             {
                 if (!FileValidators.IsValidImage(Photo))
@@ -91,38 +98,43 @@ namespace Edu.Web.Areas.Identity.Pages.Account
                     return Page();
                 }
 
-                Input.PhotoUrl = await _files.SaveFileAsync(Photo, $"users/{user.Id}");
-                user.PhotoUrl = Input.PhotoUrl;
+                // 🔥 delete old file (if any)
+                if (!string.IsNullOrWhiteSpace(user.PhotoStorageKey))
+                    await _files.DeleteFileAsync(user.PhotoStorageKey);
+
+                // fallback delete for old system
+                else if (!string.IsNullOrWhiteSpace(user.PhotoUrl))
+                    await _files.DeleteFileAsync(user.PhotoUrl);
+
+                // 🔥 save new file via storage service
+                var newKey = await _files.SaveFileAsync(Photo, $"users/{user.Id}");
+                user.PhotoStorageKey = newKey;
+                user.PhotoUrl = null; // drop old system
             }
 
+            // OTHER FIELDS
             user.FullName = Input.FullName;
             user.DateOfBirth = Input.DateOfBirth;
-            var phoneRes = await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber ?? string.Empty);
-            if (!phoneRes.Succeeded)
-            {
-                _logger.LogWarning("Failed to set phone number for user {UserId}: {Errors}", user.Id, string.Join(";", phoneRes.Errors.Select(e => e.Description)));
-            }
+
+            var phoneRes = await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber ?? "");
 
             var updRes = await _userManager.UpdateAsync(user);
             if (!updRes.Succeeded)
             {
-                _logger.LogError("Failed to update user {UserId}: {Errors}", user.Id, string.Join(";", updRes.Errors.Select(e => e.Description)));
                 ModelState.AddModelError("", "Failed to update profile");
                 await OnGetAsync();
                 return Page();
             }
 
-            // ensure student row exists
+            // ensure student exists
             var student = await _db.Students.FindAsync(user.Id);
             if (student == null)
             {
                 student = new Edu.Domain.Entities.Student { Id = user.Id };
                 _db.Students.Add(student);
+                await _db.SaveChangesAsync();
             }
 
-            await _db.SaveChangesAsync();
-
-            // Refresh cookie so layout and subsequent pages read latest claims/values
             await _signInManager.RefreshSignInAsync(user);
 
             TempData["ProfileSaved"] = _localizer["ProfileSaved"] ?? "Profile saved";

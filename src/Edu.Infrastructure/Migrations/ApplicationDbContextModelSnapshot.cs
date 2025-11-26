@@ -269,6 +269,9 @@ namespace Edu.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CoverImageKey")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CoverImageUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -549,7 +552,17 @@ namespace Edu.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name")
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NameIt")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -581,6 +594,9 @@ namespace Edu.Infrastructure.Migrations
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsForChildren")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsPublishRequested")
                         .HasColumnType("bit");
@@ -979,13 +995,16 @@ namespace Edu.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CurriculumId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsFree")
                         .HasColumnType("bit");
 
-                    b.Property<int>("ModuleId")
+                    b.Property<int?>("ModuleId")
                         .HasColumnType("int");
 
                     b.Property<int>("Order")
@@ -993,7 +1012,8 @@ namespace Edu.Infrastructure.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("VideoUrl")
                         .HasColumnType("nvarchar(max)");
@@ -1002,6 +1022,8 @@ namespace Edu.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CurriculumId");
 
                     b.HasIndex("ModuleId");
 
@@ -1125,6 +1147,9 @@ namespace Edu.Infrastructure.Migrations
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CVStorageKey")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CVUrl")
                         .HasMaxLength(500)
@@ -1541,11 +1566,18 @@ namespace Edu.Infrastructure.Migrations
 
             modelBuilder.Entity("Edu.Domain.Entities.SchoolLesson", b =>
                 {
+                    b.HasOne("Edu.Domain.Entities.Curriculum", "Curriculum")
+                        .WithMany("SchoolLessons")
+                        .HasForeignKey("CurriculumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Edu.Domain.Entities.SchoolModule", "SchoolModule")
                         .WithMany("SchoolLessons")
                         .HasForeignKey("ModuleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Curriculum");
 
                     b.Navigation("SchoolModule");
                 });
@@ -1662,6 +1694,8 @@ namespace Edu.Infrastructure.Migrations
 
             modelBuilder.Entity("Edu.Domain.Entities.Curriculum", b =>
                 {
+                    b.Navigation("SchoolLessons");
+
                     b.Navigation("SchoolModules");
                 });
 

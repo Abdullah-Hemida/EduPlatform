@@ -1,8 +1,8 @@
-﻿using Edu.Domain.Entities;
+﻿using Edu.Application.IServices;
+using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
-using Edu.Web.Areas.Admin.ViewModels;
 using Edu.Infrastructure.Helpers;
-using Edu.Application.IServices;
+using Edu.Web.Areas.Admin.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,11 +22,34 @@ namespace Edu.Web.Areas.Admin.Controllers
             _fs = fs;
         }
 
-        // GET: Admin/Lessons/Create?moduleId=5
-        public IActionResult Create(int moduleId)
+        // GET: Admin/Lessons/Create?moduleId=5 or ?curriculumId=3
+        public async Task<IActionResult> Create(int? moduleId, int? curriculumId)
         {
             ViewData["ActivePage"] = "Curricula";
-            var vm = new LessonCreateViewModel { ModuleId = moduleId, Order = 1 };
+
+            var vm = new LessonCreateViewModel
+            {
+                ModuleId = moduleId,
+                CurriculumId = curriculumId ?? 0,
+                Order = 1
+            };
+
+            // If a moduleId is provided, infer curriculumId from module
+            if (moduleId.HasValue)
+            {
+                var module = await _db.SchoolModules
+                                      .AsNoTracking()
+                                      .FirstOrDefaultAsync(m => m.Id == moduleId.Value);
+                if (module == null) return NotFound();
+                vm.CurriculumId = module.CurriculumId;
+            }
+
+            if (vm.CurriculumId == 0)
+            {
+                // no curriculum known — cannot create a lesson without curriculum
+                return BadRequest("CurriculumId or ModuleId must be provided.");
+            }
+
             return View(vm);
         }
 
@@ -35,10 +58,18 @@ namespace Edu.Web.Areas.Admin.Controllers
         {
             if (!ModelState.IsValid) return View(vm);
 
-            var ytId = !string.IsNullOrWhiteSpace(vm.YouTubeUrl) ? YouTubeHelper.ExtractYouTubeId(vm.YouTubeUrl) : null;
+            // if lesson added without module → ModuleId must be null
+            if (vm.ModuleId == 0)
+                vm.ModuleId = null;
+
+            var ytId = !string.IsNullOrWhiteSpace(vm.YouTubeUrl)
+                ? YouTubeHelper.ExtractYouTubeId(vm.YouTubeUrl)
+                : null;
+
             var lesson = new SchoolLesson
             {
                 ModuleId = vm.ModuleId,
+                CurriculumId = vm.CurriculumId,  // new
                 Title = vm.Title,
                 Description = vm.Description,
                 YouTubeVideoId = ytId,
@@ -46,6 +77,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                 IsFree = vm.IsFree,
                 Order = vm.Order
             };
+
             _db.SchoolLessons.Add(lesson);
             await _db.SaveChangesAsync();
 
@@ -68,21 +100,26 @@ namespace Edu.Web.Areas.Admin.Controllers
             }
 
             TempData["Success"] = "Lesson added.";
-            // find curriculum id to redirect to details
-            var module = await _db.SchoolModules.FindAsync(vm.ModuleId);
-            return RedirectToAction("Details", "Curricula", new { area = "Admin", id = module?.CurriculumId ?? 0 });
+
+            // redirect to curriculum details (use vm.CurriculumId which is guaranteed to be set)
+            return RedirectToAction("Details", "Curricula", new { area = "Admin", id = vm.CurriculumId });
         }
 
+        // GET: Admin/Lessons/Edit/5
         public async Task<IActionResult> Edit(int id)
         {
             ViewData["ActivePage"] = "Curricula";
-            var l = await _db.SchoolLessons.Include(x => x.Files).FirstOrDefaultAsync(x => x.Id == id);
+            var l = await _db.SchoolLessons
+                             .Include(x => x.Files)
+                             .AsNoTracking()
+                             .FirstOrDefaultAsync(x => x.Id == id);
             if (l == null) return NotFound();
 
             var vm = new LessonEditViewModel
             {
                 Id = l.Id,
                 ModuleId = l.ModuleId,
+                CurriculumId = l.CurriculumId,
                 Title = l.Title,
                 Description = l.Description,
                 YouTubeUrl = l.VideoUrl,
@@ -95,10 +132,36 @@ namespace Edu.Web.Areas.Admin.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(LessonEditViewModel vm)
         {
+            ViewData["ActivePage"] = "Curricula";
+
             if (!ModelState.IsValid) return View(vm);
 
             var l = await _db.SchoolLessons.FindAsync(vm.Id);
             if (l == null) return NotFound();
+
+            // If ModuleId changed and is provided, ensure module belongs to same curriculum or update CurriculumId accordingly.
+            if (vm.ModuleId.HasValue)
+            {
+                var module = await _db.SchoolModules.AsNoTracking().FirstOrDefaultAsync(m => m.Id == vm.ModuleId.Value);
+                if (module == null)
+                {
+                    ModelState.AddModelError(nameof(vm.ModuleId), "Module not found.");
+                    return View(vm);
+                }
+                l.ModuleId = vm.ModuleId;
+                l.CurriculumId = module.CurriculumId; // ensure lesson's curriculum matches module
+            }
+            else
+            {
+                // If module removed, keep CurriculumId as provided by vm (must be valid)
+                if (vm.CurriculumId == 0)
+                {
+                    ModelState.AddModelError(nameof(vm.CurriculumId), "Curriculum is required when removing module.");
+                    return View(vm);
+                }
+                l.ModuleId = null;
+                l.CurriculumId = vm.CurriculumId;
+            }
 
             l.Title = vm.Title;
             l.Description = vm.Description;
@@ -106,16 +169,16 @@ namespace Edu.Web.Areas.Admin.Controllers
             l.VideoUrl = vm.YouTubeUrl;
             l.IsFree = vm.IsFree;
             l.Order = vm.Order;
+
             _db.SchoolLessons.Update(l);
             await _db.SaveChangesAsync();
 
             // redirect to curriculum details
-            var module = await _db.SchoolModules.FindAsync(vm.ModuleId);
-            return RedirectToAction("Details", "Curricula", new { area = "Admin", id = module?.CurriculumId ?? 0 });
+            return RedirectToAction("Details", "Curricula", new { area = "Admin", id = l.CurriculumId });
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id, int curriculumId)
+        public async Task<IActionResult> Delete(int id, int? curriculumId)
         {
             var l = await _db.SchoolLessons.FindAsync(id);
             if (l == null) return NotFound();
@@ -131,8 +194,12 @@ namespace Edu.Web.Areas.Admin.Controllers
             await _db.SaveChangesAsync();
 
             TempData["Success"] = "Lesson deleted.";
-            return RedirectToAction("Details", "Curricula", new { area = "Admin", id = curriculumId });
+
+            // prefer passed curriculumId; otherwise infer from deleted lesson
+            var redirectId = curriculumId ?? l.CurriculumId;
+            return RedirectToAction("Details", "Curricula", new { area = "Admin", id = redirectId });
         }
     }
 }
+
 

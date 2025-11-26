@@ -15,6 +15,7 @@ namespace Edu.Domain.Entities
         public decimal Price { get; set; } 
         public bool IsPublished { get; set; }
         public bool IsPublishRequested { get; set; }
+        public bool IsForChildren { get; set; }
         public Teacher? Teacher { get; set; }
         public Category? Category { get; set; }
         public ICollection<PrivateModule> PrivateModules { get; set; } = new List<PrivateModule>();

@@ -772,3 +772,60 @@ hr {
         top: auto;
     }
 }
+
+/* Small card styles for filter cards */
+.filter-cards {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.25rem;
+}
+
+.filter-card {
+    min-width: 160px;
+    max-width: 260px;
+    flex: 0 0 auto;
+    border-radius: 12px;
+    transition: transform .14s ease, box-shadow .14s ease;
+    cursor: pointer;
+}
+
+    .filter-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+    }
+
+    .filter-card.active {
+        box-shadow: 0 16px 40px rgba(0,0,0,0.09);
+    }
+
+    /* Keep the card content compact */
+    .filter-card .card-body {
+        padding: .9rem;
+    }
+
+    .filter-card .count {
+        font-weight: 600;
+        opacity: .85;
+    }
+
+/* Line under the cards (title + controls) */
+.filter-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-top: .5rem;
+    flex-wrap: wrap;
+}
+
+/* Make the small pagination summary look subtle */
+.pagination-summary {
+    color: #6b7280;
+    font-size: .95rem;
+}
+
+/* ensure filter group spacing in RTL works (we set dir dynamically) */
+[dir="rtl"] .filter-card {
+    text-align: right;
+}

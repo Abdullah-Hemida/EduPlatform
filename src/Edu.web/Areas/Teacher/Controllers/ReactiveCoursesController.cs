@@ -15,7 +15,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
 {
     [Area("Teacher")]
     [Authorize(Roles = "Teacher")]
-    public class ReactiveCoursesController : Controller
+    public class ReactiveCoursesController : TeacherBaseController
     {
         private readonly ApplicationDbContext _db;
         private readonly IFileStorageService _fileStorage;

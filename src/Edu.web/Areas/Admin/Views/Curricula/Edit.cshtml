@@ -1,9 +1,11 @@
 ﻿@model Edu.Web.Areas.Admin.ViewModels.CurriculumEditViewModel
+@using Edu.Infrastructure.Helpers;
+@using Edu.Domain.Entities;
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @{
-     
     ViewData["Title"] = L["Admin.EditCurriculum"];
-    var levels = ViewBag.Levels as IEnumerable<Edu.Domain.Entities.Level> ?? Enumerable.Empty<Edu.Domain.Entities.Level>();
+    var levels = ViewBag.Levels as IEnumerable<Level> ?? Enumerable.Empty<Level>();
+    var levelSelectList = ViewBag.LevelSelectList as SelectList;
 }
 
 <div class="card">
@@ -12,25 +14,25 @@
         <form asp-action="Edit" method="post" enctype="multipart/form-data" class="row g-3">
             @Html.AntiForgeryToken()
             <input asp-for="Id" type="hidden" />
+
             <div class="col-md-6">
                 <label class="form-label">@L["Admin.Title"]</label>
                 <input asp-for="Title" class="form-control" />
                 <span asp-validation-for="Title" class="text-danger small"></span>
             </div>
+
             <div class="col-md-6">
                 <label class="form-label">@L["Admin.Level"]</label>
-                <select asp-for="LevelId" class="form-select">
-                    <option value="">-- @L["Admin.SelectLevel"] --</option>
-                    @foreach (var l in levels)
-                    {
-                        <option value="@l.Id" selected="@(l.Id == Model.LevelId ? "selected" : null)">@l.Name</option>
-                    }
-                </select>
+
+                @Html.DropDownListFor(m => m.LevelId, levelSelectList, ("-- " + (L["Admin.SelectLevel"].Value ?? "Select level") + " --"),
+                new { @class = "form-select" })
             </div>
+
             <div class="col-12">
                 <label class="form-label">@L["Admin.Description"]</label>
                 <textarea asp-for="Description" class="form-control" rows="4"></textarea>
             </div>
+
             <div class="col-md-4">
                 <label class="form-label">@L["Admin.CoverImage"]</label>
                 @if (!string.IsNullOrEmpty(Model.ExistingCoverUrl))
@@ -39,6 +41,7 @@
                 }
                 <input asp-for="CoverImage" type="file" class="form-control" />
             </div>
+
             <div class="col-12">
                 <button class="btn btn-primary">@L["Admin.SaveChanges"]</button>
                 <a asp-action="Details" asp-route-id="@Model.Id" asp-area="Admin" class="btn btn-link">@L["Button.Cancel"]</a>
@@ -50,4 +53,5 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
 }
+
 

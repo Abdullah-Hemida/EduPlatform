@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Edu.Web.Resources;
+using Edu.Infrastructure.Services;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -21,18 +22,20 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly ILogger<ManageUsersController> _logger;
         private readonly IWebHostEnvironment _env;
         private readonly IStringLocalizer<SharedResource> _localizer;
+        private readonly IEmailSender _emailSender;
 
         public ManageUsersController(
             UserManager<ApplicationUser> userManager,
             ApplicationDbContext db,
             ILogger<ManageUsersController> logger,
-            IWebHostEnvironment env, IStringLocalizer<SharedResource> localizer)
+            IWebHostEnvironment env, IStringLocalizer<SharedResource> localizer, IEmailSender emailSender)
         {
             _userManager = userManager;
             _db = db;
             _logger = logger;
             _env = env;
             _localizer = localizer;
+            _emailSender = emailSender;
         }
 
         // GET: Admin/ManageUsers
@@ -218,34 +221,79 @@ namespace Edu.Web.Areas.Admin.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ApproveTeacher(string id, string? returnUrl = null)
         {
-            if (string.IsNullOrEmpty(id)) { TempData["Error"] = "Invalid id."; return RedirectToLocal(returnUrl); }
+            if (string.IsNullOrEmpty(id))
+            {
+                TempData["Error"] = _localizer["InvalidId"].Value;
+                return RedirectToLocal(returnUrl);
+            }
 
             var teacher = await _db.Teachers.FindAsync(id);
-            if (teacher == null) { TempData["Error"] = "Teacher not found."; return RedirectToLocal(returnUrl); }
+            if (teacher == null)
+            {
+                TempData["Error"] = _localizer["TeacherNotFound"].Value;
+                return RedirectToLocal(returnUrl);
+            }
 
             teacher.Status = TeacherStatus.Approved;
             _db.Teachers.Update(teacher);
             await _db.SaveChangesAsync();
 
-            TempData["Success"] = "Teacher approved.";
+            // Get the user
+            var user = await _userManager.FindByIdAsync(id);
+
+            // Send Approval Email
+            if (user != null)
+            {
+                await _emailSender.SendEmailAsync(
+                    user.Email!,
+                    "Your Teacher Account Is Approved",
+                    $"Dear {user.FullName},<br/><br/>" +
+                    $"Your teacher profile has been approved. You can now access your dashboard.<br/><br/>" +
+                    $"Best regards,<br/>Edu Platform Team"
+                );
+            }
+
+            TempData["Success"] = _localizer["TeacherApproved"].Value;
             return RedirectToLocal(returnUrl);
         }
+
 
         // POST (redirecting): Unapprove teacher (server flow)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UnapproveTeacher(string id, string? returnUrl = null)
         {
-            if (string.IsNullOrEmpty(id)) { TempData["Error"] = "Invalid id."; return RedirectToLocal(returnUrl); }
+            if (string.IsNullOrEmpty(id))
+            {
+                TempData["Error"] = _localizer["InvalidId"].Value;
+                return RedirectToLocal(returnUrl);
+            }
 
             var teacher = await _db.Teachers.FindAsync(id);
-            if (teacher == null) { TempData["Error"] = "Teacher not found."; return RedirectToLocal(returnUrl); }
+            if (teacher == null)
+            {
+                TempData["Error"] = _localizer["TeacherNotFound"].Value;
+                return RedirectToLocal(returnUrl);
+            }
 
             teacher.Status = TeacherStatus.Rejected;
             _db.Teachers.Update(teacher);
             await _db.SaveChangesAsync();
 
-            TempData["Success"] = "Teacher unapproved.";
+            var user = await _userManager.FindByIdAsync(id);
+
+            if (user != null)
+            {
+                await _emailSender.SendEmailAsync(
+                    user.Email!,
+                    "Your Teacher Application Was Rejected",
+                    $"Dear {user.FullName},<br/><br/>" +
+                    $"Your application was not approved. Please review your information and try again.<br/><br/>" +
+                    $"Best regards,<br/>Edu Platform Team"
+                );
+            }
+
+            TempData["Success"] = _localizer["TeacherRejected"].Value;
             return RedirectToLocal(returnUrl);
         }
 

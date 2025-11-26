@@ -1,7 +1,7 @@
 ﻿using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
-using Edu.Infrastructure.Storage;  
+using Edu.Infrastructure.Storage;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -35,45 +35,37 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
 
         public string Username { get; set; } = null!;
 
-        [TempData] public string? StatusMessage { get; set; }
+        [TempData]
+        public string? StatusMessage { get; set; }
 
         [BindProperty]
         public InputModel Input { get; set; } = new();
 
         public class InputModel
         {
-            //[Display(Name = "Full name")]
-            //[Required, StringLength(200)]
             public string FullName { get; set; } = string.Empty;
 
             [Phone]
-            [Display(Name = "Phone number")]
             public string? PhoneNumber { get; set; }
 
-            [Display(Name = "Date of birth")]
             [DataType(DataType.Date)]
             public DateTime? DateOfBirth { get; set; }
 
-            // Photo/CV handled via files in OnPostAsync
+            // Storage keys
+            public string? PhotoStorageKey { get; set; }
+            public string? CVStorageKey { get; set; }
 
             // Teacher-specific
-            [Display(Name = "Job Title")]
-            [StringLength(150)]
             public string? JobTitle { get; set; }
-
-            [Display(Name = "Short Bio")]
-            [StringLength(2000)]
             public string? ShortBio { get; set; }
-
-            [Display(Name = "Intro Video (YouTube URL or ID)")]
             public string? IntroVideoUrl { get; set; }
 
-            // For display
+            // Computed URLs for display
             public string? PhotoUrl { get; set; }
             public string? CVUrl { get; set; }
         }
 
-        // GET
+        // GET: Load profile
         public async Task<IActionResult> OnGetAsync()
         {
             var user = await _userManager.GetUserAsync(User);
@@ -88,10 +80,11 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 FullName = user.FullName,
                 PhoneNumber = phone,
                 DateOfBirth = user.DateOfBirth,
-                PhotoUrl = user.PhotoUrl
+                PhotoStorageKey = user.PhotoStorageKey,
+                PhotoUrl = await _files.GetPublicUrlAsync(user.PhotoStorageKey)
             };
 
-            // load teacher data if teacher role
+            // Load teacher-specific data
             if (await _userManager.IsInRoleAsync(user, "Teacher"))
             {
                 var teacher = await _db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == user.Id);
@@ -100,9 +93,9 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                     Input.JobTitle = teacher.JobTitle;
                     Input.ShortBio = teacher.ShortBio;
                     Input.IntroVideoUrl = teacher.IntroVideoUrl;
-                    Input.CVUrl = teacher.CVUrl;
+                    Input.CVStorageKey = teacher.CVStorageKey;
+                    Input.CVUrl = await _files.GetPublicUrlAsync(teacher.CVStorageKey);
 
-                    // Set the embed URL for display
                     ViewData["IntroVideoEmbedUrl"] = GetYouTubeEmbedUrl(teacher.IntroVideoUrl);
                 }
             }
@@ -110,7 +103,7 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
             return Page();
         }
 
-        // POST: Update profile only
+        // POST: Update basic profile (photo included)
         public async Task<IActionResult> OnPostProfileAsync(IFormFile? photo)
         {
             var user = await _userManager.GetUserAsync(User);
@@ -122,27 +115,21 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 return Page();
             }
 
-            // Update basic profile info
-            if (Input.FullName != user.FullName)
-            {
-                user.FullName = Input.FullName;
-            }
+            // Update basic fields
+            user.FullName = Input.FullName;
+            user.DateOfBirth = Input.DateOfBirth;
 
-            // Phone update
             var phone = await _userManager.GetPhoneNumberAsync(user);
             if (Input.PhoneNumber != phone)
             {
-                var setPhoneResult = await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber);
-                if (!setPhoneResult.Succeeded)
+                var result = await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber);
+                if (!result.Succeeded)
                 {
                     ModelState.AddModelError(string.Empty, _localizer["UnexpectedErrorPhone"]);
                     await OnGetAsync();
                     return Page();
                 }
             }
-
-            // DOB
-            user.DateOfBirth = Input.DateOfBirth;
 
             // Photo upload
             if (photo != null)
@@ -153,9 +140,11 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                     await OnGetAsync();
                     return Page();
                 }
-                var photoUrl = await _files.SaveFileAsync(photo, $"users/{user.Id}");
-                user.PhotoUrl = photoUrl;
-                Input.PhotoUrl = photoUrl;
+
+                var key = await _files.SaveFileAsync(photo, $"users/{user.Id}");
+                user.PhotoStorageKey = key;
+                Input.PhotoStorageKey = key;
+                Input.PhotoUrl = await _files.GetPublicUrlAsync(key);
             }
 
             await _userManager.UpdateAsync(user);
@@ -165,7 +154,7 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
             return RedirectToAction("Index", "Home", new { area = "" });
         }
 
-        // POST: Update teacher profile only
+        // POST: Update teacher profile (CV included)
         public async Task<IActionResult> OnPostTeacherAsync(IFormFile? cvFile)
         {
             var user = await _userManager.GetUserAsync(User);
@@ -186,7 +175,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
             var teacher = await _db.Teachers.FirstOrDefaultAsync(t => t.Id == user.Id);
             if (teacher == null)
             {
-                // Create if missing
                 teacher = new Edu.Domain.Entities.Teacher
                 {
                     Id = user.Id,
@@ -213,26 +201,25 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                     await OnGetAsync();
                     return Page();
                 }
-                var cvUrl = await _files.SaveFileAsync(cvFile, $"users/{user.Id}/cv");
-                teacher.CVUrl = cvUrl;
-                Input.CVUrl = cvUrl;
+
+                var key = await _files.SaveFileAsync(cvFile, $"users/{user.Id}/cv");
+                teacher.CVStorageKey = key;
+                Input.CVStorageKey = key;
+                Input.CVUrl = await _files.GetPublicUrlAsync(key);
             }
 
             await _db.SaveChangesAsync();
             StatusMessage = _localizer["TeacherProfileUpdated"];
             return RedirectToAction("Index", "Home", new { area = "" });
         }
-        // Add this method to the IndexModel class
+
+        // YouTube helper
         private string? GetYouTubeEmbedUrl(string? url)
         {
-            if (string.IsNullOrEmpty(url))
-                return null;
+            if (string.IsNullOrEmpty(url)) return null;
 
-            // If it's already an embed URL, return as is
-            if (url.Contains("youtube.com/embed/"))
-                return url;
+            if (url.Contains("youtube.com/embed/")) return url;
 
-            // Handle standard YouTube URLs
             if (url.Contains("youtube.com/watch") && url.Contains("v="))
             {
                 var uri = new Uri(url);
@@ -242,7 +229,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                     return $"https://www.youtube.com/embed/{videoId}";
             }
 
-            // Handle youtu.be shortened URLs
             if (url.Contains("youtu.be/"))
             {
                 var videoId = url.Split('/').Last();
@@ -251,9 +237,9 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 return $"https://www.youtube.com/embed/{videoId}";
             }
 
-            // If it doesn't match standard patterns, assume it's a video ID
             return $"https://www.youtube.com/embed/{url}";
         }
     }
 }
+
 

@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Antiforgery
 @using Microsoft.AspNetCore.Identity
 @using System.Text.Json
+@inject Edu.Application.IServices.IFileStorageService Storage
 @inject IAntiforgery Antiforgery
 @inject UserManager<Edu.Domain.Entities.ApplicationUser> UserManager
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> Localizer
@@ -13,7 +14,7 @@
     var isRtl = dir == "rtl";
     var user = (User?.Identity?.IsAuthenticated ?? false) ? await UserManager.GetUserAsync(User) : null;
     var displayName = user?.FullName?.Split(' ').FirstOrDefault() ?? user?.UserName ?? Localizer["Admin.Guest"];
-    var photoUrl = !string.IsNullOrEmpty(user?.PhotoUrl) ? user!.PhotoUrl : Url.Content("~/images/default-avatar.png");
+    var photoUrl = !string.IsNullOrEmpty(user?.PhotoStorageKey) ? await Storage.GetPublicUrlAsync(user.PhotoStorageKey) : Url.Content("~/uploads/images/default-avatar.jpg");
 
     var dt_search = Localizer["DataTable.Search"].Value;
     var dt_length = Localizer["DataTable.ShowEntries"].Value;
@@ -43,14 +44,33 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="~/css/admin.css" />
 </head>
+
 <body class="bg-light">
+    <!-- Global Alerts -->
+    <div class="container mt-3 global-alert" style="z-index:12000;">
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show text-center" role="alert">
+                @TempData["Success"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        else if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show text-center" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    </div>
+    <div aria-live="polite" aria-atomic="true"
+         class="position-fixed top-0 end-0 p-3"
+         style="z-index: 2000;">
+        <div id="toast-container"></div>
+    </div>
     <div id="wrapper" class="d-flex min-vh-100">
         <!-- Sidebar -->
         <nav id="sidebar-wrapper" class="bg-dark text-white d-flex flex-column" role="navigation" aria-label="Main sidebar">
-@*             <div class="sidebar-brand py-3 border-bottom text-center">
-                <img src="~/uploads/images/AdminDashboard/adminlogo.png" alt="logo" style="height:28px" class="me-2" />
-                <strong class="d-none d-md-inline">@Localizer["Admin.SiteTitleShort"]</strong>
-            </div> *@
             <div class=" d-flex align-items-center justify-content-center p-3 gap-2 border-button">
                 <img src="~/uploads/images/AdminDashboard/adminlogo.png" alt="logo" style="height:28px" class="me-2" />
                 <a asp-area="" asp-controller="Home" asp-action="Index" target="_blank" rel="noopener"
@@ -127,7 +147,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a asp-area="Admin" asp-controller="ReactiveEnrollmentPayments" asp-action="Pending"
+                        <a asp-area="Admin" asp-controller="ReactiveEnrollments" asp-action="Index"
                            class="nav-link d-flex align-items-center gap-2 @active("ReactiveEnrollments")" title="@Localizer["Admin.ReactiveEnrollments"]">
                             <i class="fas fa-user-graduate nav-icon"></i>
                             <span class="nav-text ms-2">@Localizer["Admin.ReactiveEnrollments"]</span>
@@ -333,9 +353,7 @@
             <main class="container-fluid p-2 pt-1">
                 @RenderBody()
             </main>
-            <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
-                <div id="alert-container" class="toast-container position-static"></div>
-            </div>
+
         </div>
     </div>
 
@@ -347,6 +365,15 @@
 
     <!-- your admin script -->
     <script src="~/js/layout.js"></script>
+    <script>
+        const alert = document.querySelector('.alert');
+        if (alert) {
+            setTimeout(() => {
+                let bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 4000);
+        }
+    </script>
 
     @RenderSection("Scripts", required: false)
 </body>

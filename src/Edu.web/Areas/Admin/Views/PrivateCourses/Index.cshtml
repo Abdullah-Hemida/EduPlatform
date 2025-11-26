@@ -8,43 +8,49 @@
 }
 
     <div class="d-flex align-items-center gap-2 mb-3 mt-3">
-        <form method="get" id="filterForm" class="d-flex align-items-center">
-            <input name="q" value="@Model.Query" class="form-control form-control-sm ms-1 me-1 row-cols-auto" placeholder="@L["Admin.SearchPlaceholder"]" />
+    <form method="get" id="filterForm" class="d-flex align-items-center">
+        <input name="q" value="@Model.Query" class="form-control form-control-sm ms-1 me-1 row-cols-auto" placeholder="@L["Admin.SearchPlaceholder"]" />
 
-            <select asp-for="CategoryId"
-                    asp-items="ViewBag.CategorySelect"
-                    asp-option-label="@L["Common.All"]"
-                    class="form-select form-select-sm ms-1 me-1 w-75">
-            </select>
+        <select asp-for="CategoryId"
+                asp-items="ViewBag.CategorySelect"
+                asp-option-label="@L["Common.All"]"
+                class="form-select form-select-sm ms-1 me-1 w-75">
+        </select>
 
-            <select asp-for="ShowPublished"
-                    asp-items="ViewBag.ShowPublishedSelect"
-                    asp-option-label="@L["Common.All"]"
-                    class="form-select form-select-sm ms-1 me-1 w-50">
-            </select>
+        <select asp-for="ShowPublished"
+                asp-items="ViewBag.ShowPublishedSelect"
+                asp-option-label="@L["Common.All"]"
+                class="form-select form-select-sm ms-1 me-1 w-50">
+        </select>
 
-            @* preserve showAll mode when toggled *@
-            @if (Model.ShowAll)
-            {
-                <input type="hidden" name="showAll" value="true" />
-            }
+        <select asp-for="ForChildren"
+                asp-items="ViewBag.ForChildrenSelect"
+                asp-option-label="@L["Common.All"]"
+                class="form-select form-select-sm ms-1 me-1 w-50">
+        </select>
 
-            <button class="btn btn-primary btn-sm ms-1 me-1 ps-3 pe-3">@L["Admin.Search"]</button>
-            <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">@L["Admin.Reset"]</a>
+        @* preserve showAll mode when toggled *@
+        @if (Model.ShowAll)
+        {
+            <input type="hidden" name="showAll" value="true" />
+        }
 
-            @if (!Model.ShowAll)
-            {
-                <a class="btn btn-outline-info btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin", q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = true })">
-                    @(L["Admin.ShowAll"] ?? "Show all")
-                </a>
-            }
-            else
-            {
-                <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
-                    @(L["Admin.ShowOnlyRequests"] ?? "Show only requests")
-                </a>
-            }
-        </form>
+        <button class="btn btn-primary btn-sm ms-1 me-1 ps-3 pe-3">@L["Admin.Search"]</button>
+        <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">@L["Admin.Reset"]</a>
+
+        @if (!Model.ShowAll)
+        {
+            <a class="btn btn-outline-info btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin", q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = true })">
+                @(L["Admin.ShowAll"] ?? "Show all")
+            </a>
+        }
+        else
+        {
+            <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
+                @(L["Admin.ShowOnlyRequests"] ?? "Show only requests")
+            </a>
+        }
+    </form>
     </div>
 
 <div class="row g-3">
@@ -77,10 +83,20 @@
                             @(c.IsPublished? L["Admin.Unapprove"] : L["Button.Approve"])
                         </button>
                     </div>
-                    <div class="mt-2 small text-muted">@L["Role.Teacher"] : @(c.TeacherName ?? "(unknown)")</div>
+
+                    <div class="mt-2 small text-muted">
+                        @L["Role.Teacher"] : @(c.TeacherName ?? "(unknown)")
+
+                    </div>
+
                     @if (c.IsPublishRequested)
                     {
                         <span class="badge bg-info ms-2">@(L["Admin.PublishRequested"] ?? "Publish requested")</span>
+                    }
+
+                    @if (c.IsForChildren)
+                    {
+                        <span class="badge bg-primary ms-2 mt-2">@(L["Teacher.ForChildren"] ?? "For children")</span>
                     }
                 </div>
             </div>

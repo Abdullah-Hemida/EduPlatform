@@ -1,15 +1,15 @@
-﻿using Edu.Application.IServices;
-using Edu.Domain.Entities;
+﻿using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
-using Edu.Infrastructure.Helpers;
-using Edu.Web.Areas.Teacher.ViewModels;
-using Edu.Web.Resources;
+using Edu.Web.Areas.Teacher.ViewModels; // adjust if needed
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Edu.Application.IServices;
+using Edu.Web.Resources;
+using Edu.Infrastructure.Helpers;
 
 namespace Edu.Web.Areas.Teacher.Controllers
 {
@@ -40,7 +40,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             _logger = logger;
         }
 
-        // GET: Teacher/Courses
         // GET: Teacher/Courses
         public async Task<IActionResult> Index(string? q, int? categoryId, bool? showPublished, int page = 1)
         {
@@ -81,17 +80,17 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 Price = pc.Price,
                 PriceLabel = pc.Price.ToEuro(),
                 IsPublished = pc.IsPublished,
-                CoverImageKey = pc.CoverImageUrl, // storage key in DB
+                CoverImageKey = pc.CoverImageKey, // now from CoverImageKey
                 ModuleCount = pc.PrivateModules != null ? pc.PrivateModules.Count() : 0,
                 LessonCount = pc.PrivateLessons != null ? pc.PrivateLessons.Count() : 0
             });
 
             var paged = await PaginatedList<TeacherCourseListItemVm>.CreateAsync(projected, page, PageSize);
 
-            // Resolve PublicCoverUrl for the page items (efficient: only distinct keys from current page)
+            // Resolve public URLs for current page items (only distinct keys)
             var keys = paged.Where(x => !string.IsNullOrEmpty(x.CoverImageKey))
                             .Select(x => x.CoverImageKey)
-                            .Distinct()
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
                             .ToList();
 
             if (keys.Any())
@@ -121,11 +120,12 @@ namespace Edu.Web.Areas.Teacher.Controllers
             ViewBag.CategorySelect = new SelectList(categories, "Id", "Name", categoryId);
 
             ViewBag.ShowPublishedSelect = new List<SelectListItem>
-    {
-       new SelectListItem { Value = "", Text = _localizer["Common.All"], Selected = showPublished == null },
-       new SelectListItem { Value = "true", Text = _localizer["Status.Accepted"], Selected = showPublished == true },
-       new SelectListItem { Value = "false", Text = _localizer["Status.Rejected"], Selected = showPublished == false }
-    };
+            {
+               new SelectListItem { Value = "", Text = _localizer["Common.All"], Selected = showPublished == null },
+               new SelectListItem { Value = "true", Text = _localizer["Status.Accepted"], Selected = showPublished == true },
+               new SelectListItem { Value = "false", Text = _localizer["Status.Rejected"], Selected = showPublished == false }
+            };
+
 
             var vm = new TeacherCourseIndexVm
             {
@@ -139,7 +139,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             return View(vm);
         }
 
-        // GET: Teacher/Courses/Create
         // GET: Teacher/Courses/Create
         public async Task<IActionResult> Create()
         {
@@ -166,7 +165,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 try
                 {
                     var folder = "private-covers";
-                    coverKey = await _fileStorage.SaveFileAsync(vm.CoverImage, folder);
+                    coverKey = await _fileStorage.SaveFileAsync(vm.CoverImage, folder); // returns storage key
                 }
                 catch (Exception ex)
                 {
@@ -182,8 +181,9 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 CategoryId = vm.CategoryId ?? 0,
                 Title = vm.Title,
                 Description = vm.Description,
-                CoverImageUrl = coverKey, // store the key
+                CoverImageKey = coverKey, // store key (not url)
                 Price = vm.Price,
+                IsForChildren = vm.IsForChildren,
                 IsPublished = false,
                 IsPublishRequested = false
             };
@@ -196,8 +196,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-
-        // GET: Teacher/Courses/Edit/5
         // GET: Teacher/Courses/Edit/5
         public async Task<IActionResult> Edit(int id)
         {
@@ -214,7 +212,8 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 Title = course.Title,
                 Description = course.Description,
                 Price = course.Price,
-                ExistingCoverKey = course.CoverImageUrl
+                ExistingCoverKey = course.CoverImageKey,
+                IsForChildren = course.IsForChildren
             };
 
             if (!string.IsNullOrEmpty(vm.ExistingCoverKey))
@@ -261,12 +260,12 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     var newKey = await _fileStorage.SaveFileAsync(vm.CoverImage, folder);
 
                     // best-effort delete previous key
-                    if (!string.IsNullOrEmpty(course.CoverImageUrl))
+                    if (!string.IsNullOrEmpty(course.CoverImageKey))
                     {
-                        try { await _fileStorage.DeleteFileAsync(course.CoverImageUrl); } catch { /* ignore */ }
+                        try { await _fileStorage.DeleteFileAsync(course.CoverImageKey); } catch { /* ignore */ }
                     }
 
-                    course.CoverImageUrl = newKey;
+                    course.CoverImageKey = newKey;
                 }
                 catch (Exception ex)
                 {
@@ -281,6 +280,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
             course.Description = vm.Description;
             course.CategoryId = vm.CategoryId ?? course.CategoryId;
             course.Price = vm.Price;
+            course.IsForChildren = vm.IsForChildren;
 
             await _db.SaveChangesAsync();
 
@@ -300,7 +300,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             if (course == null) return NotFound();
             if (course.TeacherId != user.Id) return Forbid();
 
-            // set request true
             course.IsPublishRequested = true;
 
             _db.CourseModerationLogs.Add(new CourseModerationLog
@@ -352,7 +351,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             return RedirectToAction("Details", new { id });
         }
 
-
         // GET: Teacher/Courses/Details/5
         [HttpGet]
         public async Task<IActionResult> Details(int id)
@@ -362,7 +360,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                                   .AsNoTracking()
                                   .Include(c => c.Category)
                                   .Include(c => c.PrivateModules)
-                                  .Include(c => c.PrivateLessons) // includes lessons, but not files; we will load files separately
+                                  .Include(c => c.PrivateLessons)
                                   .FirstOrDefaultAsync(c => c.Id == id);
 
             if (course == null) return NotFound();
@@ -380,19 +378,31 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 Id = course.Id,
                 Title = course.Title,
                 Description = course.Description,
-                CoverImageKey = course.CoverImageUrl,
+                CoverImageKey = course.CoverImageKey,
                 PriceLabel = course.Price.ToEuro(),
+                Price = course.Price,
                 IsPublished = course.IsPublished,
                 IsPublishRequested = course.IsPublishRequested,
                 CategoryId = course.CategoryId,
                 CategoryName = course.Category?.Name,
-                TeacherId = course.TeacherId
+                TeacherId = course.TeacherId,
+                IsForChildren = course.IsForChildren
             };
+
+            // Resolve public cover url (best-effort)
+            if (!string.IsNullOrEmpty(vm.CoverImageKey))
+            {
+                try
+                {
+                    vm.PublicCoverUrl = await _fileStorage.GetPublicUrlAsync(vm.CoverImageKey);
+                }
+                catch { vm.PublicCoverUrl = null; }
+            }
 
             // Modules summary
             var modules = course.PrivateModules != null
                           ? course.PrivateModules.OrderBy(m => m.Order).ToList()
-                          : new System.Collections.Generic.List<PrivateModule>();
+                          : new List<PrivateModule>();
 
             foreach (var m in modules)
             {
@@ -440,12 +450,11 @@ namespace Edu.Web.Areas.Teacher.Controllers
             }
 
             // Build LessonsByModule dictionary for quick rendering in view
-            // use key = moduleId (int) or 0 for no module
-            var dict = new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<PrivateLessonVm>>();
+            var dict = new Dictionary<int, List<PrivateLessonVm>>();
             foreach (var lesson in vm.Lessons)
             {
                 var key = lesson.PrivateModuleId ?? 0;
-                if (!dict.ContainsKey(key)) dict[key] = new System.Collections.Generic.List<PrivateLessonVm>();
+                if (!dict.ContainsKey(key)) dict[key] = new List<PrivateLessonVm>();
                 dict[key].Add(lesson);
             }
             vm.LessonsByModule = dict;
@@ -453,9 +462,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             // IsOwner (important)
             var currentUser = await _userManager.GetUserAsync(User);
             vm.IsOwner = currentUser != null && !string.IsNullOrEmpty(course.TeacherId) && currentUser.Id == course.TeacherId;
-
-            // (Optional) load moderation logs if you have CourseModerationLog table
-            // vm.ModerationLogs = ... populate if available
 
             ViewData["ActivePage"] = "MyPrivateCourses";
             return View(vm);
@@ -479,10 +485,10 @@ namespace Edu.Web.Areas.Teacher.Controllers
             // Attempt to delete files from storage (best-effort)
             try
             {
-                // delete cover
-                if (!string.IsNullOrEmpty(course.CoverImageUrl))
+                // delete cover (use storage key)
+                if (!string.IsNullOrEmpty(course.CoverImageKey))
                 {
-                    try { await _fileStorage.DeleteFileAsync(course.CoverImageUrl); } catch { /*ignore*/ }
+                    try { await _fileStorage.DeleteFileAsync(course.CoverImageKey); } catch { /*ignore*/ }
                 }
 
                 // delete lesson files
@@ -494,7 +500,9 @@ namespace Edu.Web.Areas.Teacher.Controllers
                         {
                             foreach (var f in lesson.Files)
                             {
-                                try { await _fileStorage.DeleteFileAsync(f.StorageKey ?? f.FileUrl); } catch { /*ignore*/ }
+                                // prefer StorageKey, fallback to FileUrl
+                                var keyOrUrl = !string.IsNullOrEmpty(f.StorageKey) ? f.StorageKey : f.FileUrl;
+                                try { await _fileStorage.DeleteFileAsync(keyOrUrl); } catch { /*ignore*/ }
                             }
                         }
                     }
@@ -513,4 +521,5 @@ namespace Edu.Web.Areas.Teacher.Controllers
         }
     }
 }
+
 

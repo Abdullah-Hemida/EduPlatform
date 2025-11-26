@@ -20,24 +20,49 @@ public class JsonStringLocalizer : IStringLocalizer
         _logger = logger;
     }
 
+    // Build a merged dictionary for the CURRENT UI culture, using fallbacks.
+    // Order: parent (two-letter) -> specific (en-US) -> always ensure "en" fallback.
     private IDictionary<string, string> GetAllStringsForCurrentCulture()
     {
-        var culture = CultureInfo.CurrentUICulture.Name; // "en", "ar", "it"
-        var cacheKey = $"__json_loc_{culture}";
+        // Use two-letter code as canonical cache key (since your files are en.json/ar.json/it.json)
+        var twoLetter = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName?.ToLowerInvariant() ?? "en";
+        var cacheKey = $"__json_loc_{twoLetter}";
+
         if (!_cache.TryGetValue(cacheKey, out Dictionary<string, string> dict))
         {
             dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var basePath = Path.Combine(_env.ContentRootPath, "Resources/i18n");
-                var file = Path.Combine(basePath, $"{culture}.json");
-                if (!File.Exists(file))
+                var basePath = Path.Combine(_env.ContentRootPath, "Resources", "i18n");
+
+                // Try exact name first (e.g. "en-US.json"), then two-letter (e.g. "en.json")
+                var tried = new List<string>
+            {
+                CultureInfo.CurrentUICulture.Name,                    // e.g. "en-US"
+                CultureInfo.CurrentUICulture.TwoLetterISOLanguageName // e.g. "en"
+            }.Distinct().ToList();
+
+                string? file = null;
+                foreach (var name in tried)
                 {
-                    // fallback: try neutral culture (first 2 letters)
-                    file = Path.Combine(basePath, CultureInfo.CurrentUICulture.TwoLetterISOLanguageName + ".json");
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    var candidate = Path.Combine(basePath, $"{name}.json");
+                    if (File.Exists(candidate))
+                    {
+                        file = candidate;
+                        break;
+                    }
                 }
 
-                if (File.Exists(file))
+                // As a final fallback try "en.json"
+                if (file == null)
+                {
+                    var candidate = Path.Combine(basePath, "en.json");
+                    if (File.Exists(candidate))
+                        file = candidate;
+                }
+
+                if (!string.IsNullOrEmpty(file))
                 {
                     var text = File.ReadAllText(file);
                     var doc = JsonSerializer.Deserialize<Dictionary<string, string>>(text);
@@ -50,10 +75,13 @@ public class JsonStringLocalizer : IStringLocalizer
                 _logger?.LogError(ex, "Error loading JSON localization file");
             }
 
+            // cache using the two-letter code key
             _cache.Set(cacheKey, dict, TimeSpan.FromMinutes(30));
         }
+
         return dict;
     }
+
 
     public LocalizedString this[string name]
     {
@@ -84,4 +112,3 @@ public class JsonStringLocalizer : IStringLocalizer
 
     public IStringLocalizer WithCulture(CultureInfo culture) => this;
 }
-

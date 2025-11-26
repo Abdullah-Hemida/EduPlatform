@@ -12,9 +12,9 @@
 <div class="row mb-3 mt-3 align-items-center">
     <div class="col-md-6">
         <div class="d-flex align-items-start gap-3">
-            @if (!string.IsNullOrEmpty(Model.CoverImageUrl))
+            @if (!string.IsNullOrEmpty(Model.PublicCoverUrl))
             {
-                <img src="@Model.CoverImageUrl" alt="@Model.Title" class="rounded" style="width:160px;height:100px;object-fit:cover" />
+                <img src="@Model.PublicCoverUrl" alt="@Model.Title" class="rounded" style="width:160px;height:100px;object-fit:cover" />
             }
             <div>
                 <h3 class="mb-1">@course.Title</h3>

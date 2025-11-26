@@ -527,3 +527,32 @@ html[dir="rtl"] .curriculum-actions {
 .dash-card {
     padding: 15px 5px !important;
 }
+
+.global-alert {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 999999999 !important;
+    width: auto;
+    min-width: 280px;
+}
+#toast-container {
+    position: fixed;
+    top: 1rem; /* 16px from top */
+    right: 1rem; /* 16px from right edge */
+    z-index: 2000; /* above sidebar/navbar */
+    max-width: calc(100vw - 2rem); /* never overflow screen width */
+}
+
+    #toast-container .toast {
+        min-width: 250px; /* optional: set reasonable width */
+        max-width: 350px; /* optional */
+    }
+html[dir="rtl"] #toast-container {
+    right: auto;
+    left: 1rem;
+}
+
+
+

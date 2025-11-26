@@ -40,7 +40,7 @@
 
             <div class="form-check mb-3">
                 <input asp-for="IsActive" class="form-check-input" />
-                <label class="form-check-label">@L["Admin.IsActive"] ?? "Is active"</label>
+                <label class="form-check-label">@(L["Admin.IsActive"] ?? "Is active")</label>
             </div>
         </div>
 

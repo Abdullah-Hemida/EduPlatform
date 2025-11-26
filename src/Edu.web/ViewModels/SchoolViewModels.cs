@@ -13,16 +13,10 @@ namespace Edu.Web.ViewModels
     // SchoolIndexVm.cs
     public class SchoolIndexVm
     {
-        // For the level filter UI
         public List<SchoolLevelVm> AllLevels { get; set; } = new();
-
-        // Flat list of curricula (filtered & paginated)
         public List<CurriculumSummaryVm> Curricula { get; set; } = new();
-
-        // Selected filter
         public int? SelectedLevelId { get; set; }
         public HeroVm? SchoolHero { get; set; }
-        // Pagination
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 9;
         public int TotalCount { get; set; } = 0;
@@ -36,23 +30,19 @@ namespace Edu.Web.ViewModels
         public string Name { get; set; } = "";
         public int Order { get; set; }
         public string CurriculaCountText { get; set; } = "";
-        // You can optionally keep a Curricula property for convenience, but it's not required for the flat UI
         public List<CurriculumSummaryVm> Curricula { get; set; } = new();
     }
-
-    // CurriculumSummaryVm.cs
     public class CurriculumSummaryVm
     {
         public int Id { get; set; }
         public string Title { get; set; } = "";
         public string? Description { get; set; }
         public string? CoverImageUrl { get; set; }
+        public string? CoverImageKey { get; set; }
         public int ModuleCount { get; set; }
         public bool IsAccessible { get; set; } = false; // computed per-user
         public int Order { get; set; } = 0; // optional if you want stable ordering
     }
-
-
     public class CurriculumDetailsVm
     {
         public int Id { get; set; }

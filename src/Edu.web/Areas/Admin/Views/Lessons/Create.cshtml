@@ -29,7 +29,7 @@
                 <input type="file" name="Files" multiple class="form-control" />
             </div>
             <div class="col-12">
-                <button class="btn btn-primary">@L["Admin.AddLesson"]</button>
+                <button class="btn btn-primary">@L["Admin.AddLesson"] <i class="fas fa-plus-circle ms-1"></i></button>
                 <a asp-controller="Curricula" asp-action="Details" asp-area="Admin" asp-route-id="@ViewContext.RouteData.Values["curriculumId"]" class="btn btn-link">@L["Button.Cancel"]</a>
             </div>
         </form>

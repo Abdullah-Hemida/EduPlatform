@@ -1,10 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Edu.Domain.Entities
 {
@@ -15,7 +10,7 @@ namespace Edu.Domain.Entities
         public int MonthIndex { get; set; } // 1..DurationMonths
         public DateTime MonthStartUtc { get; set; } // optional
         public DateTime MonthEndUtc { get; set; }   // optional
-        public bool IsReadyForPayment { get; set; } = false; // teacher toggles when all lessons added
+        public bool IsReadyForPayment { get; set; } = false; 
         public ICollection<ReactiveCourseLesson> Lessons { get; set; } = new List<ReactiveCourseLesson>();
         public ICollection <ReactiveEnrollmentMonthPayment> MonthPayments { get; set; } = new List<ReactiveEnrollmentMonthPayment>();
         public ReactiveCourse? ReactiveCourse { get; set; }

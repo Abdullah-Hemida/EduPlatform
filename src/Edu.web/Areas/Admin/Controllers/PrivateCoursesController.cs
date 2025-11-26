@@ -12,7 +12,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using System.Diagnostics;
 
 
 namespace Edu.Web.Areas.Admin.Controllers
@@ -44,13 +43,9 @@ namespace Edu.Web.Areas.Admin.Controllers
             _emailSender = emailSender;
         }
 
-
-        // GET: Admin/PrivateCourses
-        // Query params: q (search), categoryId (nullable), showPublished (nullable bool), page (int)
-        // GET: Admin/PrivateCourses
-        // GET: Admin/PrivateCourses
-        // Query params: q (search), categoryId (nullable), showPublished (nullable bool), showAll (bool), page (int)
-        public async Task<IActionResult> Index(string? q, int? categoryId, bool? showPublished, bool showAll = false, int page = 1)
+        // GET: Admin/PrivateCourses 
+        // Query params: q (search), categoryId (nullable), showPublished (nullable bool), showAll (bool), forChildren (nullable bool), page (int)
+        public async Task<IActionResult> Index(string? q, int? categoryId, bool? showPublished, bool showAll = false, bool? forChildren = null, int page = 1)
         {
             const int PageSize = 12;
             ViewData["ActivePage"] = "PrivateCourses";
@@ -73,6 +68,12 @@ namespace Edu.Web.Areas.Admin.Controllers
                 baseQuery = baseQuery.Where(pc => pc.IsPublished == showPublished.Value);
             }
 
+            // NEW: filter for children/adults
+            if (forChildren.HasValue)
+            {
+                baseQuery = baseQuery.Where(pc => pc.IsForChildren == forChildren.Value);
+            }
+
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var term = q.Trim();
@@ -88,7 +89,7 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             baseQuery = baseQuery.OrderByDescending(pc => pc.Id);
 
-            // Project only DB-translatable fields (no ToEuro, no calling C# helpers)
+            // Project only DB-translatable fields
             var projected = baseQuery.Select(pc => new PrivateCourseListItemVm
             {
                 Id = pc.Id,
@@ -98,23 +99,25 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Price = pc.Price,                       // numeric, EF-friendly
                 IsPublished = pc.IsPublished,
                 IsPublishRequested = pc.IsPublishRequested,
-                CoverImageUrl = pc.CoverImageUrl,
+                // <-- store the storage key column (not a public url)
+                CoverImageKey = pc.CoverImageKey,
                 TeacherId = pc.TeacherId,
                 TeacherName = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.FullName : null,
+                TeacherEmail = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.Email : null,
+                IsForChildren = pc.IsForChildren
             });
 
-            // Paginate efficiently (your PaginatedList implementation)
+            // Paginate efficiently
             var paged = await PaginatedList<PrivateCourseListItemVm>.CreateAsync(projected, page, PageSize);
 
-            // After materialization: compute price labels and batch resolve cover URLs
+            // After materialization: compute price labels and batch resolve cover public URLs
             if (paged != null && paged.Any())
             {
-                // 1) Compute PriceLabel in-memory (cheap)
+                // 1) Compute PriceLabel in-memory
                 foreach (var it in paged)
                 {
                     try
                     {
-                        // ToEuro is a C# helper — call it now for just visible rows
                         it.PriceLabel = it.Price.ToEuro();
                     }
                     catch
@@ -123,28 +126,28 @@ namespace Edu.Web.Areas.Admin.Controllers
                     }
                 }
 
-                // 2) Batch resolve distinct cover keys/urls to public URLs
-                var keys = paged.Select(x => x.CoverImageUrl).Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
+                // 2) Batch resolve distinct cover keys to public URLs
+                var keys = paged.Select(x => x.CoverImageKey).Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
                 var resolved = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
                 foreach (var k in keys)
                 {
                     try
                     {
-                        // GetPublicUrlAsync may be network bound; do one call per distinct key
                         resolved[k!] = await _fileStorage.GetPublicUrlAsync(k!);
                     }
                     catch
                     {
-                        resolved[k!] = k; // fallback to original
+                        // fallback to key (or null) — keep original value so image can still attempt to use it
+                        resolved[k!] = k;
                     }
                 }
 
                 foreach (var it in paged)
                 {
-                    if (!string.IsNullOrEmpty(it.CoverImageUrl) && resolved.TryGetValue(it.CoverImageUrl!, out var pub))
+                    if (!string.IsNullOrEmpty(it.CoverImageKey) && resolved.TryGetValue(it.CoverImageKey!, out var pub))
                         it.PublicCoverUrl = pub;
                     else
-                        it.PublicCoverUrl = it.CoverImageUrl;
+                        it.PublicCoverUrl = null;
                 }
             }
 
@@ -157,18 +160,27 @@ namespace Edu.Web.Areas.Admin.Controllers
                 PageIndex = paged.PageIndex,
                 PageSize = paged.PageSize,
                 TotalCount = paged.TotalCount,
-                Courses = paged
+                Courses = paged,
+                ForChildren = forChildren
             };
 
             // categories for filter
             var categories = await _db.Categories.OrderBy(c => c.Name).ToListAsync();
             ViewBag.CategorySelect = new SelectList(categories, "Id", "Name", categoryId);
 
-            // showPublished select items (keep code)
+            // showPublished select items
             ViewBag.ShowPublishedSelect = new List<SelectListItem>
     {
         new SelectListItem { Value = "true", Text = _localizer != null ? _localizer["Admin.Published"].Value : "Published", Selected = showPublished == true },
         new SelectListItem { Value = "false", Text = _localizer != null ? _localizer["Admin.Unpublished"].Value : "Unpublished", Selected = showPublished == false }
+    };
+
+            // ForChildren select
+            ViewBag.ForChildrenSelect = new List<SelectListItem>
+    {
+        new SelectListItem { Value = "", Text = _localizer != null ? _localizer["Common.All"].Value : "All", Selected = forChildren == null },
+        new SelectListItem { Value = "true", Text = _localizer != null ? _localizer["Teacher.ForChildren"].Value : "For children", Selected = forChildren == true },
+        new SelectListItem { Value = "false", Text = _localizer != null ? _localizer["Teacher.ForAdults"].Value : "For adults", Selected = forChildren == false }
     };
 
             ViewData["ActivePage"] = "Private Courses";
@@ -176,7 +188,6 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
 
-        // GET: Admin/PrivateCourses/Details/5
         // GET: Admin/PrivateCourses/Details/5
         public async Task<IActionResult> Details(int id)
         {
@@ -193,8 +204,8 @@ namespace Edu.Web.Areas.Admin.Controllers
                     CategoryName = pc.Category != null ? pc.Category.Name : null,
                     pc.Price,
                     pc.IsPublished,
-                    pc.CoverImageUrl,
-                    TeacherId = pc.TeacherId,
+                    pc.CoverImageKey,
+                    pc.TeacherId,
                     TeacherFullName = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.FullName : null,
                     TeacherEmail = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.Email : null
                 })
@@ -212,7 +223,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                 CategoryName = courseBasic.CategoryName,
                 PriceLabel = courseBasic.Price.ToEuro(),
                 IsPublished = courseBasic.IsPublished,
-                CoverImageUrl = courseBasic.CoverImageUrl,
+                CoverImageKey = courseBasic.CoverImageKey,
                 Teacher = new TeacherVm
                 {
                     Id = courseBasic.TeacherId,
@@ -220,7 +231,15 @@ namespace Edu.Web.Areas.Admin.Controllers
                     Email = courseBasic.TeacherEmail
                 }
             };
-
+            // Resolve public cover url (best-effort)
+            if (!string.IsNullOrEmpty(courseVm.CoverImageKey))
+            {
+                try
+                {
+                    courseVm.PublicCoverUrl = await _fileStorage.GetPublicUrlAsync(courseVm.CoverImageKey);
+                }
+                catch { courseVm.PublicCoverUrl = null; }
+            }
             // 2) Load modules (sequential)
             var modules = await _db.PrivateModules
                 .AsNoTracking()
@@ -356,19 +375,6 @@ namespace Edu.Web.Areas.Admin.Controllers
                     CreatedAtUtc = log.CreatedAtUtc
                 };
             }).ToList();
-
-            // 8) Resolve public URL for cover image (if present)
-            if (!string.IsNullOrEmpty(courseVm.CoverImageUrl))
-            {
-                try
-                {
-                    courseVm.PublicCoverUrl = await _fileStorage.GetPublicUrlAsync(courseVm.CoverImageUrl, TimeSpan.FromHours(1));
-                }
-                catch
-                {
-                    courseVm.PublicCoverUrl = courseVm.CoverImageUrl;
-                }
-            }
 
             // 9) Resolve file public URLs in batch (distinct keys)
             var fileKeys = new List<string>();

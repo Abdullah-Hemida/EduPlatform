@@ -88,3 +88,4 @@ namespace Edu.Infrastructure.Data
 }
 
 //dotnet ef migrations add FixFileResourceFk --project src/Edu.Infrastructure/Edu.Infrastructure.csproj --startup-project src/Edu.Web/Edu.Web.csproj
+//@Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.Allowed"].Value ?? "Allowed"));

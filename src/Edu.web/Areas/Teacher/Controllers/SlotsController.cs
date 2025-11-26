@@ -13,7 +13,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
 {
     [Area("Teacher")]
     [Authorize(Roles = "Teacher")]
-    public class SlotsController : Controller
+    public class SlotsController : TeacherBaseController
     {
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _um;

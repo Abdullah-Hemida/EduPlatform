@@ -1,49 +1,56 @@
 ﻿@model CurriculumCreateViewModel
+@using Edu.Infrastructure.Helpers;
+@using Edu.Domain.Entities;
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @{
-     
     ViewData["Title"] = L["Admin.CreateCurriculum"];
-    var levels = ViewBag.Levels as IEnumerable<Edu.Domain.Entities.Level> ?? Enumerable.Empty<Edu.Domain.Entities.Level>();
+    var levels = ViewBag.Levels as IEnumerable<Level> ?? Enumerable.Empty<Level>();
+    var levelSelectList = ViewBag.LevelSelectList as SelectList;
 }
+
 <div class="card">
     <div class="card-body">
         <h4>@L["Admin.CreateCurriculum"]</h4>
         <form asp-action="Create" asp-area="Admin" method="post" enctype="multipart/form-data" class="row g-3">
             @Html.AntiForgeryToken()
+
             <div class="col-md-6">
                 <label class="form-label">@L["Admin.Title"]</label>
                 <input asp-for="Title" class="form-control" />
                 <span asp-validation-for="Title" class="text-danger small"></span>
             </div>
+
             <div class="col-md-6">
                 <label class="form-label">@L["Admin.Level"]</label>
-                <select asp-for="LevelId" class="form-select">
-                    <option value="">-- @L["Admin.SelectLevel"] --</option>
-                    @foreach (var l in levels)
-                    {
-                        <option value="@l.Id">@l.Name</option>
-                    }
-                </select>
+
+                @* Use select list provided by controller; show localized option label *@
+                @Html.DropDownListFor(m => m.LevelId, levelSelectList, ("-- " + (L["Admin.SelectLevel"].Value ?? "Select level") + " --"),
+                new { @class = "form-select" })
                 <span asp-validation-for="LevelId" class="text-danger small"></span>
             </div>
+
             <div class="col-12">
                 <label class="form-label">@L["Admin.Description"]</label>
                 <textarea asp-for="Description" class="form-control" rows="4"></textarea>
             </div>
+
             <div class="col-md-4">
                 <label class="form-label">@L["Admin.CoverImage"]</label>
                 <input asp-for="CoverImage" type="file" class="form-control" />
             </div>
+
             <div class="col-12">
-                <button class="btn btn-primary">@L["Admin.Create"]</button>
+                <button class="btn btn-primary">@L["Admin.Create"] <i class="fas fa-plus-circle ms-1"></i></button>
                 <a asp-action="Index" asp-area="Admin" class="btn btn-link">@L["Button.Cancel"]</a>
             </div>
         </form>
     </div>
 </div>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
 }
+
 
 
 

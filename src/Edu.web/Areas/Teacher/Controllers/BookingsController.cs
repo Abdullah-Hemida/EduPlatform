@@ -14,7 +14,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
 {
     [Area("Teacher")]
     [Authorize(Roles = "Teacher")]
-    public class BookingsController : Controller
+    public class BookingsController : TeacherBaseController
     {
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _um;

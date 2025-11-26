@@ -6,6 +6,7 @@ using Edu.Infrastructure.Localization;
 using Edu.Infrastructure.Persistence;
 using Edu.Infrastructure.Services;
 using Edu.Web.Views.Shared.Components.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
@@ -68,6 +69,17 @@ builder.Services.AddControllersWithViews()
 builder.Services.AddRazorPages();
 
 builder.Services.AddAuthentication();
+// using Microsoft.AspNetCore.Authorization;
+
+builder.Services.AddScoped<IAuthorizationHandler, TeacherApprovedHandler>();
+
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("TeacherApproved", policy =>
+    {
+        policy.RequireRole("Teacher"); // optional but recommended
+        policy.AddRequirements(new TeacherApprovedRequirement());
+    });
+
 
 // Request localization (supported cultures)
 // Keep cookie provider first so user selection wins; accept-language is a fallback

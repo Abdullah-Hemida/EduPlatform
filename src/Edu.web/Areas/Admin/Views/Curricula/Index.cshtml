@@ -1,10 +1,12 @@
 ﻿@model IEnumerable<Edu.Domain.Entities.Curriculum>
+@using Edu.Infrastructure.Helpers;
+@using Edu.Domain.Entities;
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @{
-     
     ViewData["Title"] = L["Admin.Curricula"];
-    var levels = ViewBag.Levels as IEnumerable<Edu.Domain.Entities.Level> ?? Enumerable.Empty<Edu.Domain.Entities.Level>();
+    var levels = ViewBag.Levels as IEnumerable<Level> ?? Enumerable.Empty<Level>();
     var selectedLevel = ViewBag.SelectedLevelId as int?;
+    var levelSelectList = ViewBag.LevelSelectList as SelectList;
 }
 
 <div class="d-flex align-items-center justify-content-between mt-3 mb-3">
@@ -16,17 +18,15 @@
     <div>
         <form method="get" class="d-flex align-items-center" id="levelFilterForm">
             <label class="me-2 small text-muted my-0">@L["Admin.Level"]</label>
-            <select name="levelId" class="form-select form-select-sm me-2" onchange="document.getElementById('levelFilterForm').submit()">
-                <option value="">@L["Common.All"]</option>
-                @foreach (var l in levels)
-                {
-                    <option value="@l.Id" selected="@(selectedLevel == l.Id ? "selected" : null)">@l.Name</option>
-                }
-            </select>
+
+            @* Use SelectList provided by controller. Option label localized. *@
+            @Html.DropDownList("levelId", levelSelectList, L["Common.All"].Value ?? "All",
+            new { @class = "form-select form-select-sm me-2", onchange = "document.getElementById('levelFilterForm').submit()" })
         </form>
     </div>
+
     <div class="ms-2 me-2">
-        <a asp-action="Create" asp-area="Admin" class="btn text-nowrap btn-primary ps-3 pe-3 btn-sm">@L["Admin.CreateCurriculum"] +</a>
+        <a asp-action="Create" asp-area="Admin" class="btn text-nowrap btn-primary ps-3 pe-3 btn-sm">@L["Admin.CreateCurriculum"] <i class="fas fa-plus-circle ms-1"></i></a>
     </div>
 </div>
 
@@ -42,7 +42,7 @@
                 <div class="card-body d-flex flex-column">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <h5 class="card-title mb-0">@c.Title</h5>
-                        <small class="text-muted ms-2">@c.Level?.Name</small>
+                        <small class="text-muted ms-2">@LocalizationHelpers.GetLocalizedLevelName(c.Level)</small>
                     </div>
                     <p class="card-text text-muted small">@(!string.IsNullOrEmpty(c.Description) ? c.Description : "")</p>
 
@@ -59,6 +59,7 @@
         </div>
     }
 </div>
+
 
 
 

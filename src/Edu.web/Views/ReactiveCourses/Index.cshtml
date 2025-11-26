@@ -55,7 +55,8 @@ else
                         <div class="mt-auto d-flex align-items-center justify-content-between">
                             <div class="fw-semibold">@c.PricePerMonthLabel</div>
                             <a class="btn btn-outline-primary btn-sm"
-                               asp-controller="ReactiveCourses"
+                               asp-area="Student"
+                               asp-controller="ReactiveEnrollments"
                                asp-action="Details"
                                asp-route-id="@c.Id">
                                 @L["View"]

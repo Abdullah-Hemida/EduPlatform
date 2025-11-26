@@ -31,11 +31,12 @@ namespace Edu.Web.Controllers
             _localizer = localizer;
         }
 
-        // GET: /PrivateCourses
         [HttpGet]
         [AllowAnonymous]
-        public async Task<IActionResult> Index(string q = null, int? categoryId = null)
+        public async Task<IActionResult> Index(string q = null, int? categoryId = null, bool? forChildren = null, int page = 1)
         {
+            const int pageSize = 12;
+
             var query = _db.PrivateCourses
                 .AsNoTracking()
                 .Where(c => c.IsPublished)
@@ -43,9 +44,11 @@ namespace Edu.Web.Controllers
                 .Include(c => c.Category)
                 .AsQueryable();
 
+            // Category filter
             if (categoryId.HasValue && categoryId.Value > 0)
                 query = query.Where(c => c.CategoryId == categoryId.Value);
 
+            // Search filter
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var term = q.Trim();
@@ -56,34 +59,54 @@ namespace Edu.Web.Controllers
                 );
             }
 
-            var list = await query.OrderByDescending(c => c.Id).ToListAsync();
+            // Filter: For Children Only
+            if (forChildren == true)
+                query = query.Where(c => c.IsForChildren);
+
+            // Pagination
+            int totalCourses = await query.CountAsync();
+            int totalPages = (int)Math.Ceiling(totalCourses / (double)pageSize);
+
+            var list = await query
+                .OrderByDescending(c => c.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
             var vm = new PrivateCourseIndexVm
             {
                 Query = q,
                 SelectedCategoryId = categoryId,
-                Courses = new List<PrivateCourseListItemVm>()
+                ForChildrenOnly = forChildren,
+
+                PageNumber = page,
+                TotalPages = totalPages
             };
 
             foreach (var c in list)
             {
-                var coverKeyOrUrl = !string.IsNullOrEmpty(c.CoverImageKey) ? c.CoverImageKey : c.CoverImageUrl;
-                string? coverPublicUrl = null;
-                if (!string.IsNullOrEmpty(coverKeyOrUrl))
-                    coverPublicUrl = await _fileStorage.GetPublicUrlAsync(coverKeyOrUrl);
-
                 vm.Courses.Add(new PrivateCourseListItemVm
                 {
                     Id = c.Id,
                     Title = c.Title,
                     Description = c.Description?.Length > 240 ? c.Description.Substring(0, 240) + "…" : c.Description,
-                    CoverPublicUrl = coverPublicUrl,
+                    CoverImageKey = c.CoverImageKey,
                     TeacherName = c.Teacher?.User?.FullName ?? c.Teacher?.User?.UserName,
                     CategoryName = c.Category?.Name,
-                    PriceLabel = c.Price.ToEuro()
+                    PriceLabel = c.Price.ToEuro(),
+                    IsForChildren = c.IsForChildren
                 });
             }
 
+            // Resolve image URLs
+            foreach (var course in vm.Courses)
+            {
+                course.CoverPublicUrl = !string.IsNullOrEmpty(course.CoverImageKey)
+                    ? await _fileStorage.GetPublicUrlAsync(course.CoverImageKey)
+                    : null;
+            }
+
+            // Load categories
             vm.Categories = await _db.Categories
                 .AsNoTracking()
                 .OrderBy(x => x.Name)
@@ -106,11 +129,6 @@ namespace Edu.Web.Controllers
 
             if (course == null) return NotFound();
 
-            var coverKeyOrUrl = !string.IsNullOrEmpty(course.CoverImageKey) ? course.CoverImageKey : course.CoverImageUrl;
-            string? coverPublicUrl = null;
-            if (!string.IsNullOrEmpty(coverKeyOrUrl))
-                coverPublicUrl = await _fileStorage.GetPublicUrlAsync(coverKeyOrUrl);
-
             var userId = _userManager.GetUserId(User);
             bool hasCompletedPurchase = false;
             bool hasPendingPurchase = false;
@@ -130,7 +148,7 @@ namespace Edu.Web.Controllers
                 Id = course.Id,
                 Title = course.Title,
                 Description = course.Description,
-                CoverPublicUrl = coverPublicUrl,
+                CoverImageKey = course.CoverImageKey,
                 TeacherName = course.Teacher?.User?.FullName ?? course.Teacher?.User?.UserName,
                 CategoryName = course.Category?.Name,
                 PriceLabel = course.Price.ToEuro(),
@@ -138,7 +156,15 @@ namespace Edu.Web.Controllers
                 HasPendingPurchase = hasPendingPurchase
                 // NOTE: No Modules/Lessons included here — student area handles that after purchase completed
             };
+            if (!string.IsNullOrEmpty(vm.CoverImageKey))
+            {
+                vm.CoverPublicUrl = await _fileStorage.GetPublicUrlAsync(vm.CoverImageKey);
 
+            }
+            else
+            {
+                 vm.CoverPublicUrl = null;
+            }
             return View(vm);
         }
     }

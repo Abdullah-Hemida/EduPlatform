@@ -11,7 +11,7 @@
 
     @if (!Model.Any())
     {
-        <div class="alert alert-info">@(L["ReactiveCourse.NoEnrollments"] ?? "You have no enrollments yet.")</div>
+        <div class="alert alert-info">@L["ReactiveCourse.NoEnrollments"].Value</div>
     }
     else
     {
@@ -24,22 +24,36 @@
                             <h5>@e.CourseTitle</h5>
                         </div>
                         <div>
-                            <a asp-area="Student" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@e.CourseId" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                            <a asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="Details"
+                               asp-route-id="@e.CourseId"
+                               class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
                         </div>
                     </div>
 
                     <div class="mt-2">
                         @foreach (var m in e.Months)
                         {
-                            var cls = "bg-secondary";
-                            if (m.PaymentStatus == EnrollmentMonthPaymentStatus.Paid) cls = "bg-success";
-                            else if (m.PaymentStatus == EnrollmentMonthPaymentStatus.Pending) cls = "bg-warning";
+                            string cls = "bg-secondary";
+                            string statusLabel;
 
-                            // label to show for status
-                            var statusLabel = m.PaymentStatus == null ? (L["NotRequested"] ?? "Not requested") : m.PaymentStatus.ToString();
-                               <span class="badge @cls me-1">
-                               @L["Month"] @m.MonthIndex - @statusLabel
-                              </span>
+                            if (m.PaymentStatus == EnrollmentMonthPaymentStatus.Paid)
+                            {
+                                cls = "bg-success";
+                                statusLabel = L["Status.Paid"].Value ?? "Paid";
+                            }
+                            else if (m.PaymentStatus == EnrollmentMonthPaymentStatus.Pending)
+                            {
+                                cls = "bg-warning";
+                                statusLabel = L["Status.Pending"].Value ?? "Pending";
+                            }
+                            else
+                            {
+                                statusLabel = L["Admin.NotRequested"].Value ?? "Not requested";
+                            }
+
+                            <span class="badge @cls me-1">
+                                @L["Admin.Month"] @m.MonthIndex - @statusLabel
+                            </span>
                         }
                     </div>
                 </div>
@@ -47,4 +61,5 @@
         }
     }
 </div>
+
 

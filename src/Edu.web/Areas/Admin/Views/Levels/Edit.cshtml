@@ -1,41 +1,53 @@
-﻿@model Edu.Domain.Entities.Level
+﻿@model Edu.Web.Areas.Admin.ViewModels.LevelEditVm
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
-     
-    ViewData["Title"] = L["Button.Edit"] + " - " + (Model?.Name ?? "");
+    ViewData["Title"] = L["Admin.EditLevel"];
 }
 
-<div class="card shadow-sm">
-    <div class="card-body">
-        <h4 class="mb-3">@L["Button.Edit"]</h4>
+<h3 class="mb-3">@L["Admin.EditLevel"]</h3>
 
-        <form asp-action="Edit" method="post" class="row g-3 needs-validation" novalidate>
-            @Html.AntiForgeryToken()
-            <input asp-for="Id" type="hidden" />
+<form asp-action="Edit" method="post" class="needs-validation" novalidate>
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
 
-            <div class="col-md-8">
-                <label asp-for="Name" class="form-label">@L["Admin.Name"]</label>
-                <input asp-for="Name" class="form-control" />
-                <span asp-validation-for="Name" class="text-danger small"></span>
-            </div>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label asp-for="NameEn" class="form-label">@L["AdminLevel.NameEn"]</label>
+            <input asp-for="NameEn" class="form-control" />
+            <span asp-validation-for="NameEn" class="text-danger small"></span>
+        </div>
 
-            <div class="col-md-4">
-                <label asp-for="Order" class="form-label">@L["Admin.Order"]</label>
-                <input asp-for="Order" type="number" class="form-control" />
-                <span asp-validation-for="Order" class="text-danger small"></span>
-            </div>
+        <div class="col-md-4">
+            <label asp-for="NameIt" class="form-label">@L["AdminLevel.NameIt"]</label>
+            <input asp-for="NameIt" class="form-control" />
+            <span asp-validation-for="NameIt" class="text-danger small"></span>
+        </div>
 
-            <div class="col-12">
-                <button type="submit" class="btn btn-primary">@(L["Button.Save"] ?? @L["Button.Edit"])</button>
-                <a asp-action="Index" class="btn btn-link">@L["Button.Cancel"]</a>
-            </div>
-        </form>
+        <div class="col-md-4">
+            <label asp-for="NameAr" class="form-label">@L["AdminLevel.NameAr"]</label>
+            <input asp-for="NameAr" class="form-control" dir="rtl" />
+            <span asp-validation-for="NameAr" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-2">
+            <label asp-for="Order" class="form-label">@L["Admin.Order"]</label>
+            <input asp-for="Order" class="form-control" />
+            <span asp-validation-for="Order" class="text-danger small"></span>
+        </div>
     </div>
-</div>
+
+    <div class="mt-4">
+        <button type="submit" class="btn btn-primary me-2">
+            <i class="fas fa-save me-1"></i> @L["Button.SaveChanges"]
+        </button>
+        <a asp-action="Index" class="btn btn-secondary">@L["Button.Cancel"]</a>
+    </div>
+</form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
 }
+
 
 

@@ -13,6 +13,7 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public string? Query { get; set; }
         public int? CategoryId { get; set; }
         public bool? ShowPublished { get; set; }
+        public bool? ForChildren { get; set; }
         public PaginatedList<TeacherCourseListItemVm> Courses { get; set; } = default!;
     }
 
@@ -46,6 +47,7 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public string? PriceLabel { get; set; }
         public IFormFile? CoverImage { get; set; }
         public bool IsPublishRequested { get; set; }
+        public bool IsForChildren { get; set; }
     }
 
     // Edit VM
@@ -78,7 +80,7 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public int CategoryId { get; set; }
         public string? CategoryName { get; set; }
         public string? TeacherId { get; set; }
-
+        public bool IsForChildren { get; set; }
         public bool IsOwner { get; set; } = false;
         public List<ModuleSummaryVm> Modules { get; set; } = new();
         public List<PrivateLessonVm> Lessons { get; set; } = new();
@@ -104,16 +106,12 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public string? YouTubeVideoId { get; set; }
         public string? VideoUrl { get; set; }
         public int Order { get; set; }
-
         public List<FileResourceVm> Files { get; set; } = new();
     }
     // Module VMs
     public class ModuleCreateVm
     {
-        [Required]
         public int PrivateCourseId { get; set; }
-
-        [Required, StringLength(250)]
         public string Title { get; set; } = string.Empty;
 
         public int Order { get; set; } = 0;
@@ -121,15 +119,9 @@ namespace Edu.Web.Areas.Teacher.ViewModels
 
     public class ModuleEditVm
     {
-        [Required]
         public int Id { get; set; }
-
-        [Required]
         public int PrivateCourseId { get; set; }
-
-        [Required, StringLength(250)]
         public string Title { get; set; } = string.Empty;
-
         public int Order { get; set; } = 0;
     }
 

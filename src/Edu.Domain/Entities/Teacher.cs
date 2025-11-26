@@ -9,6 +9,7 @@ namespace Edu.Domain.Entities
         public string JobTitle { get; set; } = string.Empty;
         public string? ShortBio { get; set; }
         public string? CVUrl { get; set; }
+        public string? CVStorageKey { get; set; }
         public string? IntroVideoUrl { get; set; }
         public TeacherStatus Status { get; set; } = TeacherStatus.Pending;
 
@@ -21,7 +22,6 @@ namespace Edu.Domain.Entities
         public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
         public ICollection<ReactiveCourse> ReactiveCourses { get; set; } = new List<ReactiveCourse>();
     }
-
     public enum TeacherStatus { Pending, Approved, Rejected }
 
     public class TeacherConfiguration : IEntityTypeConfiguration<Teacher>

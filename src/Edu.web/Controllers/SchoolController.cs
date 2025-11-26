@@ -1,6 +1,7 @@
 ﻿using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
+using Edu.Infrastructure.Helpers;
 using Edu.Web.Resources;
 using Edu.Web.ViewModels;
 using Edu.Web.Views.Shared.Components.Services;
@@ -28,8 +29,7 @@ namespace Edu.Web.Controllers
                                 UserManager<ApplicationUser> userManager,
                                 IStringLocalizer<SharedResource> localizer,
                                 IMemoryCache memoryCache,
-                                IHeroService heroService
-                                                        ) 
+                                IHeroService heroService)
         {
             _db = db;
             _fileStorage = fileStorage;
@@ -40,12 +40,16 @@ namespace Edu.Web.Controllers
         }
 
         // GET: /School
+        // Renders full page (includes hero, levels filter and initial curricula grid)
         public async Task<IActionResult> Index(int? levelId = null, int page = 1, int pageSize = 9)
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 9;
 
-            // Current user access flags
+            // Prepare AllLevels (localized name) and pass to view together with curricula page
+            var allLevels = await GetAllLevelsLocalizedAsync();
+
+            // compute user access flags (admin or allowed student)
             var user = await _userManager.GetUserAsync(User);
             bool isAdmin = user != null && await _userManager.IsInRoleAsync(user, "Admin");
             bool studentIsAllowed = false;
@@ -55,109 +59,33 @@ namespace Edu.Web.Controllers
                 studentIsAllowed = studentRecord?.IsAllowed ?? false;
             }
 
-            // Load AllLevels (cached)
-            List<Level> levels;
-            if (!_cache.TryGetValue(CACHE_KEY_ALL_LEVELS, out List<Level>? cachedLevels))
-            {
-                levels = await _db.Levels
-                                 .AsNoTracking()
-                                 .Include(l => l.Curricula)
-                                 .OrderBy(l => l.Order)
-                                 .ToListAsync();
-
-                // Cache options - tune durations as you need
-                var cacheEntryOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(30)) // persist for 30 minutes
-                    .SetSlidingExpiration(TimeSpan.FromMinutes(5));
-
-                _cache.Set(CACHE_KEY_ALL_LEVELS, levels, cacheEntryOptions);
-            }
-            else
-            {
-                levels = cachedLevels;
-            }
-
-            // Build AllLevels view model for filter buttons (localized counts)
-            var allLevelVms = new List<SchoolLevelVm>();
-            foreach (var l in levels)
-            {
-                var curriculaCount = l.Curricula?.Count ?? 0;
-                string countText = curriculaCount == 1
-                    ? _L["School.Curricula.One"].Value ?? "1 curriculum"
-                    : string.Format(_L["School.Curricula.Many"].Value ?? "{0} curricula", curriculaCount);
-
-                allLevelVms.Add(new SchoolLevelVm
-                {
-                    Id = l.Id,
-                    Name = l.Name,
-                    Order = l.Order,
-                    CurriculaCountText = countText
-                });
-            }
-
-            // Build curricula query (flat) and filter by levelId when provided
-            var curriculaQuery = _db.Curricula
-                                   .AsNoTracking()
-                                   .Include(c => c.SchoolModules)
-                                   .OrderBy(c => c.Order)
-                                   .AsQueryable();
-
-            if (levelId.HasValue)
-                curriculaQuery = curriculaQuery.Where(c => c.LevelId == levelId.Value);
-
-            // Total count for pagination
-            var totalCount = await curriculaQuery.CountAsync();
-
-            // Page slice
-            var items = await curriculaQuery
-                        .Skip((page - 1) * pageSize)
-                        .Take(pageSize)
-                        .Select(c => new
-                        {
-                            c.Id,
-                            c.Title,
-                            c.Description,
-                            c.CoverImageUrl,
-                            ModuleCount = c.SchoolModules != null ? c.SchoolModules.Count : 0,
-                            c.Order,
-                            c.LevelId
-                        })
-                        .ToListAsync();
-
-            // Map and set access
-            var curricula = items.Select(i => new CurriculumSummaryVm
-            {
-                Id = i.Id,
-                Title = i.Title,
-                Description = i.Description,
-                CoverImageUrl = i.CoverImageUrl,
-                ModuleCount = i.ModuleCount,
-                Order = i.Order,
-                IsAccessible = isAdmin || studentIsAllowed
-            }).ToList();
+            // Build Pageable curricula and other metadata via the shared helper ListInternalAsync
+            var (curricula, totalCount) = await ListInternalAsync(levelId, page, pageSize, isAdmin, studentIsAllowed);
 
             var vm = new SchoolIndexVm
             {
-                AllLevels = allLevelVms,
+                AllLevels = allLevels,
                 Curricula = curricula,
                 SelectedLevelId = levelId,
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = totalCount
             };
+
             vm.SchoolHero = await _heroService.GetHeroAsync(HeroPlacement.School);
             ViewData["Title"] = _L["School.Title"] ?? "School";
             return View(vm);
         }
 
-        // GET: /School/List  (returns the partial for AJAX requests)
+        // GET: /School/List
+        // Returns partial grid for curricula (used by AJAX). If requested without ajax flag, returns the same partial.
         [HttpGet]
-        public async Task<IActionResult> List(int? levelId = null, int page = 1, int pageSize = 9, int ajax = 1)
+        public async Task<IActionResult> List(int? levelId = null, int page = 1, int pageSize = 9, string? ajax = null)
         {
-            // reuse same logic as Index to compute Curricula/pagination
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 9;
 
+            // compute user access flags
             var user = await _userManager.GetUserAsync(User);
             bool isAdmin = user != null && await _userManager.IsInRoleAsync(user, "Admin");
             bool studentIsAllowed = false;
@@ -167,6 +95,83 @@ namespace Edu.Web.Controllers
                 studentIsAllowed = studentRecord?.IsAllowed ?? false;
             }
 
+            var allLevels = await GetAllLevelsLocalizedAsync();
+
+            var (curricula, totalCount) = await ListInternalAsync(levelId, page, pageSize, isAdmin, studentIsAllowed);
+
+            var vm = new SchoolIndexVm
+            {
+                AllLevels = allLevels,
+                Curricula = curricula,
+                SelectedLevelId = levelId,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
+
+            // if AJAX request (or explicit ajax flag), return partial only
+            var isAjaxRequest = ajax == "1" ||
+                                HttpContext.Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+            if (isAjaxRequest)
+            {
+                // return only the grid partial used by the client
+                return PartialView("_CurriculaGridPartial", vm);
+            }
+
+            // otherwise fallback to full Index view (this keeps safe fallback)
+            vm.SchoolHero = await _heroService.GetHeroAsync(HeroPlacement.School);
+            ViewData["Title"] = _L["School.Title"] ?? "School";
+            return View("Index", vm);
+        }
+
+        // Helper to build localized levels once (cached)
+        private async Task<List<SchoolLevelVm>> GetAllLevelsLocalizedAsync()
+        {
+            // Try cache first (we cache the raw Level objects so we can re-evaluate localization per request)
+            if (_cache.TryGetValue<List<Level>>(CACHE_KEY_ALL_LEVELS, out var cachedLevels) && cachedLevels != null)
+            {
+                return cachedLevels.Select(l => new SchoolLevelVm
+                {
+                    Id = l.Id,
+                    Order = l.Order,
+                    // use your helper to get the best localized name for current UI culture
+                    Name = LocalizationHelpers.GetLocalizedLevelName(l),
+                    CurriculaCountText = (l.Curricula?.Count ?? 0) == 1
+                        ? _L["School.Curricula.One"].Value ?? "1 curriculum"
+                        : string.Format(_L["School.Curricula.Many"].Value ?? "{0} curricula", (l.Curricula?.Count ?? 0))
+                }).ToList();
+            }
+
+            // load from DB and cache
+            var levels = await _db.Levels
+                                 .AsNoTracking()
+                                 .Include(l => l.Curricula)
+                                 .OrderBy(l => l.Order)
+                                 .ToListAsync();
+
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromMinutes(30))
+                .SetSlidingExpiration(TimeSpan.FromMinutes(5));
+
+            _cache.Set(CACHE_KEY_ALL_LEVELS, levels, cacheOptions);
+
+            return levels.Select(l => new SchoolLevelVm
+            {
+                Id = l.Id,
+                Order = l.Order,
+                // call helper for localized label
+                Name = LocalizationHelpers.GetLocalizedLevelName(l),
+                CurriculaCountText = (l.Curricula?.Count ?? 0) == 1
+                    ? _L["School.Curricula.One"].Value ?? "1 curriculum"
+                    : string.Format(_L["School.Curricula.Many"].Value ?? "{0} curricula", (l.Curricula?.Count ?? 0))
+            }).ToList();
+        }
+
+        // Internal helper that returns page of curricula and totalCount
+        // The curricula returned are mapped to CurriculumSummaryVm and respect the access flags
+        private async Task<(List<CurriculumSummaryVm> Items, int TotalCount)> ListInternalAsync(
+            int? levelId, int page, int pageSize, bool isAdmin, bool studentIsAllowed)
+        {
             var curriculaQuery = _db.Curricula
                                    .AsNoTracking()
                                    .Include(c => c.SchoolModules)
@@ -178,7 +183,7 @@ namespace Edu.Web.Controllers
 
             var totalCount = await curriculaQuery.CountAsync();
 
-            var items = await curriculaQuery
+            var slice = await curriculaQuery
                         .Skip((page - 1) * pageSize)
                         .Take(pageSize)
                         .Select(c => new
@@ -186,33 +191,44 @@ namespace Edu.Web.Controllers
                             c.Id,
                             c.Title,
                             c.Description,
-                            c.CoverImageUrl,
+                            c.CoverImageKey,
                             ModuleCount = c.SchoolModules != null ? c.SchoolModules.Count : 0,
-                            c.Order
+                            c.Order,
+                            c.LevelId
                         })
                         .ToListAsync();
 
-            var curricula = items.Select(i => new Edu.Web.ViewModels.CurriculumSummaryVm
-            {
-                Id = i.Id,
-                Title = i.Title,
-                Description = i.Description,
-                CoverImageUrl = i.CoverImageUrl,
-                ModuleCount = i.ModuleCount,
-                Order = i.Order,
-                IsAccessible = isAdmin || studentIsAllowed
-            }).ToList();
+            var curricula = new List<CurriculumSummaryVm>();
 
-            var vm = new Edu.Web.ViewModels.SchoolIndexVm
+            foreach (var i in slice)
             {
-                Curricula = curricula,
-                Page = page,
-                PageSize = pageSize,
-                TotalCount = totalCount,
-                SelectedLevelId = levelId
-            };
-            vm.SchoolHero = await _heroService.GetHeroAsync(HeroPlacement.School);
-            return PartialView("_CurriculaGridPartial", vm);
+                string? publicUrl = null;
+
+                if (!string.IsNullOrWhiteSpace(i.CoverImageKey))
+                {
+                    try
+                    {
+                        publicUrl = await _fileStorage.GetPublicUrlAsync(i.CoverImageKey);
+                    }
+                    catch
+                    {
+                        publicUrl = null; // or a placeholder
+                    }
+                }
+
+                curricula.Add(new CurriculumSummaryVm
+                {
+                    Id = i.Id,
+                    Title = i.Title,
+                    Description = i.Description,
+                    CoverImageKey = i.CoverImageKey,
+                    CoverImageUrl = publicUrl,
+                    ModuleCount = i.ModuleCount,
+                    Order = i.Order,
+                    IsAccessible = isAdmin || studentIsAllowed
+                });
+            }
+            return (curricula, totalCount);
         }
 
         // GET: /School/Curriculum/5
@@ -237,16 +253,13 @@ namespace Edu.Web.Controllers
             var isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
             if (!isAdmin)
             {
-                // Not admin -> must be student with allowed flag
                 var isStudent = await _userManager.IsInRoleAsync(user, "Student");
                 if (!isStudent)
                 {
-                    // Not a student -> deny
                     TempData["Error"] = _L["School.AccessDenied"].Value ?? "You don't have access to view this curriculum.";
                     return RedirectToAction("Index");
                 }
 
-                // check student record and flag
                 var studentRecord = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
                 if (studentRecord == null || !studentRecord.IsAllowed)
                 {
@@ -325,11 +338,11 @@ namespace Edu.Web.Controllers
                     if (lessonVm != null) lessonVm.Files.Add(fileVm);
                 }
             }
+
             vm.SchoolHero = await _heroService.GetHeroAsync(HeroPlacement.School);
             ViewData["Title"] = curriculum.Title;
             return View(vm);
         }
-
 
         // GET: /School/Lesson/123
         public async Task<IActionResult> Lesson(int id)
@@ -337,16 +350,15 @@ namespace Edu.Web.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-                // after retrieving studentRecord:
-                if (await _userManager.IsInRoleAsync(user, "Student"))
+            if (await _userManager.IsInRoleAsync(user, "Student"))
+            {
+                var studentRecord = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
+                if (studentRecord == null || !studentRecord.IsAllowed)
                 {
-                    var studentRecord = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
-                    if (studentRecord == null || !studentRecord.IsAllowed)
-                    {
-                        TempData["Error"] = _L["School.NotAllowedMessage"].Value ?? "You are not allowed to view this content.";
-                        return RedirectToAction("Index");
-                    }
+                    TempData["Error"] = _L["School.NotAllowedMessage"].Value ?? "You are not allowed to view this content.";
+                    return RedirectToAction("Index");
                 }
+            }
 
             var lesson = await _db.SchoolLessons
                                   .AsNoTracking()
@@ -398,5 +410,6 @@ namespace Edu.Web.Controllers
         }
     }
 }
+
 
 

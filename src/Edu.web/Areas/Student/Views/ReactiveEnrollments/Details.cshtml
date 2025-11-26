@@ -1,0 +1,540 @@
+﻿@model Edu.Web.Areas.Student.ViewModels.StudentReactiveCourseDetailsVm
+@using System.Globalization
+@using System.Text.Json
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<Edu.Web.Resources.SharedResource> L
+
+@{
+    ViewData["Title"] = Model.Title ?? L["ReactiveCourse.Details"];
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var textAlign = lang == "ar" ? "right" : "left";
+
+    // plain string dictionary for JS
+    var localizedStrings = new Dictionary<string, string>
+    {
+        // notifications / toasts
+        ["EnrollSuccess"] = L["Enroll.Success"].Value ?? "",
+        ["EnrollError"] = L["Enroll.Error"].Value ?? "",
+        ["PaySuccess"] = L["Pay.Success"].Value ?? "",
+        ["PayError"] = L["Pay.Error"].Value ?? "",
+        ["CancelSuccess"] = L["Cancel.Success"].Value ?? "",
+        ["CancelError"] = L["Cancel.Error"].Value ?? "",
+
+        // Confirm messages (titles / bodies)
+        ["ConfirmEnroll"] = L["Confirm.Enroll"].Value ?? "",
+        ["ConfirmPay"] = L["Confirm.Pay"].Value ?? "",
+        ["ConfirmCancel"] = L["Confirm.Cancel"].Value ?? "",
+
+        // Status
+        ["StatusPending"] = L["Status.Pending"].Value ?? "",
+        ["StatusPaid"] = L["Status.Paid"].Value ?? "",
+        ["StatusRejected"] = L["Status.Rejected"].Value ?? "",
+        ["NotRequested"] = L["Admin.NotRequested"].Value ?? "",
+
+        // UI Labels & Buttons used dynamically in JS
+        ["ReactiveCourse.Enrolled"] = L["ReactiveCourse.Enrolled"].Value ?? "",
+        ["ReactiveCourse.CancelEnrollment"] = L["ReactiveCourse.CancelEnrollment"].Value ?? "",
+        ["ReactiveCourse.RequestPayment"] = L["ReactiveCourse.RequestPayment"].Value ?? "",
+        ["ReactiveCourse.CancelPayment"] = L["ReactiveCourse.CancelPayment"].Value ?? "",
+        ["ReactiveCourse.Enroll"] = L["ReactiveCourse.Enroll"].Value ?? "",
+
+        // Confirm modal button labels
+        ["Common.Cancel"] = L["Common.Cancel"].Value ?? "Cancel",
+        ["Common.Yes"] = L["Common.Yes"].Value ?? "Yes",
+
+        // any other labels you might create dynamically
+        ["Booking.OpenMeet"] = L["Booking.OpenMeet"].Value ?? "",
+        ["Booking.NoMeetUrl"] = L["Booking.NoMeetUrl"].Value ?? ""
+    };
+}
+
+
+<div class="row g-3" dir="@dir" style="text-align:@textAlign">
+    <div class="col-lg-8">
+        <div class="card mb-3 shadow-sm">
+            @if (!string.IsNullOrEmpty(Model.CoverPublicUrl))
+            {
+                <img src="@Model.CoverPublicUrl" class="card-img-top" style="height:320px;object-fit:cover" alt="@Model.Title" />
+            }
+            <div class="card-body">
+                <h2>@Model.Title</h2>
+                <div class="small text-muted mb-2">@Model.DurationMonths @L["Teachers.Months"] • @Model.PricePerMonthLabel</div>
+
+                <div class="mt-3">@Html.Raw(Model.Description?.Replace("\n", "<br />"))</div>
+
+                @if (!string.IsNullOrEmpty(Model.IntroYouTubeId) || !string.IsNullOrEmpty(Model.IntroVideoUrl))
+                {
+                    <div class="mt-4" id="introVideo">
+                        <h6 class="mb-2">@L["ReactiveCourse.IntroVideo"]</h6>
+                        @if (!string.IsNullOrEmpty(Model.IntroYouTubeId))
+                        {
+                            <div class="ratio ratio-16x9 mb-3">
+                                <iframe src="https://www.youtube-nocookie.com/embed/@Model.IntroYouTubeId"
+                                        referrerpolicy="strict-origin-when-cross-origin"
+                                        title="Intro video"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen></iframe>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="ratio ratio-16x9 mb-3">
+                                <video controls style="width:100%;height:100%;object-fit:cover;">
+                                    <source src="@Model.IntroVideoUrl" />
+                                    @L["ReactiveCourse.VideoNotSupported"]
+                                </video>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="mt-4">
+                    <div class="d-flex align-items-center justify-content-between mt-2 mb-2">
+                        <div class="small text-muted mb-2">@L["ReactiveCourse.Duration"] : @Model.DurationMonths @L["ReactiveCourse.Months"]</div>
+                        <div id="enroll-area" data-enrolled="@Model.IsEnrolled.ToString().ToLower()" data-enrollment-id="@(Model.EnrollmentId ?? 0)">
+                            @if (!Model.IsEnrolled)
+                            {
+                                <button id="btnEnroll" class="btn btn-primary" data-course-id="@Model.CourseId">@L["ReactiveCourse.Enroll"]</button>
+                            }
+                            else
+                            {
+                                var cancelDisabled = Model.HasPendingEnrollment || Model.HasAnyPaidMonth;
+                                <div>
+                                    <button id="btnCancelEnroll"
+                                            class="btn btn-outline-danger ms-2"
+                                            data-course-id="@Model.CourseId"
+                                            @(cancelDisabled ? "disabled" : "")>
+                                        @L["ReactiveCourse.CancelEnrollment"]
+                                    </button>
+                                    <span class="badge bg-success ms-2">@L["ReactiveCourse.Enrolled"]</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="list-group" id="months-list">
+                        @foreach (var m in Model.Months.OrderBy(x => x.MonthIndex))
+                        {
+                            var canRequestAttr = m.CanRequestPayment ? "true" : "false";
+                            var canCancelAttr = m.CanCancelPayment ? "true" : "false";
+                            var canViewAttr = m.CanViewLessons ? "true" : "false";
+
+                            <div class="list-group-item d-flex justify-content-between align-items-center month-card"
+                                 data-month-id="@m.Id"
+                                 data-month-index="@m.MonthIndex"
+                                 data-payment-id="@(m.PaymentId ?? 0)"
+                                 data-can-request="@canRequestAttr"
+                                 data-can-cancel="@canCancelAttr"
+                                 data-can-view="@canViewAttr">
+                                <div>
+                                    <strong>@L["ReactiveCourse.Month"] @m.MonthIndex</strong>
+                                    <div class="small text-muted">@m.LessonsCount @L["ReactiveCourse.Lessons"]</div>
+                                </div>
+
+                                <div class="d-flex align-items-center justify-content-end gap-2">
+                                    <div class="action-area">
+                                        @if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Paid)
+                                        {
+                                            <span class="badge bg-success">@L["Status.Paid"]</span>
+                                        }
+                                        else if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Pending)
+                                        {
+                                            <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+                                        }
+                                        else if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Rejected)
+                                        {
+                                            <span class="badge bg-danger">@L["Status.Rejected"]</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">@L["Admin.NotRequested"]</span>
+                                        }
+
+                                        @if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Pending && m.CanCancelPayment)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="@(m.PaymentId ?? 0)">@L["ReactiveCourse.CancelPayment"]</button>
+                                        }
+                                        else if (m.MyPaymentStatus == null && m.CanRequestPayment)
+                                        {
+                                            <button class="btn btn-sm btn-primary ms-2 btnPayMonth"
+                                                    data-month-id="@m.Id"
+                                                    data-course-id="@Model.CourseId"
+                                                    data-can-request="@canRequestAttr">
+                                                @L["ReactiveCourse.RequestPayment"]
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="lesson-@m.Id" class="card mb-2 lesson-list" style="display:@(m.CanViewLessons ? "block" : "none")">
+                                <div class="card-body">
+                                    <h6>@L["ReactiveCourse.Lessons"] (@L["ReactiveCourse.Month"] @m.MonthIndex)</h6>
+                                    @if (m.Lessons != null && m.Lessons.Any())
+                                    {
+                                        <ul class="list-unstyled">
+                                            @foreach (var l in m.Lessons.OrderBy(x => x.ScheduledUtc))
+                                            {
+                                                <li class="mb-2 d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <strong>@l.Title</strong>
+                                                        <div class="small text-muted">@((l.ScheduledUtc.HasValue) ? l.ScheduledUtc.Value.ToLocalTime().ToString("g") : "")</div>
+                                                        @if (!string.IsNullOrEmpty(l.Notes))
+                                                        {
+                                                            <div class="small mt-1">@l.Notes</div>
+                                                        }
+                                                    </div>
+                                                    <div>
+                                                        @if (!string.IsNullOrWhiteSpace(l.MeetUrl))
+                                                        {
+                                                            <a target="_blank" href="@l.MeetUrl" class="btn btn-sm btn-primary">@L["Booking.OpenMeet"]</a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted small">@L["Booking.NoMeetUrl"]</span>
+                                                        }
+                                                    </div>
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                    else
+                                    {
+                                        <div class="small text-muted">@L["ReactiveCourse.NoLessons"]</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @* confirm modal *@
+                    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 id="confirmModalTitle" class="modal-title"></h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div id="confirmModalBody" class="modal-body"></div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@L["Common.Cancel"]</button>
+                                    <button type="button" id="confirmModalYes" class="btn btn-primary">@L["Common.Yes"]</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* antiforgery token *@
+                    <form id="af">@Html.AntiForgeryToken()</form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <aside class="col-lg-4">
+        <div class="card sticky-top">
+            <div class="card-body">
+                <h6>@L["ReactiveCourse.Info"]</h6>
+                <p class="small text-muted">@L["ReactiveCourse.InfoForStudent"]</p>
+                <p class="small text-muted">@L["ReactiveCourse.StartDate"] : @Model.StartDateUtc.ToLocalTime().ToString("d")</p>
+                <p class="small text-muted">@L["ReactiveCourse.EndDate"] : @Model.EndDateUtc.ToLocalTime().ToString("d")</p>
+                <p class="small text-muted">@L["ReactiveCourse.PricePerMonth"] : @Model.PricePerMonthLabel</p>
+                <p class="small text-muted">@L["ReactiveCourse.Capacity"] : @(Model.Capacity == 0 ? L["ReactiveCourse.Unlimited"] : Model.Capacity.ToString())</p>
+                <a asp-action="Index" asp-controller="ReactiveCourses" class="btn btn-light w-100">@L["Common.Back"]</a>
+            </div>
+        </div>
+    </aside>
+</div>
+
+@* toasts container (higher z-index so it appears above sidebar/layout) *@
+<div aria-live="polite" aria-atomic="true" class="position-fixed top-0 end-0 p-3" style="z-index: 12000;">
+    <div id="toast-container"></div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            // localized dictionary (plain strings) for JS
+            const Localized = @Html.Raw(JsonSerializer.Serialize(localizedStrings));
+
+            // anti-forgery token
+            const antiForgeryToken = $('#af input[name="__RequestVerificationToken"]').val();
+
+            // action locks
+            const actionLocks = {};
+            function lock(k) { actionLocks[k] = true; }
+            function unlock(k) { delete actionLocks[k]; }
+            function isLocked(k) { return !!actionLocks[k]; }
+
+            // toast helper (Bootstrap)
+            function showToast(message, type = "success") {
+                const $container = $('#toast-container');
+                const $toast = $(`<div class="toast text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                      <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                      </div>
+                    </div>`);
+                $container.append($toast);
+                const bs = new bootstrap.Toast($toast[0], { delay: 4000 });
+                bs.show();
+                $toast.on('hidden.bs.toast', function () { $(this).remove(); });
+            }
+
+            // modal confirm
+            function showConfirm(title, message, onConfirm) {
+                $('#confirmModalTitle').text(title);
+                $('#confirmModalBody').html(message);
+                const modalEl = $('#confirmModal')[0];
+                const bsModal = new bootstrap.Modal(modalEl);
+                bsModal.show();
+
+                $('#confirmModalYes').off('click').on('click', function () {
+                    bsModal.hide();
+                    if (typeof onConfirm === 'function') onConfirm();
+                });
+            }
+
+            // helpers to update UI state
+            function enablePayButtonsIfAllowed() {
+                const enrolled = $('#enroll-area').data('enrolled') === true || $('#enroll-area').data('enrolled') === 'true';
+                if (!enrolled) {
+                    $('.btnPayMonth').prop('disabled', true).hide();
+                } else {
+                    $('.btnPayMonth').each(function () {
+                        const canReq = $(this).data('can-request') === true || $(this).data('can-request') === 'true';
+                        if (canReq) $(this).prop('disabled', false).show();
+                    });
+                }
+            }
+
+            function updateCancelEnrollState() {
+                const $btn = $('#btnCancelEnroll');
+                if (!$btn.length) return;
+
+                // If any month has pending (warning badge) or paid (success badge) then disable cancel enroll
+                const hasPendingOrPaid = $('.month-card').filter(function () {
+                    return $(this).find('.badge.bg-warning, .badge.bg-success').length > 0;
+                }).length > 0;
+
+                if (hasPendingOrPaid) {
+                    $btn.prop('disabled', true).attr('title', Localized["CancelError"] || '');
+                } else {
+                    $btn.prop('disabled', false).removeAttr('title');
+                }
+            }
+
+            function markEnrolledUI(enrollmentId) {
+                $('#enroll-area').attr('data-enrolled', 'true').attr('data-enrollment-id', enrollmentId || 0);
+                const enrolledLabel = Localized["ReactiveCourse.Enrolled"] || 'Enrolled';
+                const cancelLabel = Localized["ReactiveCourse.CancelEnrollment"] || 'Cancel Enrollment';
+                $('#enroll-area').html(`<div>
+                    <button id="btnCancelEnroll" class="btn btn-outline-danger ms-2" data-course-id="${@Model.CourseId}">${escapeHtml(cancelLabel)}</button>
+                    <span class="badge bg-success ms-2">${escapeHtml(enrolledLabel)}</span>
+                </div>`);
+                enablePayButtonsIfAllowed();
+                updateCancelEnrollState();
+            }
+
+            function markMonthPending(monthId, paymentId) {
+                const $card = $(`.month-card[data-month-id="${monthId}"]`);
+                if (!$card.length) return;
+
+                $card.attr('data-payment-id', paymentId);
+                $card.find('.badge').first().removeClass().addClass('badge bg-warning text-dark').text(Localized["StatusPending"] || 'Pending');
+                $card.find('.btnPayMonth').remove();
+                if ($card.find('.btnCancelPayment').length === 0) {
+                    $card.find('.action-area').append(`<button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="${paymentId}">${escapeHtml(Localized["ReactiveCourse.CancelPayment"] || 'Cancel Payment')}</button>`);
+                }
+
+                // because now there's a pending month -> cannot cancel enrollment
+                updateCancelEnrollState();
+            }
+
+            function markMonthCancelled(monthId) {
+                const $card = $(`.month-card[data-month-id="${monthId}"]`);
+                if (!$card.length) return;
+
+                $card.attr('data-payment-id', 0);
+                $card.find('.badge').first().removeClass().addClass('badge bg-secondary').text(Localized["NotRequested"] || 'Not requested');
+                $card.find('.btnCancelPayment').remove();
+
+                const canRequest = $card.data('can-request') === true || $card.data('can-request') === 'true';
+                if (canRequest && $card.find('.btnPayMonth').length === 0) {
+                    $card.find('.action-area').append(`<button class="btn btn-sm btn-primary ms-2 btnPayMonth" data-month-id="${monthId}" data-course-id="${@Model.CourseId}" data-can-request="${canRequest}">${escapeHtml(Localized["ReactiveCourse.RequestPayment"] || 'Request Payment')}</button>`);
+                }
+
+                // possible to enable cancel enrollment again if no other pending/paid months exist
+                updateCancelEnrollState();
+            }
+
+            function markEnrollmentCancelledUI() {
+                $('#enroll-area').attr('data-enrolled', 'false').attr('data-enrollment-id', 0);
+                $('#enroll-area').html(`<button id="btnEnroll" class="btn btn-primary" data-course-id="${@Model.CourseId}">${escapeHtml(Localized["ReactiveCourse.Enroll"] || 'Enroll')}</button>`);
+                $('.btnPayMonth').prop('disabled', true).hide();
+                $('.btnCancelPayment').remove();
+                updateCancelEnrollState();
+            }
+
+            function escapeHtml(s) {
+                if (s === null || s === undefined) return '';
+                return String(s).replace(/[&<>"'`=\/]/g, function (c) {
+                    return {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;',
+                        '/': '&#x2F;',
+                        '`': '&#x60;',
+                        '=': '&#x3D;'
+                    }[c];
+                });
+            }
+
+            // init
+            (function init() {
+                enablePayButtonsIfAllowed();
+                updateCancelEnrollState();
+            })();
+
+            // ---------- Delegated handlers ----------
+
+            // ENROLL
+            $(document).on('click', '#btnEnroll', function (e) {
+                e.preventDefault();
+                const courseId = $(this).data('course-id');
+                const key = `enroll:${courseId}`;
+                if (isLocked(key)) return;
+                lock(key);
+
+                showConfirm(Localized["ConfirmEnroll"] || "Confirm", Localized["ConfirmEnroll"] || "Confirm", function () {
+                    $.ajax({
+                        url: '/Student/ReactiveEnrollments/Enroll',
+                        method: 'POST',
+                        data: { courseId: courseId, __RequestVerificationToken: antiForgeryToken },
+                        success: function (res) {
+                            if (res && res.success) {
+                                showToast(Localized["EnrollSuccess"] || "Enrolled", "success");
+                                markEnrolledUI(res.enrollmentId || 0);
+                            } else {
+                                const msg = (res && res.message) ? res.message : (Localized["EnrollError"] || "Error");
+                                showToast(msg, "danger");
+                            }
+                        },
+                        error: function () { showToast(Localized["EnrollError"] || "Error", "danger"); },
+                        complete: function () { unlock(key); }
+                    });
+                });
+            });
+
+            // CANCEL ENROLL
+            $(document).on('click', '#btnCancelEnroll', function (e) {
+                e.preventDefault();
+                const courseId = $(this).data('course-id');
+                const key = `cancelEnroll:${courseId}`;
+                if (isLocked(key)) return;
+                lock(key);
+
+                showConfirm(Localized["ConfirmCancel"] || "Confirm", Localized["ConfirmCancel"] || "Confirm", function () {
+                    $.ajax({
+                        url: '/Student/ReactiveEnrollments/CancelEnroll',
+                        method: 'POST',
+                        data: { courseId: courseId, __RequestVerificationToken: antiForgeryToken },
+                        success: function (res) {
+                            if (res && res.success) {
+                                showToast(Localized["CancelSuccess"] || "Cancelled", "success");
+                                markEnrollmentCancelledUI();
+                            } else {
+                                const msg = (res && res.message) ? res.message : (Localized["CancelError"] || "Error");
+                                showToast(msg, "danger");
+                                // still update state from server response if helpful (server may return details)
+                                updateCancelEnrollState();
+                            }
+                        },
+                        error: function () { showToast(Localized["CancelError"] || "Error", "danger"); },
+                        complete: function () { unlock(key); }
+                    });
+                });
+            });
+
+            // PAY MONTH
+            $(document).on('click', '.btnPayMonth', function (e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const monthId = $btn.data('month-id');
+                const courseId = $btn.data('course-id') || @Model.CourseId;
+                const key = `pay:${courseId}:${monthId}`;
+                if (isLocked(key)) return;
+                lock(key);
+
+                showConfirm(Localized["ConfirmPay"] || "Confirm", Localized["ConfirmPay"] || "Confirm", function () {
+                    $.ajax({
+                        url: '/Student/ReactiveEnrollments/RequestMonthPayment',
+                        method: 'POST',
+                        data: { monthId: monthId, courseId: courseId, __RequestVerificationToken: antiForgeryToken },
+                        success: function (res) {
+                            if (res && res.success) {
+                                showToast(Localized["PaySuccess"] || "Requested", "success");
+                                markMonthPending(monthId, res.paymentId || 0);
+
+                                // if server created an enrollment (it returns enrollmentId)
+                                if (res.enrollmentId) markEnrolledUI(res.enrollmentId);
+                            } else {
+                                const msg = (res && res.message) ? res.message : (Localized["PayError"] || "Error");
+                                showToast(msg, "danger");
+                            }
+                        },
+                        error: function () { showToast(Localized["PayError"] || "Error", "danger"); },
+                        complete: function () { unlock(key); }
+                    });
+                });
+            });
+
+            // CANCEL PAYMENT
+            $(document).on('click', '.btnCancelPayment', function (e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const paymentId = $btn.data('payment-id');
+                const $card = $btn.closest('.month-card');
+                const monthId = $card.data('month-id');
+                const key = `cancelPay:${paymentId}`;
+                if (isLocked(key)) return;
+                lock(key);
+
+                showConfirm(Localized["ConfirmCancel"] || "Confirm", Localized["ConfirmCancel"] || "Confirm", function () {
+                    $.ajax({
+                        url: '/Student/ReactiveEnrollments/CancelMonthPayment',
+                        method: 'POST',
+                        data: { paymentId: paymentId, __RequestVerificationToken: antiForgeryToken },
+                        success: function (res) {
+                            if (res && res.success) {
+                                showToast(Localized["CancelSuccess"] || "Cancelled", "success");
+                                // remove pending row UI and re-enable cancel enrollment if appropriate
+                                markMonthCancelled(monthId);
+                            } else {
+                                const msg = (res && res.message) ? res.message : (Localized["CancelError"] || "Error");
+                                showToast(msg, "danger");
+                            }
+                        },
+                        error: function () { showToast(Localized["CancelError"] || "Error", "danger"); },
+                        complete: function () { unlock(key); }
+                    });
+                });
+            });
+
+        });
+    </script>
+}
+
+
+
+
+
+
+
+
+
+
+
