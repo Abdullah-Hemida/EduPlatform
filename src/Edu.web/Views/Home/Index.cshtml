@@ -1,5 +1,6 @@
 ﻿@model Edu.Web.ViewModels.HomeVm
-@inject IStringLocalizer<SharedResource> Localizer
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> Localizer
+
 @{
     var lang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     var dir = lang == "ar" ? "rtl" : "ltr";
@@ -17,43 +18,50 @@
         var hasImage = !string.IsNullOrEmpty(s.ImagePublicUrl);
         var alt = idx % 2 == 1;
         var imageFirst = (lang == "ar") ? alt : !alt;
+        var items = s.Items ?? Enumerable.Empty<dynamic>();
+        var isSingleItem = items.Count() == 1;
 
-        <section class="home-section @(alt ? "alt" : "") border-bottom">
-            <div class="container mb-4">
+        <section class="home-section @(alt ? "alt" : "") border-bottom py-4">
+            <div class="container mb-3">
                 <h2 class="section-title fw-bold text-center">@s.Title</h2>
                 @if (!string.IsNullOrEmpty(s.Subtitle))
                 {
-                    <p class="section-subtitle">@s.Subtitle</p>
+                    <p class="section-subtitle text-center text-muted">@s.Subtitle</p>
                 }
             </div>
 
             <div class="container">
-                <div class="section-inner row gx-4 gy-3 align-items-center">
+                @* When single item we want the row to stretch columns to same height *@
+                <div class="section-inner row gx-4 gy-3 @(isSingleItem ? "align-items-stretch" : "align-items-center")">
                     @if (hasImage && imageFirst)
                     {
                         <div class="col-12 col-md-6 section-media order-md-1">
-                            <img src="@s.ImagePublicUrl" alt="@s.Title" loading="lazy" />
+                            <img src="@s.ImagePublicUrl" alt="@s.Title" class="img-fluid w-100 h-100 object-fit-cover" loading="lazy" />
                         </div>
                     }
 
-                    @* If section has no main image, make body full width and items appear as cards in a row/grid.
-                       We add a marker class "no-section-image" to allow CSS to switch layout. *@
                     <div class="col-12 @(hasImage ? "col-md-6" : "") section-body">
-                        <div class="home-items mt-3 @(hasImage ? "" : "no-section-image")">
-                            @foreach (var it in s.Items)
+                        @* Marker classes: no-section-image when there is no main image; single-item when only one item *@
+                        <div class="home-items mt-3 @(hasImage ? "" : "no-section-image") @(isSingleItem ? "single-item" : "")">
+                            @foreach (var it in items)
                             {
-                                <article class="home-item card" role="article" aria-labelledby="item-@it.Id">
+                                <article class="home-item card h-100">
                                     @if (!string.IsNullOrEmpty(it.ImagePublicUrl))
                                     {
                                         <div class="card-img-top item-thumb-wrap">
-                                            <img src="@it.ImagePublicUrl" alt="" class="thumb" loading="lazy" />
+                                            <img src="@it.ImagePublicUrl" alt="" class="thumb img-fluid w-100" loading="lazy" />
                                         </div>
                                     }
-                                    <div class="card-body meta">
-                                        <div id="item-@it.Id" class="item-text">@Html.Raw(it.Text)</div>
+
+                                    @* Use flex column so we can push the "Read more" to bottom when single-item *@
+                                    <div class="card-body d-flex flex-column">
+                                        <div id="item-@it.Id" class="item-text flex-grow-1">
+                                            @Html.Raw(it.Text)
+                                        </div>
+
                                         @if (!string.IsNullOrEmpty(it.LinkUrl))
                                         {
-                                            <a href="@it.LinkUrl" class="read-more btn btn-sm btn-outline-primary mt-3">
+                                            <a href="@it.LinkUrl" class="read-more btn btn-sm btn-outline-primary mt-3 align-self-start">
                                                 @Localizer["Common.ReadMore"] ?? "Read more"
                                                 <i class="fa fa-arrow-right ms-1" aria-hidden="true"></i>
                                             </a>
@@ -67,7 +75,7 @@
                     @if (hasImage && !imageFirst)
                     {
                         <div class="col-12 col-md-6 section-media order-md-2">
-                            <img src="@s.ImagePublicUrl" alt="@s.Title" loading="lazy" />
+                            <img src="@s.ImagePublicUrl" alt="@s.Title" class="img-fluid w-100 h-100 object-fit-cover" loading="lazy" />
                         </div>
                     }
                 </div>
@@ -75,6 +83,7 @@
         </section>
     }
 </main>
+
 
 <!-- Status counts footer block (enhanced) -->
 <section class="py-5">
@@ -86,29 +95,29 @@
             <div class="col-6 col-sm-4 col-md-3">
                 <div class="counts-card text-center">
                     <div class="icon text-primary"><i class="fa-solid fa-users"></i></div>
-                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalStudents">0</span></h3>
                     <small class="text-muted">@Localizer["Admin.Students"]</small>
+                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalStudents">0</span></h3>                  
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-md-3">
                 <div class="counts-card text-center">
                     <div class="icon text-primary"><i class="fa-solid fa-chalkboard-user"></i></div>
-                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalTeachers">0</span></h3>
                     <small class="text-muted">@Localizer["Admin.Teachers"]</small>
+                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalTeachers">0</span></h3>
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-md-3">
                 <div class="counts-card text-center">
                     <div class="icon text-primary"><i class="fa-solid fa-book-open"></i></div>
-                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalCurricula">0</span></h3>
                     <small class="text-muted">@Localizer["Admin.Curricula"]</small>
+                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalCurricula">0</span></h3>
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-md-3">
                 <div class="counts-card text-center">
                     <div class="icon text-primary"><i class="fa-solid fa-video"></i></div>
-                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalPrivateCourses">0</span></h3>
                     <small class="text-muted">@Localizer["Teacher.RecordedCourses"]</small>
+                    <h3 class="mt-2 mb-0"><span class="count" data-target="@Model.TotalPrivateCourses">0</span></h3>
                 </div>
             </div>
         </div>
@@ -150,336 +159,6 @@
     })();
 </script>
 
-
-@* @model Edu.Web.ViewModels.HomeVm
-@inject IStringLocalizer<SharedResource> Localizer
-@{
-    var lang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
-    var dir = lang == "ar" ? "rtl" : "ltr";
-    var textAlign = lang == "ar" ? "right" : "left";
-}
-
-@section Hero {
-    @await Html.PartialAsync("_HeroSection")
-}
-
-<main class="site-home" dir="@dir" style="text-align:@textAlign;">
-    @foreach (var s in Model.Sections)
-    {
-        var imageOnRight = lang == "ar";
-                                         <section class="py-5 border-bottom">
-                                             <div class="container-fluid">
-                                                 <div class="row align-items-center">
-                    @if (!string.IsNullOrEmpty(s.ImagePublicUrl) && !imageOnRight)
-                    {
-                        <div class="col-md-6">
-                            <img src="@s.ImagePublicUrl" class="img-fluid rounded shadow-sm" style="max-height:420px;object-fit:cover" />
-                        </div>
-                    }
-                    <div class="col-md-6">
-                        <h2 class="fw-bold">@s.Title</h2>
-                        @if (!string.IsNullOrEmpty(s.Subtitle))
-                        {
-                            <p class="lead text-muted">@s.Subtitle</p>
-                        }
-                        <div class="mt-3">
-                            @foreach (var it in s.Items)
-                            {
-                                <div class="mb-3 d-flex align-items-start gap-3">
-                                    @if (!string.IsNullOrEmpty(it.ImagePublicUrl))
-                                    {
-                                        <img src="@it.ImagePublicUrl" style="width:96px;height:64px;object-fit:cover;border-radius:8px" />
-                                    }
-                                    <div>
-                                        <div>@Html.Raw(it.Text)</div>
-                                        @if (!string.IsNullOrEmpty(it.LinkUrl))
-                                        {
-                                            <a href="@it.LinkUrl" class="small">@Localizer["Common.ReadMore"] ?? "Read more"</a>
-                                        }
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                    @if (!string.IsNullOrEmpty(s.ImagePublicUrl) && imageOnRight)
-                    {
-                        <div class="col-md-6">
-                            <img src="@s.ImagePublicUrl" class="img-fluid rounded shadow-sm" style="max-height:420px;object-fit:cover" />
-                        </div>
-                    }
-                </div>
-            </div>
-        </section>
-    }
-</main>
-
-<!-- Status counts footer block (kept) -->
-<section class="py-5 bg-light">
-    <div class="container text-center">
-        <h2 class="fw-bold">@Localizer["Home.Counts"]</h2>
-        <div class="row g-4 justify-content-center mt-3">
-            <div class="col-6 col-md-3">
-                <div class="card border-0 shadow-sm p-3">
-                    <div class="fs-2"><i class="fa-solid fa-users"></i></div>
-                    <h5 class="mt-2">@Model.TotalStudents</h5>
-                    <small class="text-muted">@Localizer["Admin.Students"]</small>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card border-0 shadow-sm p-3">
-                    <div class="fs-2"><i class="fa-solid fa-chalkboard-user"></i></div>
-                    <h5 class="mt-2">@Model.TotalTeachers</h5>
-                    <small class="text-muted">@Localizer["Admin.Teachers"]</small>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card border-0 shadow-sm p-3">
-                    <div class="fs-2"><i class="fa-solid fa-book-open"></i></div>
-                    <h5 class="mt-2">@Model.TotalCurricula</h5>
-                    <small class="text-muted">@Localizer["Admin.Curricula"]</small>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card border-0 shadow-sm p-3">
-                    <div class="fs-2"><i class="fa-solid fa-video"></i></div>
-                    <h5 class="mt-2">@Model.TotalPrivateCourses</h5>
-                    <small class="text-muted">@Localizer["Teacher.RecordedCourses"]</small>
-                </div>
-            </div>
-        </div>
-    </div>
-</section> *@
-
-@* Footer viewcomponent will be invoked in layout; no need to render again here *@
-
-
-
-
-@* @model Edu.Web.ViewModels.HomeVm
-@inject Microsoft.Extensions.Localization.IStringLocalizer<Edu.Web.Resources.SharedResource> Localizer
-
-@{
-    ViewData["Title"] = L["Site.Title"];
-    var lang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
-    var dir = lang == "ar" ? "rtl" : "ltr";
-}
-
-@section Hero {
-    @await Html.PartialAsync("_HeroSection")
-}
-
-<!-- 💡 ABOUT SECTION -->
-<section class="my-5 text-center">
-    <div class="container">
-        <h2 class="fw-bold text-primary mb-3">@Model.AboutTitle</h2>
-        <p class="lead text-secondary mx-auto" style="max-width: 800px;">@Model.AboutText</p>
-    </div>
-</section>
-
-<!-- 🎯 OBJECTIVES SECTION -->
-<section class="py-5 bg-light">
-    <div class="container">
-        <h2 class="fw-bold text-center text-success mb-4">@Model.ObjectivesTitle</h2>
-        <div class="row justify-content-center">
-            @foreach (var obj in Model.Objectives)
-            {
-                <div class="col-12 col-md-6 col-lg-4 mb-3">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-body text-center">
-                            <i class="fa-solid fa-bullseye text-success fs-3 mb-3"></i>
-                            <p class="mb-0 text-muted">@obj</p>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-</section>
-
-<!-- 🏆 ACHIEVEMENTS SECTION -->
-<section class="py-5">
-    <div class="container">
-        <h2 class="fw-bold text-center text-warning mb-4">@Model.AchievementsTitle</h2>
-        <div class="row justify-content-center">
-            @foreach (var ach in Model.Achievements)
-            {
-                <div class="col-12 col-md-6 col-lg-4 mb-3">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-body text-center">
-                            <i class="fa-solid fa-medal text-warning fs-3 mb-3"></i>
-                            <p class="mb-0 text-muted">@ach</p>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-</section>
-
-<!-- 🎨 ACTIVITIES SECTION -->
-<section class="py-5 bg-light">
-    <div class="container">
-        <h2 class="fw-bold text-center text-primary mb-4">@Model.ActivitiesTitle</h2>
-        <div class="row justify-content-center">
-            @foreach (var act in Model.Activities)
-            {
-                <div class="col-12 col-md-6 col-lg-3 mb-3">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-body text-center">
-                            <i class="fa-solid fa-palette text-primary fs-3 mb-3"></i>
-                            <p class="mb-0 text-muted">@act</p>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-</section>
-
-<!-- 📚 CURRICULUM SECTION -->
-<section class="py-5">
-    <div class="container">
-        <h2 class="fw-bold text-center text-info mb-4">@Model.CurriculaTitle</h2>
-        <div class="row justify-content-center">
-            @foreach (var cur in Model.Curricula)
-            {
-                <div class="col-12 col-md-6 col-lg-4 mb-3">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-body text-center">
-                            <i class="fa-solid fa-book text-info fs-3 mb-3"></i>
-                            <p class="mb-0 text-muted">@cur</p>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-</section>
-
-<!-- 📊 STATUS SECTION -->
-<section class="py-5 bg-light">
-    <div class="container text-center">
-        <h2 class="fw-bold text-success mb-4">@Localizer["Home.Counts"]</h2>
-        <div class="row g-4 justify-content-center">
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="card border-0 shadow-sm p-3 h-100">
-                    <div class="text-success fs-2 mb-2"><i class="fa-solid fa-users"></i></div>
-                    <h5 class="fw-bold">@Model.TotalStudents</h5>
-                    <small class="text-muted">@Localizer["Admin.Students"]</small>
-                </div>
-            </div>
-
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="card border-0 shadow-sm p-3 h-100">
-                    <div class="text-warning fs-2 mb-2"><i class="fa-solid fa-chalkboard-user"></i></div>
-                    <h5 class="fw-bold">@Model.TotalTeachers</h5>
-                    <small class="text-muted">@Localizer["Admin.Teachers"]</small>
-                </div>
-            </div>
-
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="card border-0 shadow-sm p-3 h-100">
-                    <div class="text-primary fs-2 mb-2"><i class="fa-solid fa-book-open"></i></div>
-                    <h5 class="fw-bold">@Model.TotalCurricula</h5>
-                    <small class="text-muted">@Localizer["Admin.Curricula"]</small>
-                </div>
-            </div>
-
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="card border-0 shadow-sm p-3 h-100">
-                    <div class="text-info fs-2 mb-2"><i class="fa-solid fa-video"></i></div>
-                    <h5 class="fw-bold">@Model.TotalPrivateCourses</h5>
-                    <small class="text-muted">@Localizer["Teacher.RecordedCourses"]</small>
-                </div>
-            </div>
-
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="card border-0 shadow-sm p-3 h-100">
-                    <div class="text-danger fs-2 mb-2"><i class="fa-solid fa-bolt"></i></div>
-                    <h5 class="fw-bold">@Model.TotalReactiveCourses</h5>
-                    <small class="text-muted">@Localizer["Admin.ReactiveCourses"]</small>
-                </div>
-            </div>
-        </div>
-    </div>
-</section> *@
-
-
-
-<!-- === Stats Section === -->
-@* <section id="stats" class="py-5 bg-white" dir="@dir" style="text-align:@textAlign;">
-    <div class="container text-center">
-        <h2 class="fw-bold mb-5 text-primary">@L["Home.Stats.Title"]</h2>
-        <div class="row justify-content-center g-4">
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="stat-box shadow-sm p-4 rounded bg-light">
-                    <i class="fas fa-user-graduate fa-2x text-primary mb-2"></i>
-                    <h4 class="fw-bold">@Model.TotalStudents</h4>
-                    <p class="text-muted small">@L["Home.Stats.Students"]</p>
-                </div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="stat-box shadow-sm p-4 rounded bg-light">
-                    <i class="fas fa-chalkboard-teacher fa-2x text-success mb-2"></i>
-                    <h4 class="fw-bold">@Model.TotalTeachers</h4>
-                    <p class="text-muted small">@L["Home.Stats.Teachers"]</p>
-                </div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="stat-box shadow-sm p-4 rounded bg-light">
-                    <i class="fas fa-school fa-2x text-info mb-2"></i>
-                    <h4 class="fw-bold">@Model.TotalCurricula</h4>
-                    <p class="text-muted small">@L["Home.Stats.Curricula"]</p>
-                </div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="stat-box shadow-sm p-4 rounded bg-light">
-                    <i class="fas fa-video fa-2x text-danger mb-2"></i>
-                    <h4 class="fw-bold">@Model.TotalPrivateCourses</h4>
-                    <p class="text-muted small">@L["Home.Stats.PrivateCourses"]</p>
-                </div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="stat-box shadow-sm p-4 rounded bg-light">
-                    <i class="fas fa-laptop-code fa-2x text-warning mb-2"></i>
-                    <h4 class="fw-bold">@Model.TotalReactiveCourses</h4>
-                    <p class="text-muted small">@L["Home.Stats.ReactiveCourses"]</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section> *@
-
-<!-- === Activities Section === -->
-@* <section id="activities" class="py-5 bg-light" dir="@dir" style="text-align:@textAlign;">
-    <div class="container">
-        <h2 class="fw-bold mb-4 text-primary text-center">@Model.ActivitiesTitle</h2>
-        <div class="row g-3 justify-content-center">
-            @foreach (var act in Model.Activities)
-            {
-                <div class="col-sm-6 col-md-4 col-lg-3">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-body text-center">
-                            <i class="fas fa-star text-warning fa-lg mb-2"></i>
-                            <p class="small text-muted mb-0">@act</p>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-</section> *@
-
-<!-- === CTA Section === -->
-@* <section id="cta" class="py-5 text-white" style="background: linear-gradient(135deg, #007bff, #6610f2);" dir="@dir" style="text-align:@textAlign;">
-    <div class="container text-center">
-        <h3 class="fw-bold mb-3">@L["Home.CTA.Title"]</h3>
-        <p class="lead mb-4">@L["Home.CTA.Description"]</p>
-        <a href="/Identity/Account/Register" class="btn btn-light btn-lg fw-semibold px-5">
-            <i class="fas fa-user-plus me-2"></i> @L["Home.CTA.Button"]
-        </a>
-    </div>
-</section> *@
 
 
 

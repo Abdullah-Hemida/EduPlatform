@@ -9,26 +9,44 @@
     var levelSelectList = ViewBag.LevelSelectList as SelectList;
 }
 
-<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mt-3 mb-3">
+
+    <!-- Left: Title -->
     <div>
         <h4 class="mb-1">@L["Admin.Curricula"]</h4>
         <div class="small text-muted">@L["Admin.CurriculaSubtitle"]</div>
     </div>
 
+    <!-- Middle: Level Filter -->
+    <form method="get"
+          id="levelFilterForm"
+          class="d-flex align-items-center gap-2">
+
+        <label class="small text-muted mb-0">@L["Admin.Level"]</label>
+
+        @Html.DropDownList(
+        "levelId",
+                levelSelectList,
+                L["Common.All"].Value ?? "All",
+                new
+                {
+                    @class = "form-select form-select-sm",
+                    onchange = "document.getElementById('levelFilterForm').submit()"
+                }
+                )
+    </form>
+
+    <!-- Right: Create Button -->
     <div>
-        <form method="get" class="d-flex align-items-center" id="levelFilterForm">
-            <label class="me-2 small text-muted my-0">@L["Admin.Level"]</label>
-
-            @* Use SelectList provided by controller. Option label localized. *@
-            @Html.DropDownList("levelId", levelSelectList, L["Common.All"].Value ?? "All",
-            new { @class = "form-select form-select-sm me-2", onchange = "document.getElementById('levelFilterForm').submit()" })
-        </form>
-    </div>
-
-    <div class="ms-2 me-2">
-        <a asp-action="Create" asp-area="Admin" class="btn text-nowrap btn-primary ps-3 pe-3 btn-sm">@L["Admin.CreateCurriculum"] <i class="fas fa-plus-circle ms-1"></i></a>
+        <a asp-action="Create"
+           asp-area="Admin"
+           class="btn btn-primary btn-sm text-nowrap px-3">
+            @L["Admin.CreateCurriculum"]
+            <i class="fas fa-plus-circle ms-1"></i>
+        </a>
     </div>
 </div>
+
 
 <div class="row g-3">
     @foreach (var c in Model)

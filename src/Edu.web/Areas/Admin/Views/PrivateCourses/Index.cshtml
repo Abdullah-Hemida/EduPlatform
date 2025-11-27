@@ -7,51 +7,82 @@
     ViewData["Title"] = L["Admin.PrivateCourses"] ?? "Private Courses";
 }
 
-    <div class="d-flex align-items-center gap-2 mb-3 mt-3">
-    <form method="get" id="filterForm" class="d-flex align-items-center">
-        <input name="q" value="@Model.Query" class="form-control form-control-sm ms-1 me-1 row-cols-auto" placeholder="@L["Admin.SearchPlaceholder"]" />
+<div class="mb-3 mt-3">
 
-        <select asp-for="CategoryId"
-                asp-items="ViewBag.CategorySelect"
-                asp-option-label="@L["Common.All"]"
-                class="form-select form-select-sm ms-1 me-1 w-75">
-        </select>
+    <form method="get" id="filterForm" class="row g-2 align-items-end">
 
-        <select asp-for="ShowPublished"
-                asp-items="ViewBag.ShowPublishedSelect"
-                asp-option-label="@L["Common.All"]"
-                class="form-select form-select-sm ms-1 me-1 w-50">
-        </select>
+        <!-- Search -->
+        <div class="col-12 col-sm-6 col-md-3">
+            <input name="q" value="@Model.Query"
+                   class="form-control form-control-sm"
+                   placeholder="@L["Admin.SearchPlaceholder"]" />
+        </div>
 
-        <select asp-for="ForChildren"
-                asp-items="ViewBag.ForChildrenSelect"
-                asp-option-label="@L["Common.All"]"
-                class="form-select form-select-sm ms-1 me-1 w-50">
-        </select>
+        <!-- Category -->
+        <div class="col-12 col-sm-6 col-md-3">
+            <select asp-for="CategoryId"
+                    asp-items="ViewBag.CategorySelect"
+                    asp-option-label="@L["Common.All"]"
+                    class="form-select form-select-sm">
+            </select>
+        </div>
 
-        @* preserve showAll mode when toggled *@
+        <!-- Published -->
+        <div class="col-12 col-sm-6 col-md-2">
+            <select asp-for="ShowPublished"
+                    asp-items="ViewBag.ShowPublishedSelect"
+                    asp-option-label="@L["Common.All"]"
+                    class="form-select form-select-sm">
+            </select>
+        </div>
+
+        <!-- For Children -->
+        <div class="col-12 col-sm-6 col-md-2">
+            <select asp-for="ForChildren"
+                    asp-items="ViewBag.ForChildrenSelect"
+                    asp-option-label="@L["Common.All"]"
+                    class="form-select form-select-sm">
+            </select>
+        </div>
+
+        <!-- Hidden Keep ShowAll -->
         @if (Model.ShowAll)
         {
             <input type="hidden" name="showAll" value="true" />
         }
 
-        <button class="btn btn-primary btn-sm ms-1 me-1 ps-3 pe-3">@L["Admin.Search"]</button>
-        <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">@L["Admin.Reset"]</a>
+        <!-- Buttons -->
+        <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
 
-        @if (!Model.ShowAll)
-        {
-            <a class="btn btn-outline-info btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin", q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = true })">
+            <button class="btn btn-primary btn-sm px-3">
+                @L["Admin.Search"]
+            </button>
+
+            <a class="btn btn-outline-secondary btn-sm text-nowrap"
+               href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
+                @L["Admin.Reset"]
+            </a>
+
+            @if (!Model.ShowAll)
+            {
+                <a class="btn btn-outline-info btn-sm text-nowrap"
+                   href="@Url.Action("Index", "PrivateCourses",
+                                      new { area = "Admin", q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = true })">
                 @(L["Admin.ShowAll"] ?? "Show all")
             </a>
-        }
-        else
-        {
-            <a class="btn btn-outline-secondary btn-sm ms-1 me-1 text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
-                @(L["Admin.ShowOnlyRequests"] ?? "Show only requests")
-            </a>
-        }
+                        }
+            else
+            {
+                <a class="btn btn-outline-secondary btn-sm text-nowrap"
+                   href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
+                    @(L["Admin.ShowOnlyRequests"] ?? "Show only requests")
+                </a>
+            }
+        </div>
+
     </form>
-    </div>
+</div>
+
 
 <div class="row g-3">
     @foreach (var c in Model.Courses)

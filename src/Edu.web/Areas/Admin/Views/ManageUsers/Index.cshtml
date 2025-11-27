@@ -3,56 +3,61 @@
 @inject Microsoft.AspNetCore.Identity.UserManager<Edu.Domain.Entities.ApplicationUser> UserManager
 
 @{
-     
     ViewData["Title"] = L["Admin.Users"];
     var currentUserId = UserManager.GetUserId(User);
 }
 
-<div class="admin-header d-flex flex-column flex-md-row align-items-start align-items-md-center mb-3 gap-3">
-    <div class="header-center d-flex align-items-center flex-wrap gap-2 mx-md-3">
-        <div class="btn-group role-filters-group d-flex gap-2" role="group" aria-label="Role filters">
-            <a class="btn btn-outline-secondary rounded role-filter @(Model.CurrentRoleFilter == "All" ? "active" : "")"
+<!-- Header: role filters + totals + search (responsive) -->
+<div class="admin-header mb-3">
+
+    <!-- Role filters (scrollable on xs, wraps on md) -->
+    <div class="d-flex align-items-center mb-2">
+        <div class="d-flex flex-row flex-md-row gap-2 w-100 overflow-auto" style="-webkit-overflow-scrolling: touch;">
+            <a class="btn btn-outline-secondary btn-sm rounded role-filter @(Model.CurrentRoleFilter == "All" ? "active" : "")"
                href="@Url.Action("Index", new { role = "All", showDeleted = Model.ShowDeleted, search = Model.Search })"
                title="@L["Common.All"]" aria-label="@L["Common.All"]">
                 <i class="fa fa-list me-1" aria-hidden="true"></i>
                 <span class="d-none d-md-inline">@L["Common.All"]</span>
-                <span class="badge bg-secondary mt-1 ms-2 d-inline-block">@Model.TotalCount</span>
+                <span class="badge bg-secondary ms-2 d-inline-block">@Model.TotalCount</span>
             </a>
 
-            <a class="btn btn-outline-secondary rounded role-filter @(Model.CurrentRoleFilter == "Admin" ? "active" : "")"
+            <a class="btn btn-outline-secondary btn-sm rounded role-filter @(Model.CurrentRoleFilter == "Admin" ? "active" : "")"
                href="@Url.Action("Index", new { role = "Admin", showDeleted = Model.ShowDeleted, search = Model.Search })"
                title="@L["Admin.Admin"]" aria-label="@L["Admin.Admin"]">
                 <i class="fa fa-user-shield me-1" aria-hidden="true"></i>
                 <span class="d-none d-md-inline">@L["Admin.Admin"]</span>
-                <span class="badge bg-danger mt-1 ms-2 d-inline-block">@Model.AdminCount</span>
+                <span class="badge bg-danger ms-2 d-inline-block">@Model.AdminCount</span>
             </a>
 
-            <a class="btn btn-outline-secondary rounded role-filter @(Model.CurrentRoleFilter == "Teacher" ? "active" : "")"
+            <a class="btn btn-outline-secondary btn-sm rounded role-filter @(Model.CurrentRoleFilter == "Teacher" ? "active" : "")"
                href="@Url.Action("Index", new { role = "Teacher", showDeleted = Model.ShowDeleted, search = Model.Search })"
                title="@L["Admin.Teacher"]" aria-label="@L["Admin.Teacher"]">
                 <i class="fa fa-chalkboard-teacher me-1" aria-hidden="true"></i>
                 <span class="d-none d-md-inline">@L["Admin.Teacher"]</span>
-                <span class="badge bg-primary mt-1 ms-2 d-inline-block">@Model.TeacherCount</span>
+                <span class="badge bg-primary ms-2 d-inline-block">@Model.TeacherCount</span>
             </a>
 
-            <a class="btn btn-outline-secondary rounded btn-sm role-filter @(Model.CurrentRoleFilter == "Student" ? "active" : "")"
+            <a class="btn btn-outline-secondary btn-sm rounded role-filter @(Model.CurrentRoleFilter == "Student" ? "active" : "")"
                href="@Url.Action("Index", new { role = "Student", showDeleted = Model.ShowDeleted, search = Model.Search })"
                title="@L["Admin.Student"]" aria-label="@L["Admin.Student"]">
                 <i class="fa fa-user-graduate me-1" aria-hidden="true"></i>
                 <span class="d-none d-md-inline">@L["Admin.Student"]</span>
-                <span class="badge bg-success mt-1 ms-2 d-inline-block">@Model.StudentCount</span>
+                <span class="badge bg-success ms-2 d-inline-block">@Model.StudentCount</span>
             </a>
         </div>
     </div>
 
-    <div class="header-right ms-md-auto d-flex align-items-center gap-2">
-        <div class="d-none d-md-flex align-items-center text-muted small">
+    <!-- Right-side controls: total, deleted toggle, search -->
+    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
+
+        <!-- Total (visible on md+) -->
+        <div class="d-none d-md-flex align-items-center text-muted small me-2">
             <span class="fw-semibold me-1">@L["Admin.Total"]:</span>
             <span class="badge bg-primary me-2">@Model.TotalCount</span>
         </div>
 
-        <!-- Deleted filter buttons (added) -->
-        <div class="btn-group gap-1 me-2" role="group" aria-label="Deleted filter">
+        <!-- Deleted toggle -->
+        <div class="btn-group btn-group-sm me-md-2" role="group" aria-label="Deleted filter">
             <a class="btn btn-outline-secondary btn-sm rounded deleted-filter @(Model.ShowDeleted ? "" : "active")"
                href="@Url.Action("Index", new { role = Model.CurrentRoleFilter, showDeleted = false, search = Model.Search })">
                 @(L["Admin.ActiveShort"] ?? "Active")
@@ -63,33 +68,41 @@
             </a>
         </div>
 
-        <form class="d-flex" method="get" asp-action="Index" asp-area="Admin">
+        <!-- Search: full width on xs, compact on md+ -->
+        <form class="d-flex w-100 w-md-auto" method="get" asp-action="Index" asp-area="Admin">
             <input type="hidden" name="role" value="@Model.CurrentRoleFilter" />
             <input type="hidden" name="showDeleted" value="@(Model.ShowDeleted ? "true" : "false")" />
-            <input type="text" name="search" value="@Model.Search" class="form-control form-control-sm me-2 w-auto" placeholder="@L["DataTable.Search"]" />
-            <button class="btn btn-sm btn-primary ms-1 me-1" type="submit">@L["DataTable.Search"]</button>
+            <div class="input-group input-group-sm w-100">
+                <input type="text" name="search" value="@Model.Search" class="form-control" placeholder="@L["DataTable.Search"]" />
+                <button class="btn btn-primary" type="submit">@L["DataTable.Search"]</button>
+            </div>
         </form>
     </div>
 </div>
 
+<!-- Card container -->
 <div class="card shadow-sm">
     <div class="card-body">
-        <div class="table-responsive">
-            <table id="usersTable" class="table table-hover align-middle w-100">
+
+        <!-- TABLE for md+ -->
+        <div class="table-responsive d-none d-md-block">
+            <table id="usersTable" class="table table-hover align-middle w-100 small">
                 <thead class="table-light">
                     <tr>
-                        <th>#</th>
-                        <th>@L["Admin.Image"]</th>
+                        <th style="width:50px">#</th>
+                        <th style="width:60px">@L["Admin.Image"]</th>
                         <th>@L["Admin.FullName"]</th>
-                        <th>@L["Admin.Phone"]</th>
-                        <th>@L["Admin.Roles"]</th>
-                        <th>@L["Admin.Actions"]</th>
+                        <th style="width:140px">@L["Admin.Phone"]</th>
+                        <th style="width:200px">@L["Admin.Roles"]</th>
+                        <th style="width:280px" class="text-end">@L["Admin.Actions"]</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (Model.Items == null || !Model.Items.Any())
                     {
-                        <tr><td colspan="6" class="text-center text-muted">— @(L["Admin.NoUsersFound"] ?? "No users found") —</td></tr>
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">— @(L["Admin.NoUsersFound"] ?? "No users found") —</td>
+                        </tr>
                     }
                     else
                     {
@@ -100,25 +113,29 @@
                             <tr class="@(Model.ShowDeleted ? "table-secondary" : "")">
                                 <td>@idx</td>
                                 <td>
-                                    <img src="@(row.PhotoUrl ?? Url.Content("~/images/default-avatar.png"))" class="rounded-circle" style="width:42px;height:42px;object-fit:cover" alt="">
+                                    <img src="@(row.PhotoUrl ?? Url.Content("~/images/default-avatar.png"))"
+                                         class="rounded-circle" style="width:42px;height:42px;object-fit:cover" alt="">
                                 </td>
                                 <td>
-                                    <div class="fw-semibold small text-truncate" style="max-width:220px;">@row.FullName</div>
-                                    <div class="small text-muted">@row.Email</div>
+                                    <div class="fw-semibold text-truncate" style="max-width:260px;">@row.FullName</div>
+                                    <div class="small text-muted text-truncate" style="max-width:260px;">@row.Email</div>
                                 </td>
-                                <td>@(string.IsNullOrEmpty(row.PhoneNumber) ? "<span class=\"text-muted\">—</span>" : row.PhoneNumber)</td>
-                                <td>@Html.Raw(System.Net.WebUtility.HtmlEncode(row.Roles))</td>
+                                <td class="text-nowrap">
+                                    @Html.Raw(string.IsNullOrEmpty(row.PhoneNumber) ? "<span class=\"text-muted\">—</span>" : System.Net.WebUtility.HtmlEncode(row.PhoneNumber))
+                                </td>
                                 <td>
-                                    <div class="d-flex flex-wrap gap-1">
+                                    <div class="small text-truncate" style="max-width:200px;">@Html.Raw(System.Net.WebUtility.HtmlEncode(row.Roles))</div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end flex-wrap gap-1">
                                         <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="ManageUsers" asp-action="Details" asp-route-id="@row.Id">@L["Button.View"]</a>
 
-                                        @* Approve/Unapprove (single toggle button) *@
+                                        @* Approve/Unapprove toggle for Teacher role *@
                                         @if ((row.Roles ?? "").Split(',').Select(r => r.Trim()).Contains("Teacher"))
                                         {
                                             if (string.Equals(row.TeacherStatus, "Approved", StringComparison.OrdinalIgnoreCase))
                                             {
-                                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="UnapproveTeacher" class="m-0 d-inline confirm"
-                                                      data-confirm="@L["Admin.ConfirmUnapprove"]">
+                                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="UnapproveTeacher" class="m-0 d-inline confirm">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="id" value="@row.Id" />
                                                     <button type="submit" class="btn btn-sm btn-outline-warning">@L["Admin.Unapprove"]</button>
@@ -126,15 +143,15 @@
                                             }
                                             else
                                             {
-                                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="ApproveTeacher" class="m-0 d-inline confirm"
-                                                      data-confirm="@L["Admin.ConfirmApprove"]">
+                                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="ApproveTeacher" class="m-0 d-inline confirm">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="id" value="@row.Id" />
                                                     <button type="submit" class="btn btn-sm btn-outline-success">@L["Button.Approve"]</button>
                                                 </form>
                                             }
                                         }
-                                        @* Inside the foreach row rendering in ManageUsers Index view *@
+
+                                        @* Student allow toggle (AJAX) *@
                                         @if (row.IsAllowed.HasValue)
                                         {
                                             <form method="post"
@@ -144,11 +161,8 @@
                                                   class="student-allow-form m-0 d-inline"
                                                   data-user-id="@row.Id">
                                                 @Html.AntiForgeryToken()
-
-                                                @* Hidden field for setTo (we will toggle) *@
                                                 <input type="hidden" name="id" value="@row.Id" />
                                                 <input type="hidden" name="setTo" value="@(row.IsAllowed.Value ? "false" : "true")" class="setToInput" />
-
                                                 <button type="submit"
                                                         class="btn btn-sm student-allow-btn @(row.IsAllowed.Value ? "btn-success" : "btn-outline-secondary")"
                                                         title="@(row.IsAllowed.Value? L["Admin.RevokeAccess"] : L["Admin.AllowAccess"])">
@@ -157,9 +171,9 @@
                                                 </button>
                                             </form>
                                         }
-                                        @* Soft-delete / Restore (toggle) *@
-                                        <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="SoftDelete" class="m-0 d-inline ms-1 confirm"
-                                              data-confirm="@(Model.ShowDeleted ? (L["Admin.ConfirmRestore"] ?? "Restore this user?") : (L["Admin.ConfirmSuspend"] ?? "Suspend this user?"))">
+
+                                        @* Soft-delete / Restore *@
+                                        <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="SoftDelete" class="m-0 d-inline confirm">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="id" value="@row.Id" />
                                             <button type="submit" class="btn btn-sm btn-outline-danger">
@@ -167,11 +181,10 @@
                                             </button>
                                         </form>
 
-                                        @* Hard delete (only when viewing deleted users) *@
+                                        @* Hard delete when viewing deleted *@
                                         @if (Model.ShowDeleted)
                                         {
-                                            <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="HardDelete" class="m-0 d-inline ms-1 confirm"
-                                                  data-confirm="@L["Admin.ConfirmDelete"]">
+                                            <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="HardDelete" class="m-0 d-inline">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="id" value="@row.Id" />
                                                 <button type="submit" class="btn btn-sm btn-danger">@L["Admin.DeletePermanently"]</button>
@@ -186,9 +199,124 @@
             </table>
         </div>
 
-        @* Pagination block (unchanged) *@
-        <nav aria-label="Page navigation">
-            <ul class="pagination">
+        <!-- CARDS for small screens (replace existing d-md-none block) -->
+        <div class="d-md-none">
+            @if (Model.Items == null || !Model.Items.Any())
+            {
+                <div class="text-center text-muted py-3">— @(L["Admin.NoUsersFound"] ?? "No users found") —</div>
+            }
+            else
+            {
+                var cidx = (Model.PageIndex - 1) * Model.PageSize;
+                foreach (var row in Model.Items)
+                {
+                    cidx++;
+                    <div class="card mb-2">
+                        <div class="card-body">
+                            <div class="d-flex gap-3">
+                                <img src="@(row.PhotoUrl ?? Url.Content("~/images/default-avatar.png"))"
+                                     class="rounded-circle flex-shrink-0" style="width:56px;height:56px;object-fit:cover" alt="">
+
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <div class="fw-semibold text-truncate">@row.FullName</div>
+                                            <div class="small text-muted text-truncate">@row.Email</div>
+                                        </div>
+
+                                        <div class="text-end small text-muted">
+                                            #@cidx
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-2 small">
+                                        <div class="text-truncate">
+                                            <strong>@L["Admin.Phone"]:</strong>
+                                            @(string.IsNullOrEmpty(row.PhoneNumber) ? "—" : row.PhoneNumber)
+                                        </div>
+                                        <div class="text-truncate">
+                                            <strong>@L["Admin.Roles"]:</strong>
+                                            @Html.Raw(System.Net.WebUtility.HtmlEncode(row.Roles))
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Single-line footer: action buttons stay inline, scrollable if overflow -->
+                        <div class="card-footer bg-white d-flex flex-nowrap gap-2 overflow-auto" aria-label="Actions">
+                            <!-- View -->
+                            <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="ManageUsers" asp-action="Details" asp-route-id="@row.Id">
+                                @L["Button.View"]
+                            </a>
+
+                            <!-- Approve/Unapprove (Teacher) -->
+                            @if ((row.Roles ?? "").Split(',').Select(r => r.Trim()).Contains("Teacher"))
+                            {
+                                if (string.Equals(row.TeacherStatus, "Approved", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="UnapproveTeacher" class="m-0 d-inline-block">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@row.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-warning">@L["Admin.Unapprove"]</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="ApproveTeacher" class="m-0 d-inline-block">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@row.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-success">@L["Button.Approve"]</button>
+                                    </form>
+                                }
+                            }
+
+                            <!-- Student allow toggle (AJAX) -->
+                            @if (row.IsAllowed.HasValue)
+                            {
+                                <form method="post"
+                                      asp-area="Admin"
+                                      asp-controller="ManageUsers"
+                                      asp-action="ToggleStudentAllowedAjax"
+                                      class="student-allow-form m-0 d-inline-block"
+                                      data-user-id="@row.Id">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@row.Id" />
+                                    <input type="hidden" name="setTo" value="@(row.IsAllowed.Value ? "false" : "true")" class="setToInput" />
+                                    <button type="submit"
+                                            class="btn btn-sm student-allow-btn @(row.IsAllowed.Value ? "btn-success" : "btn-outline-secondary")">
+                                        @(row.IsAllowed.Value? L["Admin.Allowed"] : L["Admin.NotAllowed"])
+                                    </button>
+                                </form>
+                            }
+
+                            <!-- Soft-delete / Restore -->
+                            <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="SoftDelete" class="m-0 d-inline-block">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@row.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    @(Model.ShowDeleted? L["Admin.Restore"] : L["Admin.Suspend"])
+                                </button>
+                            </form>
+
+                            <!-- Hard delete when viewing deleted -->
+                            @if (Model.ShowDeleted)
+                            {
+                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="HardDelete" class="m-0 d-inline-block">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@row.Id" />
+                                    <button type="submit" class="btn btn-sm btn-danger">@L["Admin.DeletePermanently"]</button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- Pagination (unchanged) -->
+        <nav aria-label="Page navigation" class="mt-3">
+            <ul class="pagination justify-content-center justify-content-md-end">
                 <li class="page-item @(Model.Items?.HasPreviousPage == true ? "" : "disabled")">
                     <a class="page-link" href="@Url.Action("Index", new { role = Model.CurrentRoleFilter, showDeleted = Model.ShowDeleted, search = Model.Search, pageIndex = Model.PageIndex - 1, pageSize = Model.PageSize })" aria-label="Previous">
                         <span aria-hidden="true">&laquo;</span>
@@ -209,12 +337,13 @@
                 </li>
             </ul>
         </nav>
+
     </div>
 </div>
 
 @section Scripts {
     <script>
-        // Auto-dismiss server TempData alerts after 30 seconds (30_000 ms)
+        // Auto-dismiss server TempData alerts after 10 seconds
         (function() {
             var dismissMs = 10000;
             if (window.jQuery) {
@@ -236,8 +365,9 @@
             }
         })();
     </script>
+
     <script>
-        // Localized strings (JSON-encoded to guarantee correct characters & escaping)
+        // Localized strings for AJAX toggle
         var txtAllowed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.Allowed"].Value ?? "Allowed"));
         var txtNotAllowed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.NotAllowed"].Value ?? "Not allowed"));
         var txtAllowAccess = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.AllowAccess"].Value ?? "Allow access"));
@@ -245,24 +375,20 @@
         var txtToggleFailed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ToggleFailed"].Value ?? "Failed to update access. Please try again."));
 
         (function ($) {
-            // helper: show inline temporary alert (bootstrap style) in top of page
             function showTempAlert(message, type = 'success', timeout = 4000) {
                 const $alert = $('<div class="alert alert-' + type + ' admin-temp-alert" role="alert" style="position:fixed;top:20px;right:20px;z-index:1055;min-width:220px;">' + message + '</div>');
                 $('body').append($alert);
                 setTimeout(function () { $alert.fadeOut(300, function () { $(this).remove(); }); }, timeout);
             }
 
-            // Submit handler
+            // AJAX handler for student-allow toggle forms
             $(document).on('submit', '.student-allow-form', function (e) {
                 e.preventDefault();
                 var $form = $(this);
-                var action = $form.attr('action');
-                if (!action) action = window.location.href;
-
+                var action = $form.attr('action') || window.location.href;
                 var id = $form.find('input[name="id"]').val();
                 var setTo = $form.find('input[name="setTo"]').val();
                 var token = $form.find('input[name="__RequestVerificationToken"]').val();
-
                 var $btn = $form.find('.student-allow-btn');
                 $btn.prop('disabled', true);
 
@@ -299,7 +425,7 @@
                         try {
                             var json = xhr.responseJSON;
                             if (json && json.message) msg = json.message;
-                        } catch (e) { /* ignore parse error */ }
+                        } catch (e) { }
                         showTempAlert(msg, 'danger', 5000);
                     },
                     complete: function () {
@@ -310,6 +436,7 @@
         })(jQuery);
     </script>
 }
+
 
 
 

@@ -1,36 +1,30 @@
 ﻿@model List<HomeSection>
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
-<div class="d-flex align-items-center justify-content-between mt-2 mb-2">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
     <h2 class="mb-0">@L["Admin.HomeSections"]</h2>
+
     <a asp-action="Create" class="btn btn-primary">
         @L["Admin.CreateNewSection"] <i class="fas fa-plus-circle ms-1"></i>
     </a>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-striped align-middle">
+<!-- TABLE for md+ -->
+<div class="table-responsive d-none d-md-block">
+    <table class="table table-striped align-middle mb-0">
         <thead>
             <tr>
                 <th style="width:60px;">@L["Admin.Order"]</th>
                 <th>
                     @(
-                        (L["Admin.TitleEn"]?.Value?.Length > 0 ? L["Admin.TitleEn"].Value :
-                        (L["Admin.TitlePreview"]?.Value?.Length > 0 ? L["Admin.TitlePreview"].Value : "Title (EN)"))
-                    )
+                                        (L["Admin.TitleEn"]?.Value?.Length > 0 ? L["Admin.TitleEn"].Value :
+                                        (L["Admin.TitlePreview"]?.Value?.Length > 0 ? L["Admin.TitlePreview"].Value : "Title (EN)"))
+                                        )
                 </th>
-                <th style="min-width:220px;">
-                    @(
-                        L["Admin.TitleIt"]?.Value ?? "Title (IT)"
-                    )
-                </th>
-                <th style="min-width:220px;">
-                    @(
-                        L["Admin.TitleAr"]?.Value ?? "Title (AR)"
-                    )
-                </th>
-                <th style="width:90px;">@L["Admin.ItemsCount"]</th>
-                <th></th>
+                <th style="min-width:220px;">@(L["Admin.TitleIt"]?.Value ?? "Title (IT)")</th>
+                <th style="min-width:220px;">@(L["Admin.TitleAr"]?.Value ?? "Title (AR)")</th>
+                <th style="width:90px;text-align:center">@L["Admin.ItemsCount"]</th>
+                <th style="width:180px" class="text-end">@L["Admin.Actions"]</th>
             </tr>
         </thead>
         <tbody>
@@ -40,7 +34,6 @@
                 var it = s.Translations?.FirstOrDefault(x => x.Culture == "it")?.Title;
                 var ar = s.Translations?.FirstOrDefault(x => x.Culture == "ar")?.Title;
 
-                // fallbacks
                 en = string.IsNullOrWhiteSpace(en) ? "-" : en;
                 it = string.IsNullOrWhiteSpace(it) ? "-" : it;
                 ar = string.IsNullOrWhiteSpace(ar) ? "-" : ar;
@@ -49,40 +42,103 @@
                     <td class="align-middle">@s.Order</td>
 
                     <td class="align-middle">
-                        <div class="d-flex flex-column">
-                            <div>
-                                <span class="badge bg-light text-dark small me-2">EN</span>
-                                <span class="fw-semibold">@en</span>
-                            </div>
+                        <div>
+                            <span class="badge bg-light text-dark small me-2">EN</span>
+                            <span class="fw-semibold">@en</span>
                         </div>
                     </td>
 
                     <td class="align-middle">
-                        <div class="d-flex flex-column">
-                            <div>
-                                <span class="badge bg-light text-dark small me-2">IT</span>
-                                <span class="fw-semibold">@it</span>
-                            </div>
+                        <div>
+                            <span class="badge bg-light text-dark small me-2">IT</span>
+                            <span class="fw-semibold">@it</span>
                         </div>
                     </td>
 
                     <td class="align-middle">
-                        <div class="d-flex flex-column" dir="rtl">
-                            <div class="text-end">
-                                <span class="badge bg-light text-dark small me-2">AR</span>
-                                <span class="fw-semibold">@ar</span>
-                            </div>
+                        <div dir="rtl" class="text-end">
+                            <span class="badge bg-light text-dark small me-2">AR</span>
+                            <span class="fw-semibold">@ar</span>
                         </div>
                     </td>
 
                     <td class="align-middle text-center">@((s.Items?.Count) ?? 0)</td>
 
                     <td class="align-middle text-end text-nowrap">
-                        <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary me-1">@L["Admin.Edit"]</a>
-                        <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">@L["Admin.Delete"]</a>
+                        <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary me-1">
+                            @L["Admin.Edit"]
+                        </a>
+                        <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">
+                            @L["Admin.Delete"]
+                        </a>
                     </td>
                 </tr>
             }
         </tbody>
     </table>
 </div>
+
+<!-- CARDS for small screens -->
+<div class="d-md-none">
+    <div class="row g-2">
+        @foreach (var s in Model)
+        {
+            var en = s.Translations?.FirstOrDefault(x => x.Culture == "en")?.Title;
+            var it = s.Translations?.FirstOrDefault(x => x.Culture == "it")?.Title;
+            var ar = s.Translations?.FirstOrDefault(x => x.Culture == "ar")?.Title;
+
+            en = string.IsNullOrWhiteSpace(en) ? "-" : en;
+            it = string.IsNullOrWhiteSpace(it) ? "-" : it;
+            ar = string.IsNullOrWhiteSpace(ar) ? "-" : ar;
+
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between">
+                            <div>
+                                <div class="small text-muted">@L["Admin.Order"]</div>
+                                <div class="fw-semibold">@s.Order</div>
+                            </div>
+
+                            <div class="text-end">
+                                <div class="small text-muted">@L["Admin.ItemsCount"]</div>
+                                <div class="fw-semibold text-center">@((s.Items?.Count) ?? 0)</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-2" />
+
+                        <div>
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="badge bg-light text-dark small me-2">EN</span>
+                                <div class="fw-semibold">@en</div>
+                            </div>
+
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="badge bg-light text-dark small me-2">IT</span>
+                                <div class="">@it</div>
+                            </div>
+
+                            <div class="d-flex align-items-center" dir="rtl">
+                                <div class="text-end w-100">
+                                    <span class="badge bg-light text-dark small me-2">AR</span>
+                                    <div class="fw-semibold">@ar</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer bg-white d-flex justify-content-end gap-2">
+                        <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary">
+                            @L["Admin.Edit"]
+                        </a>
+                        <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">
+                            @L["Admin.Delete"]
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+

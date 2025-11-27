@@ -6,10 +6,21 @@
     ViewData["Title"] = L["Admin.Categories"];
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div><h4 class="mb-0">@L["Admin.Categories"]</h4><small class="text-muted">@L["Admin.CategoriesSubtitle"]</small></div>
-    <a class="btn btn-primary btn-sm ms-3 me-3" asp-action="Create">@L["Admin.AddCategory"] <i class="fas fa-plus-circle ms-1"></i></a>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 gap-md-3 mb-3">
+
+    <!-- Title + Subtitle -->
+    <div>
+        <h4 class="mb-0">@L["Admin.Categories"]</h4>
+        <small class="text-muted">@L["Admin.CategoriesSubtitle"]</small>
+    </div>
+
+    <!-- Add Button -->
+    <a asp-action="Create" class="btn btn-primary btn-sm text-nowrap">
+        @L["Admin.AddCategory"]
+        <i class="fas fa-plus-circle ms-1"></i>
+    </a>
 </div>
+
 
 @if (TempData["Success"] != null)
 {

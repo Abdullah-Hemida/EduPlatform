@@ -18,72 +18,104 @@
 }
 
 
-    <!-- 1) Cards row -->
-    <div class="mb-2 mt-2">
-        <div class="filter-cards" id="filterCards" role="list" aria-label="@L["School.FilterByLevel"]">
-            @* "All" card *@
-            <div class="card filter-card @(Model.SelectedLevelId == null ? "active border-primary" : "border")" data-levelid="">
-                <div class="card-body d-flex align-items-center flex-column justify-content-between">
+<!-- 1) Level Filter Cards Row -->
+<div class="mt-2 mb-2">
+    <div class="row g-2" id="filterCards" role="list" aria-label="@L["School.FilterByLevel"]">
+
+        <!-- "All" Card -->
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+            <div class="card h-100 filter-card @(Model.SelectedLevelId == null ? "border-primary" : "border")"
+                 data-levelid="">
+                <div class="card-body d-flex flex-column align-items-center justify-content-between text-center">
                     <div>
                         <div class="small text-muted">@L["Common.All"]</div>
-                        <div class="count">@Model.TotalCount</div>
+                        <div class="fw-bold fs-5">@Model.TotalCount</div>
                     </div>
                     <div class="text-muted small">@L["Admin.Curricula"]</div>
                 </div>
             </div>
+        </div>
 
-            @foreach (var level in Model.AllLevels)
-            {
-                var isActive = Model.SelectedLevelId.HasValue && Model.SelectedLevelId.Value == level.Id;
-                <div class="card filter-card @(isActive ? "active border-primary" : "border")" data-levelid="@level.Id">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between flex-column">
-                            <div>
-                                <div class="fw-semibold">@level.Name</div>
-                                @* <div class="small text-muted">@level.CurriculaCountText</div> *@
-                            </div>
-                            <div class="text-end">
-                                <div class="count">@level.CurriculaCountText.Split(' ')[0]</div>
+        <!-- Individual Level Cards -->
+        @foreach (var level in Model.AllLevels)
+        {
+            var isActive = Model.SelectedLevelId.HasValue && Model.SelectedLevelId.Value == level.Id;
+
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+                <div class="card h-100 filter-card @(isActive ? "border-primary" : "border")"
+                     data-levelid="@level.Id">
+                    <div class="card-body d-flex flex-column justify-content-between text-center">
+                        <div>
+                            <div class="fw-semibold">@level.Name</div>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-5">
+                                @level.CurriculaCountText.Split(' ')[0]
                             </div>
                         </div>
                     </div>
                 </div>
-            }
-        </div>
-    </div>
-
-    <!-- 2) Line under cards: Filter title + pageSize selector + pagination summary -->
-    <div class="filter-meta mb-3 justify-content-between">
-        <div class="">
-            <h5 class="mb-0">@L["School.FilterByLevel"]</h5>
-            <small class="text-muted">@L["School.FilterHelp"]</small>
-        </div>
-
-        <div class="d-flex align-items-center justify-content-between gap-2">
-            <form id="pageSizeForm" method="get" asp-action="Index" class="d-flex align-items-center gap-2">
-                <input type="hidden" name="levelId" id="ps-levelId" value="@(currentLevelId?.ToString() ?? "")" />
-                <input type="hidden" name="page" value="1" />
-                <label class="form-label mb-0 small w-auto text-nowrap">@L["DataTable.ShowEntries"]</label>
-                <select id="pageSizeSelect" name="pageSize" class="form-select form-select-sm">
-                    @{
-                        var sizes = new[] { 6, 9, 12, 20 };
-                        foreach (var s in sizes)
-                        {
-                            <option value="@s" selected="@(s == currentPageSize ? "selected" : null)">@s</option>
-                        }
-                    }
-                </select>
-                <noscript><button type="submit" class="btn btn-sm btn-primary ms-2">@(L["Button.Apply"] ?? "Apply")</button></noscript>
-            </form>
-
-            <div class="pagination-summary small text-muted" id="paginationSummary">
-                @(L["School.Showing"] ?? "Showing")
-                <span id="summaryRange">@( ((Model.Page - 1) * Model.PageSize) + 1)-@((Math.Min(Model.TotalCount, Model.Page * Model.PageSize)))</span>
-                @(L["School.Of"] ?? "of")
-                <strong id="summaryTotal">@Model.TotalCount</strong>
             </div>
-        </div>
+        }
     </div>
+</div>
+
+
+<!-- 2) Filter Meta: Title + PageSize + Summary -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-3">
+
+    <!-- Left: Filter Title -->
+    <div>
+        <h5 class="mb-0">@L["School.FilterByLevel"]</h5>
+        <small class="text-muted">@L["School.FilterHelp"]</small>
+    </div>
+
+    <!-- Right: Page Size + Summary -->
+    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-3">
+
+        <!-- Page Size Form -->
+        <form id="pageSizeForm" method="get" asp-action="Index"
+              class="d-flex align-items-center gap-2">
+
+            <input type="hidden" name="levelId" id="ps-levelId" value="@(currentLevelId?.ToString() ?? "")" />
+            <input type="hidden" name="page" value="1" />
+
+            <label class="form-label mb-0 small text-nowrap">
+                @L["DataTable.ShowEntries"]
+            </label>
+
+            <select id="pageSizeSelect" name="pageSize" class="form-select form-select-sm w-auto">
+                @{
+                    var sizes = new[] { 6, 9, 12, 20 };
+                    foreach (var s in sizes)
+                    {
+                        <option value="@s" selected="@(s == currentPageSize ? "selected" : null)">
+                            @s
+                        </option>
+                    }
+                }
+            </select>
+
+            <noscript>
+                <button type="submit" class="btn btn-sm btn-primary ms-2">
+                    @(L["Button.Apply"] ?? "Apply")
+                </button>
+            </noscript>
+        </form>
+
+        <!-- Pagination Summary -->
+        <div class="small text-muted" id="paginationSummary">
+            @(L["School.Showing"] ?? "Showing")
+            <span id="summaryRange">
+                @(((Model.Page - 1) * Model.PageSize) + 1)-@((Math.Min(Model.TotalCount, Model.Page * Model.PageSize)))
+            </span>
+            @(L["School.Of"] ?? "of")
+            <strong id="summaryTotal">@Model.TotalCount</strong>
+        </div>
+
+    </div>
+</div>
+
 
     <!-- 3) Curricula container: initial render via partial (so server render + AJAX updates) -->
     <div id="curriculaContainer">

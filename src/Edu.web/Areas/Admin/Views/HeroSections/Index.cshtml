@@ -5,66 +5,160 @@
     ViewData["Title"] = L["Admin.HeroSections"] ?? "Hero Sections";
 }
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h2 class="mb-0">@L["Admin.HeroSections"]</h2>
-    <a asp-action="Create" class="btn btn-primary">@L["Admin.Create"] <i class="fas fa-plus-circle ms-1"></i></a>
+<!-- Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+    <h2 class="m-0">@L["Admin.HeroSections"]</h2>
+
+    <a asp-action="Create" class="btn btn-primary text-nowrap px-4">
+        @L["Admin.Create"] <i class="fas fa-plus-circle ms-1"></i>
+    </a>
 </div>
 
-<table class="table table-hover">
-    <thead>
-        <tr>
-            <th>@L["Admin.Placement"]</th>
-            <th>@L["Admin.Title"]</th>
-            <th>@L["Admin.Image"]</th>
-            <th>@L["Admin.ActiveShort"]</th>
-            <th>@L["Admin.Order"]</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var h in Model.OrderBy(m => m.Placement).ThenBy(m => m.Order))
-        {
+<!-- TABLE (visible md and above) -->
+<div class="table-responsive d-none d-md-block">
+    <table class="table table-hover align-middle">
+        <thead class="table-light small">
             <tr>
-                <td>@h.Placement</td>
-                <td>
+                <th style="width:120px;">@L["Admin.Placement"]</th>
+                <th>@L["Admin.Title"]</th>
+                <th style="width:110px;">@L["Admin.Image"]</th>
+                <th style="width:90px;">@L["Admin.ActiveShort"]</th>
+                <th style="width:70px;">@L["Admin.Order"]</th>
+                <th style="width:170px;" class="text-end">@L["Admin.Actions"]</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (var h in Model.OrderBy(m => m.Placement).ThenBy(m => m.Order))
+            {
+                <tr>
+                    <td>@h.Placement</td>
+
+                    <td>
+                        @if (!string.IsNullOrEmpty(h.TitleEn))
+                        {
+                            <div><strong>EN:</strong> @h.TitleEn</div>
+                        }
+                        @if (!string.IsNullOrEmpty(h.TitleIt))
+                        {
+                            <div><strong>IT:</strong> @h.TitleIt</div>
+                        }
+                        @if (!string.IsNullOrEmpty(h.TitleAr))
+                        {
+                            <div><strong>AR:</strong> @h.TitleAr</div>
+                        }
+                        @if (string.IsNullOrEmpty(h.TitleEn) && string.IsNullOrEmpty(h.TitleIt) && string.IsNullOrEmpty(h.TitleAr))
+                        {
+                            <span class="text-muted small">@L["Admin.NoTitle"]</span>
+                        }
+                    </td>
+
+                    <td>
+                        @if (!string.IsNullOrEmpty(h.ImageStorageKey))
+                        {
+                            var publicUrl = Url.Content(h.ImageStorageKey);
+                            <img src="@publicUrl" class="img-fluid rounded" style="height:48px; object-fit:cover;" />
+                        }
+                    </td>
+
+                    <td>
+                        @if (h.IsActive)
+                        {
+                            <span class="badge bg-success">@L["Admin.ActiveShort"]</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">@L["Admin.InactiveShort"]</span>
+                        }
+                    </td>
+
+                    <td>@h.Order</td>
+
+                    <td class="text-end text-nowrap">
+                        <a asp-action="Edit" asp-route-id="@h.Id" class="btn btn-sm btn-outline-primary me-1">
+                            @L["Admin.Edit"]
+                        </a>
+                        <a asp-action="Delete" asp-route-id="@h.Id" class="btn btn-sm btn-outline-danger">
+                            @L["Admin.Delete"]
+                        </a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- MOBILE CARDS (visible on small screens) -->
+<div class="d-md-none">
+    @foreach (var h in Model.OrderBy(m => m.Placement).ThenBy(m => m.Order))
+    {
+        <div class="card shadow-sm mb-2">
+            <div class="card-body">
+
+                <!-- Placement + Order -->
+                <div class="d-flex justify-content-between mb-2">
+                    <div>
+                        <div class="small text-muted">@L["Admin.Placement"]</div>
+                        <div class="fw-semibold">@h.Placement</div>
+                    </div>
+
+                    <div class="text-end">
+                        <div class="small text-muted">@L["Admin.Order"]</div>
+                        <div>@h.Order</div>
+                    </div>
+                </div>
+
+                <!-- Titles -->
+                <div class="mb-2">
+                    <div class="small text-muted">@L["Admin.Title"]</div>
+
                     @if (!string.IsNullOrEmpty(h.TitleEn))
                     {
-                        <div><strong>EN:</strong> @h.TitleEn</div>
+                        <div><span class="badge bg-light text-dark me-1">EN</span>@h.TitleEn</div>
                     }
                     @if (!string.IsNullOrEmpty(h.TitleIt))
                     {
-                        <div><strong>IT:</strong> @h.TitleIt</div>
+                        <div><span class="badge bg-light text-dark me-1">IT</span>@h.TitleIt</div>
                     }
                     @if (!string.IsNullOrEmpty(h.TitleAr))
                     {
-                        <div><strong>AR:</strong> @h.TitleAr</div>
+                        <div class="text-end" dir="rtl">
+                            <span class="badge bg-light text-dark ms-1">AR</span>@h.TitleAr
+                        </div>
                     }
-                </td>
-                <td>
-                    @if (!string.IsNullOrEmpty(h.ImageStorageKey))
-                    {
-                        var publicUrl = Url.Content(h.ImageStorageKey);
-                        <img src="@publicUrl" style="height:48px;object-fit:cover;border-radius:6px" />
-                    }
-                </td>
-                <td>
+                </div>
+
+                <!-- Image -->
+                @if (!string.IsNullOrEmpty(h.ImageStorageKey))
+                {
+                    var publicUrl = Url.Content(h.ImageStorageKey);
+
+                    <div class="mb-2">
+                        <img src="@publicUrl" class="img-fluid rounded" />
+                    </div>
+                }
+
+                <!-- Active status -->
+                <div class="mb-2">
+                    <div class="small text-muted">@L["Admin.ActiveShort"]</div>
                     @if (h.IsActive)
                     {
-                        <span class="badge bg-success">@(L["Admin.ActiveShort"] ?? "Active")</span>
+                        <span class="badge bg-success">@L["Admin.ActiveShort"]</span>
                     }
                     else
                     {
-
-                        <span class="badge bg-secondary">@(L["Admin.InactiveShort"] ?? "Inactive")</span>
+                        <span class="badge bg-secondary">@L["Admin.InactiveShort"]</span>
                     }
-                </td>
-                <td>@h.Order</td>
-                <td>
-                    <a asp-action="Edit" asp-route-id="@h.Id" class="btn btn-sm btn-outline-primary">@L["Admin.Edit"]</a>
-                    <a asp-action="Delete" asp-route-id="@h.Id" class="btn btn-sm btn-outline-danger">@L["Admin.Delete"]</a>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+                </div>
+
+            </div>
+
+            <div class="card-footer bg-white d-flex justify-content-end gap-2">
+                <a asp-action="Edit" asp-route-id="@h.Id" class="btn btn-sm btn-outline-primary">@L["Admin.Edit"]</a>
+                <a asp-action="Delete" asp-route-id="@h.Id" class="btn btn-sm btn-outline-danger">@L["Admin.Delete"]</a>
+            </div>
+        </div>
+    }
+</div>
+
 

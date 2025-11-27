@@ -11,40 +11,55 @@
     var pageSize = Model?.PageSize ?? 20;
 }
 
-<h3>@L["Admin.Bookings"]</h3>
+<h3 class="mb-3">@L["Admin.Bookings"]</h3>
 
+<!-- Tabs: scrollable on small screens -->
 <nav class="mb-3">
-    <ul class="nav nav-tabs">
-        <li class="nav-item">
-            <a class="nav-link @(tab == "upcoming" ? "active" : "")" href="@Url.Action("Index", new { status = statusFilter, tab = "upcoming", page = 1 })">
-                @(L["Booking.Tab.Upcoming"] ?? "Upcoming")
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(tab == "past" ? "active" : "")" href="@Url.Action("Index", new { status = statusFilter, tab = "past", page = 1 })">
-                @(L["Booking.Tab.Past"] ?? "Past")
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(tab == "all" ? "active" : "")" href="@Url.Action("Index", new { status = statusFilter, tab = "all", page = 1 })">
-                @(L["Booking.Tab.All"] ?? "All")
-            </a>
-        </li>
-    </ul>
+    <div class="overflow-auto" style="-webkit-overflow-scrolling: touch;">
+        <ul class="nav nav-tabs flex-nowrap">
+            <li class="nav-item">
+                <a class="nav-link @(tab == "upcoming" ? "active" : "")"
+                   href="@Url.Action("Index", new { status = statusFilter, tab = "upcoming", page = 1 })">
+                    @(L["Booking.Tab.Upcoming"] ?? "Upcoming")
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(tab == "past" ? "active" : "")"
+                   href="@Url.Action("Index", new { status = statusFilter, tab = "past", page = 1 })">
+                    @(L["Booking.Tab.Past"] ?? "Past")
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(tab == "all" ? "active" : "")"
+                   href="@Url.Action("Index", new { status = statusFilter, tab = "all", page = 1 })">
+                    @(L["Booking.Tab.All"] ?? "All")
+                </a>
+            </li>
+        </ul>
+    </div>
 </nav>
 
+<!-- Filter bar -->
 <div class="mb-3">
-    <form method="get" class="d-flex gap-2 align-items-center">
+    <form method="get" class="row gx-2 gy-2 align-items-center">
         <input type="hidden" name="tab" value="@tab" />
-        <select name="status" class="form-select form-select-sm" style="width:180px">
-            <option value="">@L["Common.All"]</option>
-            @foreach (var s in Enum.GetValues(typeof(BookingStatus)).Cast<BookingStatus>())
-            {
-                <option value="@s" selected="@(string.Equals(statusFilter, s.ToString(), StringComparison.OrdinalIgnoreCase))">@L[$"Booking.Status.{s}"]</option>
-            }
-        </select>
-        <button class="btn btn-primary btn-sm">@L["Button.Filter"]</button>
-        <a asp-action="Index" class="btn btn-outline-secondary btn-sm ms-2">@L["Admin.Reset"]</a>
+        <div class="col-12 col-sm-auto">
+            <select name="status" class="form-select form-select-sm">
+                <option value="">@L["Common.All"]</option>
+                @foreach (var s in Enum.GetValues(typeof(BookingStatus)).Cast<BookingStatus>())
+                {
+                    <option value="@s" selected="@(string.Equals(statusFilter, s.ToString(), StringComparison.OrdinalIgnoreCase))">@L[$"Booking.Status.{s}"]</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-auto">
+            <button class="btn btn-primary btn-sm">@L["Button.Filter"]</button>
+        </div>
+
+        <div class="col-auto">
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">@L["Admin.Reset"]</a>
+        </div>
     </form>
 </div>
 
@@ -54,60 +69,148 @@
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>@L["Slots.Times"]</th>
-                <th>@L["Booking.Student"]</th>
-                <th>@L["Booking.Teacher"]</th>
-                <th>@L["Booking.Status"]</th>
-                <th>@L["Booking.Price"]</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
+    <!-- Table for md+ -->
+    <div class="table-responsive d-none d-md-block">
+        <table class="table table-striped align-middle mb-0">
+            <thead class="table-light small">
+                <tr>
+                    <th>@L["Slots.Times"]</th>
+                    <th>@L["Booking.Student"]</th>
+                    <th>@L["Booking.Teacher"]</th>
+                    <th style="width:140px;">@L["Booking.Status"]</th>
+                    <th style="width:120px;">@L["Booking.Price"]</th>
+                    <th class="text-end" style="width:260px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Model.Bookings)
+                {
+                    <tr>
+                        <td>@(b.SlotTimes ?? "-")</td>
+                        <td>
+                            <div class="fw-semibold">@(!string.IsNullOrEmpty(b.StudentName) ? b.StudentName : "-")</div>
+                            <div class="small text-muted">@b.StudentEmail</div>
+                            <div class="small text-muted">@b.StudentPhoneNumber</div>
+                        </td>
+                        <td>@(b.TeacherName ?? "-")</td>
+                        <td>
+                            <span id="badge-@b.Id"
+                                  class="badge booking-status-badge @(b.Status == BookingStatus.Paid ? "bg-success" : "bg-warning text-dark")">
+                                @(L[$"Booking.Status.{b.Status}"] ?? b.Status.ToString())
+                            </span>
+                        </td>
+                        <td>
+                            <span id="price-@b.Id">@(b.PriceLabel ?? "-")</span>
+                        </td>
+                        <td class="text-end">
+                            <!-- Inline action buttons (nowrap, scrollable if overflow) -->
+                            <div class="d-flex flex-nowrap gap-2 justify-content-end overflow-auto">
+                                <a asp-action="Details" asp-area="Admin" asp-route-id="@b.Id" class="btn btn-sm btn-outline-primary">
+                                    @L["Button.View"]
+                                </a>
+
+                                @if (b.Status != BookingStatus.Paid)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-success ms-1 mark-paid-btn"
+                                            data-id="@b.Id" title="@L["Booking.MarkPaid"]">
+                                        @L["Booking.MarkPaid"]
+                                    </button>
+
+                                    <form asp-action="Delete" method="post" class="d-inline-block ms-1" onsubmit="return confirm('@L["ConfirmAdminDelete"] ?? " Permanently delete this booking?"');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@b.Id" />
+                                        <button type="submit" class="btn btn-sm btn-danger">@(L["Admin.Delete"] ?? "Delete")</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-success ms-1" disabled>@(L["Admin.Paid"] ?? "Paid")</button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Cards for small screens -->
+    <div class="d-md-none">
+        <div class="row g-2">
             @foreach (var b in Model.Bookings)
             {
-                <tr>
-                    <td>@(b.SlotTimes ?? "-")</td>
-                    <td>
-                        <div class="fw-semibold">@(b.StudentName ?? "-")</div>
-                        <div class="small text-muted">@(b.StudentEmail ?? "")</div>
-                        <div class="small text-muted">@(b.StudentPhoneNumber ?? "")</div>
-                    </td>
-                    <td>@(b.TeacherName ?? "-")</td>
-                    <td>
-                        <span class="badge booking-status-badge @(b.Status == BookingStatus.Paid ? "bg-success" : "bg-warning text-dark")" id="badge-@b.Id">
-                            @(L[$"Booking.Status.{b.Status}"] ?? b.Status.ToString())
-                        </span>
-                    </td>
-                    <td>
-                        <span id="price-@b.Id">@(b.PriceLabel ?? "-")</span>
-                    </td>
-                    <td class="text-end">
-                        <a asp-action="Details" asp-area="Admin" asp-route-id="@b.Id" class="btn btn-sm btn-outline-primary">@L["Button.View"]</a>
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2 align-items-start">
+                                <div>
+                                    <div class="small text-muted">@L["Slots.Times"]</div>
+                                    <div class="fw-semibold">@(b.SlotTimes ?? "-")</div>
+                                </div>
 
-                        @if (b.Status != BookingStatus.Paid)
-                        {
-                            <button class="btn btn-sm btn-outline-success ms-1 mark-paid-btn" data-id="@b.Id" title="@L["Booking.MarkPaid"]">@L["Booking.MarkPaid"]</button>
-                            <form asp-action="Delete" method="post" class="d-inline-block ms-1" onsubmit="return confirm('@L["ConfirmAdminDelete"] ?? " Permanently delete this booking?"');">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="id" value="@b.Id" />
-                                <button type="submit" class="btn btn-sm btn-danger">@(L["Admin.Delete"] ?? "Delete")</button>
-                            </form>
-                        }
-                        else
-                        {
-                            <button class="btn btn-sm btn-success ms-1" disabled>@(L["Admin.Paid"] ?? "Paid")</button>
-                        }
-                    </td>
-                </tr>
+                                <div class="text-end">
+                                    <div class="small text-muted">@L["Booking.Status"]</div>
+                                    <div>
+                                        <span id="badge-@b.Id"
+                                              class="badge booking-status-badge @(b.Status == BookingStatus.Paid ? "bg-success" : "bg-warning text-dark")">
+                                            @(L[$"Booking.Status.{b.Status}"] ?? b.Status.ToString())
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <div class="small text-muted">@L["Booking.Student"]</div>
+                                <div class="fw-semibold">@(b.StudentName ?? "-")</div>
+                                <div class="small text-muted">@b.StudentEmail</div>
+                                <div class="small text-muted">@b.StudentPhoneNumber</div>
+                            </div>
+
+                            <div class="mb-2">
+                                <div class="small text-muted">@L["Booking.Teacher"]</div>
+                                <div>@(b.TeacherName ?? "-")</div>
+                            </div>
+
+                            <div>
+                                <div class="small text-muted">@L["Booking.Price"]</div>
+                                <div id="price-@b.Id">@(b.PriceLabel ?? "-")</div>
+                            </div>
+                        </div>
+
+                        <!-- Single-line footer: actions stay inline, scrollable when necessary -->
+                        <div class="card-footer bg-white d-flex flex-nowrap gap-2 overflow-auto">
+                            <a asp-action="Details" asp-area="Admin" asp-route-id="@b.Id" class="btn btn-sm btn-outline-primary">
+                                @L["Button.View"]
+                            </a>
+
+                            @if (b.Status != BookingStatus.Paid)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-success mark-paid-btn" data-id="@b.Id" title="@L["Booking.MarkPaid"]">
+                                    @L["Booking.MarkPaid"]
+                                </button>
+
+                                <form asp-action="Delete" method="post" class="m-0 d-inline-block">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@b.Id" />
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('@L["ConfirmAdminDelete"] ?? " Permanently delete this booking?"');">
+                                        @(L["Admin.Delete"] ?? "Delete")
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-success" disabled>@(L["Admin.Paid"] ?? "Paid")</button>
+                            }
+                        </div>
+                    </div>
+                </div>
             }
-        </tbody>
-    </table>
+        </div>
+    </div>
 
-    <nav aria-label="Page navigation">
-        <ul class="pagination">
+    <!-- Pagination -->
+    <nav aria-label="Page navigation" class="mt-3">
+        <ul class="pagination justify-content-center">
             @{
                 var current = Model.Page;
                 var totalPages = Model.TotalPages;
@@ -161,7 +264,6 @@ else
             function showMessage(msg) {
                 // if you have a toast implementation use it, else fallback to alert
                 try {
-                    // Example: if bootstrap toasts exist in your layout you can push a toast here.
                     alert(msg);
                 } catch (e) {
                     alert(msg);
@@ -172,7 +274,6 @@ else
             async function markPaid(id, btn) {
                 if (!confirm(texts.confirmMarkPaid)) return;
 
-                // ask for optional amount and payment reference (quick prompt UI)
                 var amountRaw = prompt(texts.promptAmount + ":");
                 var amount = null;
                 if (amountRaw !== null && amountRaw.trim() !== '') {
@@ -186,7 +287,6 @@ else
 
                 var payload = { Id: id, Amount: amount, PaymentRef: paymentRef };
 
-                // disable btn
                 btn.disabled = true;
                 btn.classList.add('disabled');
 
@@ -221,7 +321,6 @@ else
                             if (priceEl) priceEl.innerText = data.priceLabel ?? data.price ?? priceEl.innerText;
                         }
 
-                        // replace button: find the btn and replace with disabled Paid button
                         var newBtn = document.createElement('button');
                         newBtn.className = 'btn btn-sm btn-success ms-1';
                         newBtn.disabled = true;
@@ -250,6 +349,7 @@ else
         })();
     </script>
 }
+
 
 
 

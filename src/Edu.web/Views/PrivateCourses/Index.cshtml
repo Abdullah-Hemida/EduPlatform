@@ -11,41 +11,85 @@
     var textAlign = lang == "ar" ? "right" : "left";
 }
 
-<div class="d-flex align-items-center justify-content-between" dir="@dir" style="text-align:@textAlign">
-    <div>
-        <h2 class="mb-2">@L["Nav.Courses"]</h2>
+<!-- Responsive header + filters (Bootstrap only) -->
+<div class="row align-items-center justify-content-between mb-4" dir="@dir" style="text-align:@textAlign">
+
+    <!-- Title -->
+    <div class="col-12 col-md-auto mb-2 mb-md-0">
+        <h2 class="h5 mb-1">@L["Nav.Courses"]</h2>
         <div class="small text-muted">@L["Nav.RecordedCourses"]</div>
     </div>
 
-    <form method="get" class="d-flex flex-row align-items-center gap-2 search-row" style="width:auto">
+    <!-- Filters Form -->
+    <div class="col-12 col-md-8 col-lg-6">
+        <form method="get" asp-controller="YourController" asp-action="YourAction" class="w-100">
 
-        <select name="categoryId" class="form-select form-select-sm" style="min-width:140px;">
-            <option value="">@L["All"]</option>
-            @foreach (var cat in Model.Categories)
-            {
-                <option value="@cat.Id" selected="@(Model.SelectedCategoryId == cat.Id)">
-                    @cat.Name
-                </option>
-            }
-        </select>
+            <!-- Toggle button (only on small screens) -->
+            <div class="d-md-none mb-2">
+                <button class="btn btn-outline-secondary btn-sm w-100" 
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#courseFilters"
+                        aria-expanded="false">
+                    <i class="fas fa-filter me-1"></i> @L["Filters"]
+                </button>
+            </div>
 
-        <input name="q" class="form-control form-control-sm flex-fill"
-               placeholder="@L["Search.Placeholder"]"
-               value="@q" 
-               style="min-width:200px"/>
+            <!-- Collapsible Filters -->
+            <div class="collapse d-md-block" id="courseFilters">
+                <div class="row gx-2 gy-2">
+                    
+                    <!-- Category -->
+                    <div class="col-12 col-sm-auto">
+                        <select name="categoryId" class="form-select form-select-sm">
+                            @foreach (var cat in Model.Categories)
+                            {
+                                var selected = Model.SelectedCategoryId == cat.Id ? "selected" : "";
+                                <option value="@cat.Id" selected="@selected">
+                                    @cat.Name
+                                </option>
+                            }
+                            <option value="">@L["All"]</option>
+                        </select>
+                    </div>
 
-        <!-- Filter: For Children -->
-        <div class="form-check form-check-sm ms-2 d-flex justify-content-between w-100">
-            <input class="form-check-input" type="checkbox" name="forChildren" value="true"
-                   @(Model.ForChildrenOnly == true ? "checked" : "") />
-            <label class="form-check-label me-2">
-                 @L["Teacher.ForChildren"]
-            </label>
-        </div>
+                    <!-- Search -->
+                    <div class="col-12 col-sm">
+                        <input name="q"
+                               class="form-control form-control-sm"
+                               placeholder="@L["Search.Placeholder"]"
+                               value="@q" />
+                    </div>
 
-        <button type="submit" class="btn btn-primary btn-sm">@L["button.Search"]</button>
-    </form>
+                    <!-- Children Checkbox -->
+                    <div class="col-auto">
+                        <div class="form-check mt-1">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="forChildren"
+                                   name="forChildren"
+                                   value="true"
+                                   @(Model.ForChildrenOnly == true ? "checked" : "")/>
+                            <label class="form-check-label small" for="forChildren">
+                                @L["Teacher.ForChildren"]
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Search Button -->
+                    <div class="col-12 col-sm-auto">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            @L["button.Search"]
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+        </form>
+    </div>
 </div>
+
 
 @if (!Model.Courses.Any())
 {
@@ -88,11 +132,23 @@ else
                         <div class="mt-auto">
                             <div class="d-flex align-items-center justify-content-between gap-2">
                                 <div class="fw-semibold">@c.PriceLabel</div>
-                                <a class="btn btn-outline-primary btn-sm"
-                                   asp-action="Details"
-                                   asp-route-id="@c.Id">
-                                    @L["View"]
-                                </a>
+
+                                @if (User.Identity?.IsAuthenticated ?? true)
+                                {
+                                    <a class="btn btn-outline-primary btn-sm"
+                                       asp-action="Details"
+                                       asp-route-id="@c.Id">
+                                        @L["View"]
+                                    </a>
+                                }
+                                else
+                                {
+                                    <!-- anonymous: go to Identity Register page and include returnUrl back to course details -->
+                                    <a class="btn btn-primary btn-sm px-1 py-1 fw-semibold rounded-pill shadow-sm"
+                                       href="/Identity/Account/Register">
+                                        @L["Button.View"]
+                                    </a>
+                                }
                             </div>
                         </div>
 

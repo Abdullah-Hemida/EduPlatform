@@ -1,39 +1,119 @@
 ﻿@model List<Edu.Domain.Entities.SocialLink>
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@{
 
-}
+<!-- Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3 mt-2">
+    <h2 class="m-0">@L["Admin.SocialLinks"]</h2>
 
-<h2>@L["Admin.SocialLinks"]</h2>
-<p>
-    <a asp-action="Create" class="btn btn-primary">@L["Admin.Create"] <i class="fas fa-plus-circle ms-1"></i></a>
-</p>
+    <a asp-action="Create" class="btn btn-primary text-nowrap px-4">
+        @L["Admin.Create"] <i class="fas fa-plus-circle ms-1"></i>
+    </a>
+</div>
 
-<table class="table">
-    <thead>
-        <tr>
-            <th>@L["Admin.Order"]</th>
-            <th>@L["Admin.Provider"]</th>
-            <th>@L["Admin.Url"]</th>
-            <th>@L["Admin.Visible"]</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var s in Model)
-        {
+<!-- Table for md+ screens -->
+<div class="table-responsive d-none d-md-block">
+    <table class="table table-striped align-middle mb-0">
+        <thead class="table-light small">
             <tr>
-                <td>@s.Order</td>
-                <td>@s.Provider</td>
-                <td>@s.Url</td>
-                <td>@(s.IsVisible? L["Common.Yes"] : L["Common.No"])</td>
-                <td>
-                    <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary">@L["Admin.Edit"]</a>
-                    <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">@L["Admin.Delete"]</a>
-                </td>
+                <th style="width:80px;">@L["Admin.Order"]</th>
+                <th>@L["Admin.Provider"]</th>
+                <th>@L["Admin.Url"]</th>
+                <th style="width:100px;">@L["Admin.Visible"]</th>
+                <th style="width:170px;" class="text-end">@L["Admin.Actions"]</th>
             </tr>
-        }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @if (!Model.Any())
+            {
+                <tr>
+                    <td colspan="5" class="text-center py-3 small text-muted">
+                        @L["Admin.NoRecords"]
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var s in Model)
+                {
+                    <tr>
+                        <td>@s.Order</td>
+                        <td>@s.Provider</td>
+                        <td>
+                            <a href="@s.Url" target="_blank" class="text-decoration-none">
+                                @s.Url
+                            </a>
+                        </td>
+                        <td>
+                            @(s.IsVisible? L["Common.Yes"] : L["Common.No"])
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary me-1">
+                                @L["Admin.Edit"]
+                            </a>
+                            <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">
+                                @L["Admin.Delete"]
+                            </a>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Cards for mobile screens -->
+<div class="d-md-none">
+    @if (!Model.Any())
+    {
+        <div class="text-center small text-muted py-3">@L["Admin.NoRecords"]</div>
+    }
+    else
+    {
+        <div class="row g-2">
+            @foreach (var s in Model)
+            {
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+
+                            <div class="d-flex justify-content-between mb-2">
+                                <div>
+                                    <div class="small text-muted">@L["Admin.Order"]</div>
+                                    <div class="fw-semibold">@s.Order</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted">@L["Admin.Provider"]</div>
+                                    <div class="fw-semibold">@s.Provider</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <div class="small text-muted">@L["Admin.Url"]</div>
+                                <a href="@s.Url" class="text-decoration-none" target="_blank">
+                                    @s.Url
+                                </a>
+                            </div>
+
+                            <div>
+                                <div class="small text-muted">@L["Admin.Visible"]</div>
+                                <div>@(s.IsVisible? L["Common.Yes"] : L["Common.No"])</div>
+                            </div>
+                        </div>
+
+                        <div class="card-footer bg-white d-flex justify-content-end gap-2">
+                            <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary">
+                                @L["Admin.Edit"]
+                            </a>
+                            <a asp-action="Delete" asp-route-id="@s.Id" class="btn btn-sm btn-outline-danger">
+                                @L["Admin.Delete"]
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
 
 

@@ -10,20 +10,20 @@
     var textAlign = lang == "ar" ? "right" : "left";
 }
 
-<div class="pt-0" dir="@dir" style="text-align:@textAlign">   
-        <div class="d-flex align-items-center mb-4">
-            <div>
-                <h1 class="h3 mb-2">@L["Nav.Teachers"]</h1>
-                <div class="small text-muted">@(L["Teachers.Subtitle"] ?? "Browse our teachers and their courses")</div>
-            </div>
-
-            <div class="ms-auto d-flex gap-2 align-items-center">
-                <form method="get" class="d-flex" asp-controller="Teachers" asp-action="Index">
-                    <input name="q" value="@Model.Query" class="form-control form-control-sm" style="width:350px" placeholder="@L["Search.Placeholder"]" />
-                    <button class="btn btn-primary btn-sm ms-2">@L["button.Search"]</button>
-                </form>
-            </div>
+<div class="pt-0" dir="@dir" style="text-align:@textAlign">
+    <div class="row align-items-center mb-4">
+        <div class="col-md-6 col-12 mb-3 mb-md-0">
+            <h1 class="h3 mb-2">@L["Nav.Teachers"]</h1>
+            <div class="small text-muted">@(L["Teachers.Subtitle"] ?? "Browse our teachers and their courses")</div>
         </div>
+
+        <div class="col-md-6 col-12">
+            <form method="get" class="d-flex gap-2" asp-controller="Teachers" asp-action="Index">
+                <input name="q" value="@Model.Query" class="form-control form-control-sm flex-grow-1" placeholder="@L["Search.Placeholder"]" />
+                <button class="btn btn-primary btn-sm flex-shrink-0">@L["button.Search"]</button>
+            </form>
+        </div>
+    </div>
 
         @if (!Model.Teachers.Any())
         {
@@ -47,7 +47,6 @@
                                 <img src="@(t.PhotoUrl ?? "uploads/images/default-avatar.jpg")"
                                      class="card-img-top teacher-photo"
                                      alt="@t.FullName" />
-
                             </div>
 
                             <!-- Info section -->
@@ -80,7 +79,7 @@
                                 <!-- Button -->
                                 <div class="mt-auto">
                                     <a asp-action="Details" asp-controller="Teachers" asp-route-id="@t.Id"
-                                       class="btn btn-primary btn-sm rounded-pill px-4">
+                                       class="btn btn-primary btn-sm rounded-pill d-block px-4">
                                         <i class="bi bi-person-lines-fill me-1"></i>@(L["View"] ?? "View")
                                     </a>
                                 </div>

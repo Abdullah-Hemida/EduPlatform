@@ -265,7 +265,7 @@ body {
 
 /*the teacher car*/
 .teacher-photo {
-    height: 240px;
+    height: 150px;
     width: 100%;
     object-fit: cover;
     border-top-left-radius: 0.5rem;
@@ -340,11 +340,11 @@ body {
 }
 
 
-
-
-
  /*new dynamic*/
 /* --- Section visuals --- */
+/* =========================
+   Home sections: base rules
+   ========================= */
 .home-section {
     padding: 4rem 0;
 }
@@ -367,7 +367,7 @@ body {
         margin-right: auto;
     }
 
-    /* section layout */
+    /* section layout (keeps your flex fallback for older browsers) */
     .home-section .section-inner {
         display: flex;
         gap: 2rem;
@@ -375,42 +375,50 @@ body {
         flex-wrap: wrap;
     }
 
-    /* media */
-    .home-section .section-media {
-        flex: 1 1 48%;
-        min-width: 280px;
-    }
-
-        .home-section .section-media img {
-            width: 100%;
-            height: 100%;
-            max-height: 420px;
-            object-fit: cover;
-            border-radius: 12px;
-            box-shadow: 0 8px 18px rgba(18, 24, 30, .08);
-        }
-
-    /* section body */
-    .home-section .section-body {
-        flex: 1 1 48%;
-        min-width: 280px;
-    }
-
-/* --- Items: default (used when section has an image) --- */
-.home-items {
-    display: grid;
-    grid-template-columns: repeat(1, 1fr);
-    gap: 0.9rem;
+/* Explicit utility when we want the row to stretch children (applied from Razor as class) */
+.section-inner.align-items-stretch {
+    align-items: stretch !important;
 }
 
-/* tablet+ */
+/* media */
+.home-section .section-media {
+    flex: 1 1 48%;
+    min-width: 280px;
+}
+
+    .home-section .section-media img {
+        width: 100%;
+        height: 100%;
+        max-height: 420px;
+        object-fit: cover;
+        border-radius: 12px;
+        box-shadow: 0 8px 18px rgba(18, 24, 30, .08);
+        display: block;
+    }
+
+/* section body */
+.home-section .section-body {
+    flex: 1 1 48%;
+    min-width: 280px;
+}
+
+/* =========================
+   Items: default (section WITH image)
+   ========================= */
+.home-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+/* tablet+ force 2 columns for nicer look (keeps original intent) */
 @media (min-width: 768px) {
     .home-items {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 
-/* default card-style for items when section HAS image (horizontal card) */
+/* default card-style for items when section HAS image (horizontal card look) */
 .home-item {
     display: flex;
     gap: 1rem;
@@ -423,34 +431,42 @@ body {
     border: none; /* using Bootstrap .card but keep subtle */
 }
 
-    .home-item:hover {
-        transform: translateY(-6px);
-        box-shadow: 0 18px 40px rgba(18,24,30,.07);
-    }
+.object-fit-cover {
+    object-fit: cover;
+    height: 100%;
+    display: block;
+}
 
-    /* small thumb in horizontal mode */
-    .home-item .thumb {
-        width: 96px;
-        height: 64px;
-        object-fit: cover;
-        border-radius: 8px;
-        flex-shrink: 0;
-        background: #f3f4f6;
-    }
+.home-item:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 18px 40px rgba(18,24,30,.07);
+}
 
-    /* meta text */
-    .home-item .meta .item-text {
-        margin-bottom: .4rem;
-        line-height: 1.35;
-        color: #1f2937;
-    }
+/* small thumb in horizontal mode */
+.home-item .thumb {
+    width: 96px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+    background: #f3f4f6;
+}
 
-    .home-item .meta .read-more {
-        font-size: .85rem;
-        font-weight: 600;
-    }
+/* meta text */
+.home-item .meta .item-text {
+    margin-bottom: .4rem;
+    line-height: 1.35;
+    color: #1f2937;
+}
 
-/* --- Items layout WHEN section has NO main image --- */
+.home-item .meta .read-more {
+    font-size: .85rem;
+    font-weight: 600;
+}
+
+/* =========================
+   Items layout WHEN section has NO main image
+   ========================= */
 /* Marker class .no-section-image changes layout to a responsive grid of cards */
 .home-items.no-section-image {
     display: grid;
@@ -475,7 +491,7 @@ body {
     /* image wrapper to keep consistent aspect ratio */
     .home-items.no-section-image .item-thumb-wrap {
         width: 100%;
-        aspect-ratio: 16/9; /* modern browsers */
+        aspect-ratio: 16 / 9;
         overflow: hidden;
         background: #f7fafc;
     }
@@ -508,9 +524,90 @@ body {
         align-self: start;
     }
 
-/* alternating section background */
-.home-section.alt {
-    background: linear-gradient(180deg, rgba(247,250,252,1) 0%, rgba(255,255,255,1) 100%);
+/* =========================
+   Single-item behaviour (new)
+   - when a section contains exactly one item we want:
+     * the item to take full width of the items column
+     * the item card to stretch to match the sibling media height (when media exists)
+   ========================= */
+
+/* marker added by Razor: .single-item on .home-items */
+.home-items.single-item {
+    display: flex; /* make it a flex column to control width */
+    flex-direction: column;
+    gap: 1rem;
+}
+
+    /* Make the single card fill the column and be a vertical flex container */
+    .home-items.single-item .home-item {
+        width: 100%;
+        max-width: 100%;
+        /* Don't force height here — let content size it naturally on small screens */
+        height: auto;
+        min-height: 180px; /* reasonable visual minimum */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+        /* Ensure the card-body grows so content flows and read-more sits at bottom */
+        .home-items.single-item .home-item .card-body,
+        .home-items.single-item .home-item .meta {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+        }
+
+@media (min-width: 768px) {
+    .section-inner.align-items-stretch {
+        align-items: stretch !important;
+    }
+
+        .section-inner.align-items-stretch > .section-media,
+        .section-inner.align-items-stretch > .section-body {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+            /* allow the .home-items container to expand to fill the column height */
+            .section-inner.align-items-stretch > .section-body .home-items.single-item {
+                flex: 1 1 auto;
+                display: flex;
+                flex-direction: column;
+            }
+
+                /* Now allow the single card to stretch to match sibling image height */
+                .section-inner.align-items-stretch > .section-body .home-items.single-item .home-item {
+                    height: 100%;
+                    min-height: 0; /* let the sibling image drive height */
+                }
+
+            /* ensure the media image fills its column height */
+            .section-inner.align-items-stretch > .section-media img {
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
+}
+/* Defensive: make sure thumb/image aspect in horizontal mode stays reasonable */
+.home-item .thumb {
+    width: 96px;
+    height: 64px;
+    object-fit: cover;
+}
+
+/* Optional: reduce extreme vertical growth if some content is very long */
+.home-items.single-item .home-item .item-text {
+    overflow: auto;
+    max-height: 60vh; /* prevents ridiculously tall single card on very narrow screens */
+    /* remove or reduce if you prefer full scrollable text */
+}
+
+/* Preserve visual consistency for cards */
+.home-item.card {
+    border: 1px solid rgba(0,0,0,0.06);
+    background: #fff;
 }
 
 /* RTL adjustments */
@@ -527,7 +624,7 @@ body {
         margin-right: .75rem;
     }
 
-/* responsive tweaks */
+/* Responsive tweaks */
 @media (max-width: 575px) {
     .home-section {
         padding: 2.25rem 0;
@@ -536,7 +633,13 @@ body {
         .home-section .section-title {
             font-size: 1.5rem;
         }
+
+    /* small spacing tweak for items */
+    .home-items {
+        gap: .5rem;
+    }
 }
+
 
 /* 1) Force navbar items to stay centered and not wrap */
 nav#header .navbar-collapse,

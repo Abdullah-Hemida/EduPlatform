@@ -104,8 +104,26 @@
                                                 
                                                 <div class="mt-auto d-flex align-items-center justify-content-between">
                                                     <div class="small text-muted">@rc.MonthsCount @(L["Teachers.Months"] ?? "months")</div>
-                                                    <div class="text-end">                                                      
-                                                        <a asp-area="Student" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@rc.Id" class="btn btn-sm btn-outline-primary ms-2">@L["Button.View"]</a>
+                                                    <div class="text-end">
+                                                        @if (User.Identity?.IsAuthenticated ?? true)
+                                                        {
+                                                            <!-- logged-in: go to course details -->
+                                                            <a asp-area="Student"
+                                                               asp-controller="ReactiveCourses"
+                                                               asp-action="Details"
+                                                               asp-route-id="@rc.Id"
+                                                               class="btn btn-sm btn-outline-primary ms-2">
+                                                                @L["Button.View"]
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <!-- anonymous: go to Identity Register page and include returnUrl back to course details -->
+                                                            <a class="btn btn-primary btn-sm px-3 py-2 fw-semibold rounded-pill shadow-sm"
+                                                               href="/Identity/Account/Register">
+                                                                @L["Button.View"]
+                                                            </a>
+                                                        }
                                                     </div>
                                                 </div>
                                             </div>
@@ -144,7 +162,19 @@
                                                 <div class="small text-muted mb-2">@pc.Description</div>
                                                 <div class="mt-auto d-flex align-items-center justify-content-between">
                                                     <div class="small text-muted">@pc.PriceLabel</div>
-                                                    <a class="btn btn-outline-primary btn-sm" asp-area="" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@pc.Id">@L["View"]</a>
+
+                                                    @if (User.Identity?.IsAuthenticated ?? true)
+                                                    {
+                                                        <a class="btn btn-outline-primary btn-sm" asp-area="" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@pc.Id">@L["View"]</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <!-- anonymous: go to Identity Register page and include returnUrl back to course details -->
+                                                        <a class="btn btn-primary btn-sm px-1 py-1 fw-semibold rounded-pill shadow-sm"
+                                                           href="/Identity/Account/Register">
+                                                            @L["Button.View"]
+                                                        </a>
+                                                    }
                                                 </div>
                                             </div>
                                         </div>
@@ -217,8 +247,9 @@
                                             }
                                             else
                                             {
-                                                <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Create", "Bookings", new { area = "Student", slotId = s.Id })">
-                                                    <i class="bi bi-calendar-plus me-1"></i> @(L["Booking.Request"] ?? "Request")
+                                                <a class="btn btn-primary btn-sm fw-semibold rounded-pill shadow-sm"
+                                                   href="/Identity/Account/Register">
+                                                    <i class="bi bi-calendar-plus me-1"></i> @(L["Teachers.BookSession"] ?? "Book")
                                                 </a>
                                             }
                                         </div>
