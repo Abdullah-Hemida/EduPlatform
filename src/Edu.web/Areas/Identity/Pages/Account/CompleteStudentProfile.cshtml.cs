@@ -78,9 +78,7 @@ namespace Edu.Web.Areas.Identity.Pages.Account
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
-            {
                 return RedirectToPage("/Account/Login", new { area = "Identity" });
-            }
 
             if (!ModelState.IsValid)
             {
@@ -98,32 +96,63 @@ namespace Edu.Web.Areas.Identity.Pages.Account
                     return Page();
                 }
 
-                // 🔥 delete old file (if any)
+                // delete old file (if any)
                 if (!string.IsNullOrWhiteSpace(user.PhotoStorageKey))
                     await _files.DeleteFileAsync(user.PhotoStorageKey);
-
-                // fallback delete for old system
                 else if (!string.IsNullOrWhiteSpace(user.PhotoUrl))
                     await _files.DeleteFileAsync(user.PhotoUrl);
 
-                // 🔥 save new file via storage service
+                // save new file via storage service
                 var newKey = await _files.SaveFileAsync(Photo, $"users/{user.Id}");
+
+                // defensive: make sure SaveFileAsync returned something meaningful
+                if (string.IsNullOrWhiteSpace(newKey))
+                {
+                    _logger.LogError("SaveFileAsync returned empty key for user {UserId}", user.Id);
+                    ModelState.AddModelError("Photo", _localizer["FileSaveFailed"] ?? "Failed to save file");
+                    await OnGetAsync();
+                    return Page();
+                }
+
+                // assign key — this must be the storage KEY (not the public URL).
                 user.PhotoStorageKey = newKey;
-                user.PhotoUrl = null; // drop old system
+                user.PhotoUrl = null;
             }
 
             // OTHER FIELDS
             user.FullName = Input.FullName;
             user.DateOfBirth = Input.DateOfBirth;
 
+            // Prefer SetPhoneNumberAsync (if you want the built-in phone handling).
             var phoneRes = await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber ?? "");
+            if (!phoneRes.Succeeded)
+            {
+                ModelState.AddModelError("", "Failed to update phone number");
+                await OnGetAsync();
+                return Page();
+            }
 
+            // Persist user changes
             var updRes = await _userManager.UpdateAsync(user);
             if (!updRes.Succeeded)
             {
+                _logger.LogError("Failed to update user {UserId}: {Errors}", user.Id,
+                    string.Join(" | ", updRes.Errors.Select(e => e.Description)));
                 ModelState.AddModelError("", "Failed to update profile");
                 await OnGetAsync();
                 return Page();
+            }
+
+            // IMPORTANT: reload user in the DbContext we injected to avoid stale-tracking overwrites
+            try
+            {
+                // this will ensure the injected _db context has the latest values for this user
+                await _db.Entry(user).ReloadAsync();
+            }
+            catch (Exception ex)
+            {
+                // not fatal, but helpful for debugging if reload fails
+                _logger.LogWarning(ex, "Failed to reload user entity into injected DbContext after update for {UserId}", user.Id);
             }
 
             // ensure student exists
@@ -136,7 +165,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             }
 
             await _signInManager.RefreshSignInAsync(user);
-
             TempData["ProfileSaved"] = _localizer["ProfileSaved"] ?? "Profile saved";
             return RedirectToAction("Index", "Home", new { area = "" });
         }

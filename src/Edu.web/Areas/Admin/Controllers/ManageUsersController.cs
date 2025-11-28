@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Edu.Web.Resources;
 using Edu.Infrastructure.Services;
+using Edu.Application.IServices;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -23,12 +24,13 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly IWebHostEnvironment _env;
         private readonly IStringLocalizer<SharedResource> _localizer;
         private readonly IEmailSender _emailSender;
+        private readonly IFileStorageService _fileServic;
 
         public ManageUsersController(
             UserManager<ApplicationUser> userManager,
             ApplicationDbContext db,
             ILogger<ManageUsersController> logger,
-            IWebHostEnvironment env, IStringLocalizer<SharedResource> localizer, IEmailSender emailSender)
+            IWebHostEnvironment env, IStringLocalizer<SharedResource> localizer, IEmailSender emailSender,IFileStorageService fileStorage)
         {
             _userManager = userManager;
             _db = db;
@@ -36,10 +38,12 @@ namespace Edu.Web.Areas.Admin.Controllers
             _env = env;
             _localizer = localizer;
             _emailSender = emailSender;
+            _fileServic = fileStorage;
         }
 
         // GET: Admin/ManageUsers
         // Server-rendered listing with filters, search and pagination
+        // GET: Admin/ManageUsers
         public async Task<IActionResult> Index(
             string role = "All",
             bool showDeleted = false,
@@ -47,47 +51,51 @@ namespace Edu.Web.Areas.Admin.Controllers
             int pageIndex = 1,
             int pageSize = 20)
         {
-            // compute counts
-            var total = await _userManager.Users.CountAsync();
+            if (pageIndex < 1) pageIndex = 1;
 
-            var roles = await _db.Roles.AsNoTracking().ToListAsync();
-            var userRoles = _db.Set<IdentityUserRole<string>>().AsNoTracking();
+            // 1) Get total users count (simple scalar)
+            var total = await _db.Users.AsNoTracking().CountAsync();
 
-            int adminCount = 0, teacherCount = 0, studentCount = 0;
-            var roleMap = roles.ToDictionary(r => r.Name, r => r.Id, StringComparer.OrdinalIgnoreCase);
+            // 2) Fetch roles together with counts in a single DB query (reduces round trips)
+            var rolesWithCounts = await (from r in _db.Roles.AsNoTracking()
+                                         join ur in _db.Set<IdentityUserRole<string>>().AsNoTracking()
+                                             on r.Id equals ur.RoleId into g
+                                         select new
+                                         {
+                                             r.Id,
+                                             r.Name,
+                                             Count = g.Count()
+                                         }).ToListAsync();
 
-            if (roleMap.TryGetValue("Admin", out var adminRoleId))
-                adminCount = await userRoles.CountAsync(ur => ur.RoleId == adminRoleId);
+            // Build map name->id and counts for Admin/Teacher/Student quickly
+            var roleMap = rolesWithCounts.ToDictionary(x => x.Name, x => x.Id, StringComparer.OrdinalIgnoreCase);
+            int adminCount = rolesWithCounts.FirstOrDefault(r => r.Name.Equals("Admin", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            int teacherCount = rolesWithCounts.FirstOrDefault(r => r.Name.Equals("Teacher", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            int studentCount = rolesWithCounts.FirstOrDefault(r => r.Name.Equals("Student", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 
-            if (roleMap.TryGetValue("Teacher", out var teacherRoleId))
-                teacherCount = await userRoles.CountAsync(ur => ur.RoleId == teacherRoleId);
+            // 3) Base query: project only needed fields (minimizes data transferred)
+            IQueryable<ApplicationUser> baseQuery = _db.Users.AsNoTracking()
+                .Select(u => new ApplicationUser
+                {
+                    Id = u.Id,
+                    FullName = u.FullName,
+                    UserName = u.UserName,
+                    Email = u.Email,
+                    PhotoStorageKey = u.PhotoStorageKey,
+                    PhoneNumber = u.PhoneNumber,
+                    IsDeleted = u.IsDeleted
+                });
 
-            if (roleMap.TryGetValue("Student", out var studentRoleId))
-                studentCount = await userRoles.CountAsync(ur => ur.RoleId == studentRoleId);
+            // 4) Filter by soft-delete
+            baseQuery = showDeleted ? baseQuery.Where(u => u.IsDeleted) : baseQuery.Where(u => !u.IsDeleted);
 
-            // base query
-            IQueryable<ApplicationUser> query = _userManager.Users.AsNoTracking();
-
-            // filter by deletion state
-            if (showDeleted)
-                query = query.Where(u => u.IsDeleted);
-            else
-                query = query.Where(u => !u.IsDeleted);
-
-            // role filter (if provided and not All)
+            // 5) Role filter: use subquery on userroles (EF will translate to SQL IN (subquery))
             if (!string.IsNullOrEmpty(role) && !role.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
-                var roleEntity = await _db.Roles.AsNoTracking().FirstOrDefaultAsync(r => r.Name == role);
-                if (roleEntity != null)
+                var roleEntity = rolesWithCounts.FirstOrDefault(r => r.Name.Equals(role, StringComparison.OrdinalIgnoreCase));
+                if (roleEntity == null)
                 {
-                    var userIdsInRole = _db.Set<IdentityUserRole<string>>()
-                                           .Where(ur => ur.RoleId == roleEntity.Id)
-                                           .Select(ur => ur.UserId);
-                    query = query.Where(u => userIdsInRole.Contains(u.Id));
-                }
-                else
-                {
-                    // role not found -> return empty page
+                    // Role doesn't exist -> return empty VM
                     var emptyVm = new UserIndexViewModel
                     {
                         TotalCount = total,
@@ -101,68 +109,95 @@ namespace Edu.Web.Areas.Admin.Controllers
                         PageSize = pageSize,
                         Items = new PaginatedList<UserRowViewModel>(new List<UserRowViewModel>(), 0, pageIndex, pageSize)
                     };
-
                     ViewData["ActivePage"] = "Users";
                     ViewData["Title"] = "Users";
                     return View(emptyVm);
                 }
+
+                var roleId = roleEntity.Id;
+                var userIdsInRoleQuery = _db.Set<IdentityUserRole<string>>()
+                                             .AsNoTracking()
+                                             .Where(ur => ur.RoleId == roleId)
+                                             .Select(ur => ur.UserId);
+
+                baseQuery = baseQuery.Where(u => userIdsInRoleQuery.Contains(u.Id));
             }
 
-            // search fields — FullName, UserName, PhoneNumber
+            // 6) Search (FullName, UserName, PhoneNumber) - ensure database-side filtering
             if (!string.IsNullOrWhiteSpace(search))
             {
-                query = query.Where(u =>
-                    (u.FullName ?? "").Contains(search) ||
-                    (u.UserName ?? "").Contains(search) ||
-                    ((u.PhoneNumber ?? "").Contains(search))
-                );
+                // Use trimmed search
+                var s = search.Trim();
+                baseQuery = baseQuery.Where(u =>
+                    (u.FullName ?? "").Contains(s) ||
+                    (u.UserName ?? "").Contains(s) ||
+                    (u.PhoneNumber ?? "").Contains(s));
             }
 
-            var ordered = query.OrderBy(u => u.FullName);
-            var totalFiltered = await ordered.CountAsync();
+            // 7) Compute totalFiltered before paging
+            var totalFiltered = await baseQuery.CountAsync();
 
-            // apply paging
-            if (pageIndex < 1) pageIndex = 1;
-            var page = await ordered.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync();
-            var ids = page.Select(u => u.Id).ToList();
+            // 8) Fetch the page (order by FullName). Keep projection minimal to avoid pulling navigation properties.
+            var pageUsers = await baseQuery
+                .OrderBy(u => u.FullName)
+                .Skip((pageIndex - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
-            // roles for page users
-            var rolesMap = await (from ur in _db.Set<IdentityUserRole<string>>()
-                                  join r in _db.Roles on ur.RoleId equals r.Id
+            var ids = pageUsers.Select(u => u.Id).ToList();
+
+            // 9) Fetch roles for the page users in one join query
+            var rolesMap = await (from ur in _db.Set<IdentityUserRole<string>>().AsNoTracking()
+                                  join r in _db.Roles.AsNoTracking() on ur.RoleId equals r.Id
                                   where ids.Contains(ur.UserId)
                                   select new { ur.UserId, r.Name })
                                   .ToListAsync();
 
-            var rolesByUser = rolesMap.GroupBy(x => x.UserId).ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.Name)));
-            // after you fetched ids for page
+            var rolesByUser = rolesMap
+                .GroupBy(x => x.UserId)
+                .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.Name)));
+
+            // 10) Fetch student flags in one query
             var studentFlags = await _db.Students
+                .AsNoTracking()
                 .Where(s => ids.Contains(s.Id))
                 .Select(s => new { s.Id, s.IsAllowed })
                 .ToListAsync();
 
             var studentAllowedByUser = studentFlags.ToDictionary(s => s.Id, s => s.IsAllowed);
-            // teacher status if exists
+
+            // 11) Fetch teacher status in one query
             var teachers = await _db.Teachers
-                                    .Where(t => ids.Contains(t.Id))
-                                    .Select(t => new { t.Id, t.Status })
-                                    .ToListAsync();
+                .AsNoTracking()
+                .Where(t => ids.Contains(t.Id))
+                .Select(t => new { t.Id, t.Status })
+                .ToListAsync();
+
             var teacherStatusByUser = teachers.ToDictionary(t => t.Id, t => t.Status.ToString());
 
-            var rows = page.Select(u => new UserRowViewModel
+            // 12) Resolve public URLs for photos in parallel (external I/O) - do these outside of EF work
+            var keys = pageUsers.Select(u => u.PhotoStorageKey).ToArray();
+            var urlTasks = pageUsers.Select(u => _fileServic.GetPublicUrlAsync(u.PhotoStorageKey)).ToArray();
+
+            var urls = await Task.WhenAll(urlTasks); // run all storage lookups concurrently
+
+            // 13) Build row view models synchronously using the already-fetched urls and maps
+            var rowsList = pageUsers.Select((u, idx) => new UserRowViewModel
             {
                 Id = u.Id,
-                FullName = u.FullName ?? u.UserName ?? "",
-                Email = u.Email ?? "",
-                PhotoUrl = u.PhotoUrl,
+                FullName = u.FullName ?? u.UserName ?? string.Empty,
+                Email = u.Email ?? string.Empty,
+                PhotoUrl = urls[idx],
                 PhoneNumber = u.PhoneNumber,
                 Roles = rolesByUser.TryGetValue(u.Id, out var r) ? r : string.Empty,
                 TeacherStatus = teacherStatusByUser.TryGetValue(u.Id, out var ts) ? ts : string.Empty,
                 IsAllowed = studentAllowedByUser.TryGetValue(u.Id, out var allowed) ? allowed : (bool?)null
             }).ToList();
 
+            // 14) Create paged list
+            var paged = new PaginatedList<UserRowViewModel>(rowsList, totalFiltered, pageIndex, pageSize);
 
-            var paged = new PaginatedList<UserRowViewModel>(rows, totalFiltered, pageIndex, pageSize);
-
+            // 15) Build VM
             var vm = new UserIndexViewModel
             {
                 TotalCount = total,
@@ -177,13 +212,10 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Items = paged
             };
 
-            // pass any TempData messages to view through ViewData (view reads TempData directly is fine too)
             ViewData["ActivePage"] = "Users";
             ViewData["Title"] = "Users";
             return View(vm);
         }
-
-        
 
         // GET: Admin/ManageUsers/Details/{id}
         public async Task<IActionResult> Details(string id)

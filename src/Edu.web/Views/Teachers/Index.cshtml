@@ -36,7 +36,7 @@
             <div class="row g-4">
                 @foreach (var t in Model.Teachers)
                 {
-                    <div class="col-12 col-md-6 col-lg-4">
+                    <div class="col-12 col-md-4 col-lg-3">
                         <div class="card border-0 shadow-sm teacher-card h-100"
                              role="link" tabindex="0"
                              data-href="@Url.Action("Details", "Teachers", new { id = t.Id })"
