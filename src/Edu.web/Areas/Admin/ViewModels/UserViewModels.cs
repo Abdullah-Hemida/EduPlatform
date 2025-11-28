@@ -39,6 +39,7 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? Email { get; set; }
         public string? PhoneNumber { get; set; }
         public DateTime? DateOfBirth { get; set; }
+        public string? PhotoStorageKey { get; set; }
         public string? PhotoUrl { get; set; }
         public IList<string> Roles { get; set; } = new List<string>();
 

@@ -724,6 +724,7 @@
   "Teacher.BookingRequested": "Booking requests",
   "Teacher.PaidMonths": "Monthly payments",
   "Teacher.EnrolledAt": "request date",
+  "Teacher.ForAdults": "For adults",
   "ReactiveCourse.MyReactiveCourses": "My Reactive Courses",
   "ReactiveCourse.CreateCourse": "Create Course",
   "ReactiveCourse.CreateReactiveCourse": "Create Reactive Course",

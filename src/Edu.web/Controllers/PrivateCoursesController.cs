@@ -59,9 +59,10 @@ namespace Edu.Web.Controllers
                 );
             }
 
-            // Filter: For Children Only
-            if (forChildren == true)
-                query = query.Where(c => c.IsForChildren);
+            if (forChildren.HasValue)
+            {
+                query = query.Where(c => c.IsForChildren == forChildren.Value);
+            }
 
             // Pagination
             int totalCourses = await query.CountAsync();

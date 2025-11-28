@@ -49,7 +49,16 @@
                     <input asp-for="Price" class="form-control form-control-sm" />
                     <span asp-validation-for="Price" class="text-danger small"></span>
                 </div>
-
+                <!-- IsForChildren (checkbox) -->
+                <div class="col-md-6 d-flex align-items-center">
+                    <div class="form-check">
+                        <input asp-for="IsForChildren" class="form-check-input" type="checkbox" id="IsForChildren" />
+                        <label class="form-check-label small" for="IsForChildren">
+                            @L["Teacher.ForChildren"]
+                        </label>
+                    </div>
+                    <span asp-validation-for="IsForChildren" class="text-danger small ms-2"></span>
+                </div>
                 <div class="col-12 text-end">
                     <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-outline-secondary btn-sm me-2">@L["Button.Cancel"]</a>
                     <button type="submit" class="btn btn-primary btn-sm">@L["Button.Save"]</button>

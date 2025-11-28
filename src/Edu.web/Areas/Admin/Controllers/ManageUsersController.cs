@@ -236,12 +236,19 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Email = user.Email,
                 PhoneNumber = user.PhoneNumber,
                 DateOfBirth = user.DateOfBirth,
-                PhotoUrl = user.PhotoUrl,
+                PhotoStorageKey = user.PhotoStorageKey,
                 Roles = roles,
                 Teacher = teacher,
                 Student = student,
                 StudentIsAllowed = student?.IsAllowed
             };
+            if (!String.IsNullOrEmpty(user.PhotoStorageKey))
+            {
+                vm.PhotoUrl = await _fileServic.GetPublicUrlAsync(user.PhotoStorageKey);
+            } else
+            {
+                vm.PhotoUrl = null;
+            }
 
             ViewData["Title"] = "User details";
             ViewData["ActivePage"] = "Users";

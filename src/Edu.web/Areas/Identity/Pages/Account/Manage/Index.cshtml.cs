@@ -81,9 +81,8 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 PhoneNumber = phone,
                 DateOfBirth = user.DateOfBirth,
                 PhotoStorageKey = user.PhotoStorageKey,
-                PhotoUrl = await _files.GetPublicUrlAsync(user.PhotoStorageKey)
             };
-
+            Input.PhotoUrl = await _files.GetPublicUrlAsync(user.PhotoStorageKey);
             // Load teacher-specific data
             if (await _userManager.IsInRoleAsync(user, "Teacher"))
             {
@@ -99,7 +98,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                     ViewData["IntroVideoEmbedUrl"] = GetYouTubeEmbedUrl(teacher.IntroVideoUrl);
                 }
             }
-
             return Page();
         }
 

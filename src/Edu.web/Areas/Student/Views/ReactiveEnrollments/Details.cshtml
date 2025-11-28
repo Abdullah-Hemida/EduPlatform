@@ -295,19 +295,35 @@
                     if (typeof onConfirm === 'function') onConfirm();
                 });
             }
-
+        function isAttrTrue($el, attrName) {
+            // attrName without "data-" prefix, e.g. "can-request" -> checks data-can-request attr
+            const val = $el.attr('data-' + attrName);
+            // accept 'true', 'True', '1' or actual boolean from jQuery .data()
+            return val === 'true' || val === 'True' || val === '1' || $el.data(attrName.replace(/-([a-z])/g, (m, c) => c.toUpperCase()) ) === true;
+        }
             // helpers to update UI state
-            function enablePayButtonsIfAllowed() {
-                const enrolled = $('#enroll-area').data('enrolled') === true || $('#enroll-area').data('enrolled') === 'true';
-                if (!enrolled) {
-                    $('.btnPayMonth').prop('disabled', true).hide();
-                } else {
-                    $('.btnPayMonth').each(function () {
-                        const canReq = $(this).data('can-request') === true || $(this).data('can-request') === 'true';
-                        if (canReq) $(this).prop('disabled', false).show();
-                    });
-                }
+        function enablePayButtonsIfAllowed() {
+            // read data-enrolled reliably as string from attribute
+            const enrolledAttr = $('#enroll-area').attr('data-enrolled');
+            const enrolled = enrolledAttr === 'true' || enrolledAttr === 'True' || enrolledAttr === '1' || $('#enroll-area').data('enrolled') === true;
+
+            if (!enrolled) {
+                // user not enrolled: hide/disable all pay buttons
+                $('.btnPayMonth').prop('disabled', true).hide();
+                return;
             }
+
+            // user is enrolled: show only those months that allow requesting payment
+            $('.btnPayMonth').each(function () {
+                const $btn = $(this);
+                const canReq = isAttrTrue($btn, 'can-request'); // checks data-can-request
+                if (canReq) {
+                    $btn.prop('disabled', false).show();
+                } else {
+                    $btn.prop('disabled', true).hide();
+                }
+            });
+        }
 
             function updateCancelEnrollState() {
                 const $btn = $('#btnCancelEnroll');
@@ -337,37 +353,43 @@
                 updateCancelEnrollState();
             }
 
-            function markMonthPending(monthId, paymentId) {
-                const $card = $(`.month-card[data-month-id="${monthId}"]`);
-                if (!$card.length) return;
+        // Also update markMonthPending to ensure future checks are consistent:
+        function markMonthPending(monthId, paymentId) {
+            const $card = $(`.month-card[data-month-id="${monthId}"]`);
+            if (!$card.length) return;
 
-                $card.attr('data-payment-id', paymentId);
-                $card.find('.badge').first().removeClass().addClass('badge bg-warning text-dark').text(Localized["StatusPending"] || 'Pending');
-                $card.find('.btnPayMonth').remove();
-                if ($card.find('.btnCancelPayment').length === 0) {
-                    $card.find('.action-area').append(`<button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="${paymentId}">${escapeHtml(Localized["ReactiveCourse.CancelPayment"] || 'Cancel Payment')}</button>`);
-                }
-
-                // because now there's a pending month -> cannot cancel enrollment
-                updateCancelEnrollState();
+            $card.attr('data-payment-id', paymentId);
+            $card.find('.badge').first().removeClass().addClass('badge bg-warning text-dark').text(Localized["StatusPending"] || 'Pending');
+            $card.find('.btnPayMonth').remove();
+            if ($card.find('.btnCancelPayment').length === 0) {
+                $card.find('.action-area').append(`<button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="${paymentId}">${escapeHtml(Localized["ReactiveCourse.CancelPayment"] || 'Cancel Payment')}</button>`);
             }
 
-            function markMonthCancelled(monthId) {
-                const $card = $(`.month-card[data-month-id="${monthId}"]`);
-                if (!$card.length) return;
+            // because now there's a pending month -> cannot cancel enrollment
+            updateCancelEnrollState();
+        }
 
-                $card.attr('data-payment-id', 0);
-                $card.find('.badge').first().removeClass().addClass('badge bg-secondary').text(Localized["NotRequested"] || 'Not requested');
-                $card.find('.btnCancelPayment').remove();
+        // Update usage in markMonthCancelled / other functions that read data-can-request
+        function markMonthCancelled(monthId) {
+            const $card = $(`.month-card[data-month-id="${monthId}"]`);
+            if (!$card.length) return;
 
-                const canRequest = $card.data('can-request') === true || $card.data('can-request') === 'true';
-                if (canRequest && $card.find('.btnPayMonth').length === 0) {
-                    $card.find('.action-area').append(`<button class="btn btn-sm btn-primary ms-2 btnPayMonth" data-month-id="${monthId}" data-course-id="${@Model.CourseId}" data-can-request="${canRequest}">${escapeHtml(Localized["ReactiveCourse.RequestPayment"] || 'Request Payment')}</button>`);
-                }
+            $card.attr('data-payment-id', 0);
+            $card.find('.badge').first().removeClass().addClass('badge bg-secondary').text(Localized["NotRequested"] || 'Not requested');
+            $card.find('.btnCancelPayment').remove();
 
-                // possible to enable cancel enrollment again if no other pending/paid months exist
-                updateCancelEnrollState();
+            // read can-request via attribute
+            const canRequest = isAttrTrue($card, 'can-request');
+            if (canRequest && $card.find('.btnPayMonth').length === 0) {
+                // append with proper data attributes (string "true"/"false")
+                $card.find('.action-area').append(
+                    `<button class="btn btn-sm btn-primary ms-2 btnPayMonth" data-month-id="${monthId}" data-course-id="${@Model.CourseId}" data-can-request="${canRequest}">${escapeHtml(Localized["ReactiveCourse.RequestPayment"] || 'Request Payment')}</button>`
+                );
             }
+
+            // possible to enable cancel enrollment again if no other pending/paid months exist
+            updateCancelEnrollState();
+        }
 
             function markEnrollmentCancelledUI() {
                 $('#enroll-area').attr('data-enrolled', 'false').attr('data-enrollment-id', 0);

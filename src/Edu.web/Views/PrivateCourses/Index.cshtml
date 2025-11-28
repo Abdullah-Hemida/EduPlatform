@@ -61,20 +61,24 @@
                                value="@q" />
                     </div>
 
-                    <!-- Children Checkbox -->
+                   <!-- Audience select (All / For children / For adults) -->
+                    @{
+                        // Build options and set Selected based on Model.ForChildrenOnly (bool?)
+                        var audienceOptions = new List<SelectListItem>
+                                        {
+                                        new SelectListItem { Text = L["All"].Value,               Value = "",    Selected = Model.ForChildrenOnly == null },
+                                        new SelectListItem { Text = L["Teacher.ForChildren"].Value, Value = "true",  Selected = Model.ForChildrenOnly == true },
+                                        new SelectListItem { Text = L["Teacher.ForAdults"].Value,   Value = "false", Selected = Model.ForChildrenOnly == false }
+                                        };
+                    }
+
                     <div class="col-auto">
-                        <div class="form-check mt-1">
-                            <input class="form-check-input"
-                                   type="checkbox"
-                                   id="forChildren"
-                                   name="forChildren"
-                                   value="true"
-                                   @(Model.ForChildrenOnly == true ? "checked" : "")/>
-                            <label class="form-check-label small" for="forChildren">
-                                @L["Teacher.ForChildren"]
-                            </label>
-                        </div>
+                        <!-- keep name="forChildren" so your controller action binds to the query param -->
+                        <select name="forChildren" class="form-select form-select-sm" asp-items="audienceOptions"
+                                aria-label="@L["Teacher.ForChildren"]">
+                        </select>
                     </div>
+
 
                     <!-- Search Button -->
                     <div class="col-12 col-sm-auto">

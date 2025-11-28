@@ -14,7 +14,7 @@ using Microsoft.Extensions.Localization;
 namespace Edu.Web.Areas.Student.Controllers
 {
     [Area("Student")]
-    [Authorize(Roles = "Student")]
+    [Authorize(Roles = "Student,Admin,Teacher")]
     public class ReactiveEnrollmentsController : Controller
     {
         private readonly ApplicationDbContext _db;

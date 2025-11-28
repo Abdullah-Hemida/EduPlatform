@@ -21,7 +21,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-body text-center">
                     <div class="position-relative d-inline-block">
-                        <img src="@(!string.IsNullOrEmpty(Model.Input.PhotoUrl) ? Model.Input.PhotoUrl : "/images/default-avatar.png")"
+                        <img src="@(!string.IsNullOrEmpty(Model.Input.PhotoUrl) ? Model.Input.PhotoUrl : "~/uploads/images/default-avatar.png")"
                              class="rounded-circle mb-3"
                              style="width:120px;height:120px;object-fit:cover"
                              alt="@L["Profile.PhotoAlt"]" />

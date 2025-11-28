@@ -11,7 +11,7 @@
     <div class="col-md-4">
         <div class="card text-center">
             <div class="card-body">
-                <img src="@(!string.IsNullOrEmpty(Model.PhotoUrl) ? Model.PhotoUrl : Url.Content("~/images/default-avatar.png"))"
+                <img src="@(!string.IsNullOrEmpty(Model.PhotoUrl) ? Model.PhotoUrl : Url.Content("~/uploads/images/default-avatar.png"))"
                      class="rounded-circle mb-3" style="width:140px;height:140px;object-fit:cover;" alt="@Model.FullName" />
                 <h4 class="mb-0">@Model.FullName</h4>
                 <p class="text-muted mb-1">@string.Join(", ", Model.Roles)</p>

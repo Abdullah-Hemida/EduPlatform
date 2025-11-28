@@ -63,7 +63,15 @@
                     <input asp-for="Price" type="number" class="form-control form-control-sm" />
                     <span asp-validation-for="Price" class="text-danger small"></span>
                 </div>
-
+                <div class="col-md-6 d-flex align-items-center">
+                    <div class="form-check">
+                        <input asp-for="IsForChildren" class="form-check-input" type="checkbox" id="IsForChildren" />
+                        <label class="form-check-label small" for="IsForChildren">
+                            @L["Teacher.ForChildren"]
+                        </label>
+                    </div>
+                    <span asp-validation-for="IsForChildren" class="text-danger small ms-2"></span>
+                </div>
                 <!-- Publish-request status shown; RequestPublish remains a separate POST form -->
                 <div class="col-12">
                     <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
