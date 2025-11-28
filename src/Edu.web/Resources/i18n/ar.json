@@ -5,7 +5,7 @@
   "Nav.Home": "الرئيسية",
   "Nav.Courses": "الدورات",
   "Nav.School": "المدرسة",
-  "Nav.PublicSite": " الذهاب للموقع",
+  "Nav.PublicSite": "الصفحة الرئيسية",
   "Nav.Profile": "الملف الشخصي",
 
   "Nav.AdminDashboard": "لوحة الإحصائيات",
@@ -289,6 +289,7 @@
   "Purchase.By": "بواسطة",
   "Purchase.MarkCompleted": "تحديد كمكتمل",
   "Purchase.CancelRequest": "إلغاء طلب الشراء",
+  "Purchase.PriceNote": "قدم طلبك وسنتواصل معك",
 
   "PurchaseRequest.Details.Title": "تفاصيل طلب الشراء",
   "PurchaseRequest.Details.Subtitle": "معلومات كاملة عن طلب الشراء هذا",
@@ -590,7 +591,10 @@
   "Admin.PaymentAlreadyPaid": "الدفع مدفوع بالفعل",
   "Admin.CannotRejectPaid": "لا يمكن رفض دفع مدفوع",
   "Admin.Other": "أخرى",
-  "AdminLevel.NameAr": "(إسم المستوى  (عربى",
+
+  "AdminLevel.NameAr": "إسم المستوى (عربى)",
+  "AdminLevel.NameIt": "إسم المستوى (إيطالى)",
+  "AdminLevel.NameEn": "إسم المستوى (إنجليزى)",
 
   "Notify.PaymentMarkedPaid.Subject": "تم وضع علامة على دفعتك الشهرية كمدفوعة",
   "Notify.PaymentMarkedPaid.Body": "تمت الإشارة إلى دفعتك بمقدار {0} للشهر رقم {1} كمدفوعة من قبل الإدارة.",

@@ -5,7 +5,7 @@
   "Nav.Home": "Home",
   "Nav.Courses": "Corsi",
   "Nav.School": "La Scuola",
-  "Nav.PublicSite": "Vai al sito web",
+  "Nav.PublicSite": "Pagina iniziale",
   "Nav.Profile": "Profilo",
 
   "Nav.AdminDashboard": "Dashboard delle statistiche",
@@ -312,6 +312,7 @@
   "Purchase.By": "da",
   "Purchase.MarkCompleted": "Segna completato",
   "Purchase.CancelRequest": "Annulla richiesta di acquisto",
+  "Purchase.PriceNote": "Invia la tua richiesta e ti contatteremo.",
 
   "PurchaseRequest.Details.Title": "Dettagli richiesta acquisto",
   "PurchaseRequest.Details.Subtitle": "Informazioni complete su questa richiesta di acquisto",
@@ -596,7 +597,10 @@
   "Admin.PaymentAlreadyPaid": "Il pagamento è già stato pagato",
   "Admin.CannotRejectPaid": "Impossibile rifiutare un pagamento già pagato",
   "Admin.Other": "Altro",
+
   "AdminLevel.NameIt": "Nome del livello (Italiano)",
+  "AdminLevel.NameEn": "Nome del livello (Inglese)",
+  "AdminLevel.NameAr": "Nome del livello (Arabo)",
 
   "Notify.PaymentMarkedPaid.Subject": "Il tuo pagamento mensile è stato segnato come pagato",
   "Notify.PaymentMarkedPaid.Body": "Il tuo pagamento di {0} per il mese id {1} è stato segnato come pagato dall'amministrazione.",

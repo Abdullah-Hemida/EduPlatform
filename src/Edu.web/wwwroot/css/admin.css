@@ -22,9 +22,166 @@ body {
     margin-bottom: 60px;
 }
 
+/*:root {
+    --sidebar-width: 250px;
+    --sidebar-collapsed: 80px;*/ /* desktop collapsed width */
+    /*--sidebar-collapsed-mobile: 56px;*/ /* thinner mobile collapsed width */
+    /*--sidebar-bg: #0b1220;
+    --sidebar-color: #e9f0fb;
+    --accent: #0d6efd;
+    --transition: 0.18s;
+}*/
+
+/* Sidebar base, anchored left in LTR, right in RTL */
+/*.sidebar {
+    width: var(--sidebar-width);
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;*/ /* LTR default */
+    /*z-index: 1060;
+    padding-top: .5rem;
+    background: var(--sidebar-bg);
+    color: var(--sidebar-color);
+    overflow-y: auto;
+    transition: width var(--transition) ease;
+}
+
+html[dir="rtl"] .sidebar {
+    left: auto;
+    right: 0;
+}*/
+
+/* Page content margins: default (desktop full sidebar) */
+/*#page-content-wrapper {
+    transition: margin var(--transition) ease;
+    margin-left: var(--sidebar-width);
+    margin-right: 0;
+}
+
+html[dir="rtl"] #page-content-wrapper {
+    margin-left: 0;
+    margin-right: var(--sidebar-width);
+}*/
+
+/* Desktop collapsed icons-only */
+/*#wrapper.sidebar-collapsed .sidebar {
+    width: var(--sidebar-collapsed);
+}
+
+#wrapper.sidebar-collapsed .nav-text {
+    display: none !important;
+}
+
+#wrapper.sidebar-collapsed .nav-link {
+    justify-content: center;
+    padding-left: .5rem;
+    padding-right: .5rem;
+}
+
+#wrapper.sidebar-collapsed #page-content-wrapper {
+    margin-left: var(--sidebar-collapsed);
+    margin-right: 0;
+}
+
+html[dir="rtl"] #wrapper.sidebar-collapsed #page-content-wrapper {
+    margin-left: 0;
+    margin-right: var(--sidebar-collapsed);
+}*/
+
+/* Mobile default - thin icons-only (side-by-side, not overlay) */
+/*@media (max-width: 991.98px) {
+    .sidebar {
+        width: var(--sidebar-collapsed-mobile);
+    }
+
+    .nav-text {
+        display: none !important;
+    }*/
+
+    /* Page content uses collapsed mobile width */
+    /*#page-content-wrapper {
+        margin-left: var(--sidebar-collapsed-mobile);
+        margin-right: 0;
+    }
+
+    html[dir="rtl"] #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-collapsed-mobile);
+    }*/
+
+    /* When expanded on mobile, show full width and update margins */
+    /*#wrapper.sidebar-expanded-mobile .sidebar {
+        width: var(--sidebar-width);
+    }
+
+    #wrapper.sidebar-expanded-mobile .nav-text {
+        display: inline-block !important;
+    }
+
+    #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: var(--sidebar-width);
+        margin-right: 0;
+    }
+
+    html[dir="rtl"] #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-width);
+    }
+}*/
+
+/* Link visuals */
+/*#sidebar-wrapper .nav-link {
+    color: var(--sidebar-color);
+    padding: .55rem .6rem;
+    border-radius: .35rem;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    text-decoration: none;
+}
+
+    #sidebar-wrapper .nav-link:hover {
+        background: rgba(255,255,255,.03);
+        color: #fff;
+        text-decoration: none;
+    }*/
+
+    /* Active highlight: left border in LTR, right border in RTL */
+    /*#sidebar-wrapper .nav-link.active {
+        background: rgba(255,255,255,.06);
+        color: #fff;
+        border-left: 3px solid var(--accent);
+    }
+
+html[dir="rtl"] #sidebar-wrapper .nav-link.active {
+    border-left: none;
+    border-right: 3px solid var(--accent);
+}
+
+.nav-icon {
+    width: 22px;
+    text-align: center;
+    font-size: .95rem;
+    color: var(--sidebar-color);
+}
+
+.nav-group .text-muted {
+    opacity: .85;
+    font-size: .75rem;
+}
+
+.nav-text.text-truncate {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+}*/
+
 :root {
     --sidebar-width: 250px;
-    --sidebar-collapsed: 80px;
+    --sidebar-collapsed: 40px;
     --transition: 0.25s;
 }
 
@@ -35,7 +192,7 @@ body {
     top: 0;
     bottom: 0;
     left: 0; /* LTR default */
-    z-index: 1;
+    z-index: 1060; /* sits under navbar but above page content */
     padding-top: 0;
     overflow-x: hidden;
     overflow-y: auto;
@@ -88,38 +245,21 @@ html[dir="rtl"] #wrapper.sidebar-collapsed #page-content-wrapper {
     text-align: center;
     padding-left: .75rem;
     padding-right: .75rem;
+    width: 100%; /* ensure clickable area remains full-width */
 }
 
-/* Mobile: hide sidebar off-screen when hidden class present */
+/* Mobile: default behaviors and expanded-mobile helper */
 #sidebar-wrapper {
     transform: translateX(0);
 }
 
-html[dir="rtl"] .navbar .ms-auto {
-    margin-left: 0 !important;
-    margin-right: auto !important;
-}
-
-/* LTR hide: slide left; RTL hide: slide right (different classes handled by JS) */
+/* Off-screen hiding classes (used by JS) */
 #wrapper.sidebar-hidden #sidebar-wrapper {
-    transform: translateX(-110%);
+    transform: translateX(-110%); /* LTR hide */
 }
 
 #wrapper.sidebar-hidden-rtl #sidebar-wrapper {
-    transform: translateX(110%);
-}
-
-/* On small screens, content uses full width */
-@media (max-width: 991.98px) {
-    #sidebar-wrapper {
-        position: fixed;
-        width: var(--sidebar-width);
-    }
-
-    #page-content-wrapper {
-        margin-left: 0;
-        margin-right: 0;
-    }
+    transform: translateX(110%); /* RTL hide */
 }
 
 /* Sidebar link visuals */
@@ -130,29 +270,32 @@ html[dir="rtl"] .navbar .ms-auto {
     display: flex;
     align-items: center;
     pointer-events: auto; /* ensure clickable */
+    text-decoration: none;
+    white-space: nowrap;
 }
+
 html[dir="rtl"] #sidebar-wrapper .nav-link {
     border-left: none;
     border-right: 3px solid transparent;
 }
 
-    html[dir="rtl"] #sidebar-wrapper .nav-link.active {
-        border-right-color: #0d6efd; /* active highlight */
-        border-left-color: transparent;
-    }
+/* Hover/active */
+#sidebar-wrapper .nav-link:hover {
+    background: rgba(255,255,255,0.03);
+    color: #fff;
+    text-decoration: none;
+}
 
-    /* Hover/active */
-    #sidebar-wrapper .nav-link:hover {
-        background: rgba(255,255,255,0.03);
-        color: #fff;
-        text-decoration: none;
-    }
+#sidebar-wrapper .nav-link.active {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    border-left-color: #0d6efd; /* active highlight */
+}
 
-    #sidebar-wrapper .nav-link.active {
-        background: rgba(255,255,255,0.06);
-        color: #fff;
-        border-left-color: #0d6efd;
-    }
+html[dir="rtl"] #sidebar-wrapper .nav-link.active {
+    border-left-color: transparent;
+    border-right-color: #0d6efd;
+}
 
 /* Icon width */
 .nav-icon {
@@ -160,20 +303,30 @@ html[dir="rtl"] #sidebar-wrapper .nav-link {
     text-align: center;
 }
 
+/* When collapsed make icons centered both LTR and RTL */
+#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link {
+    justify-content: center;
+    text-align: center;
+    padding-left: .5rem;
+    padding-right: .5rem;
+}
+
+    #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link .nav-icon {
+        margin: 0 auto;
+        display: inline-block;
+    }
+
+/* Active link icon color */
+#sidebar-wrapper .nav-link.active .nav-icon {
+    color: #fff;
+}
+
+/* When collapsed show subtle background even without text */
+#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link.active {
+    background: rgba(13,110,253,0.12);
+}
+
 /* Topbar stays on top (toggle must be clickable) */
-.navbar {
-    z-index: 1080;
-}
-
-/* Sidebar under navbar, above page content */
-#sidebar-wrapper {
-    z-index: 1060;
-}
-
-#page-content-wrapper {
-    z-index: 1;
-}
-/* ensure navbar and its toggler sit above sidebar on all sizes */
 .navbar {
     z-index: 1100; /* higher than sidebar */
 }
@@ -184,23 +337,25 @@ html[dir="rtl"] #sidebar-wrapper .nav-link {
     position: relative; /* ensures z-index applies */
 }
 
-/* slightly move the toggle left/right if needed to avoid overlap (optional) */
+/* Responsive rules */
 @media (max-width: 991.98px) {
-    /* keep the toggler visible on small screens */
-    #sidebarToggle {
-        margin-left: .25rem;
-    }
-}
-/* On small screens, default to icons-only (collapsed) instead of hiding */
-@media (max-width: 991.98px) {
-    /* Make sidebar fixed and icons-only by default */
+    /* On small screens, content uses full width by default */
     #sidebar-wrapper {
         position: fixed;
-        width: var(--sidebar-collapsed); /* icons-only by default */
-        transform: translateX(0); /* no off-screen hiding */
+        width: var(--sidebar-width);
+        transform: translateX(0);
     }
 
-    /* Page content uses collapsed width as well */
+    #page-content-wrapper {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    /* Default mobile: icons-only */
+    #sidebar-wrapper {
+        width: var(--sidebar-collapsed); /* icons-only by default */
+    }
+
     #page-content-wrapper {
         margin-left: var(--sidebar-collapsed);
         margin-right: 0;
@@ -235,19 +390,291 @@ html[dir="rtl"] #sidebar-wrapper .nav-link {
     #wrapper.sidebar-expanded-mobile .nav-text {
         display: inline-block !important;
     }
+}
 
-    /* Ensure nav links center icon when collapsed */
-    #sidebar-wrapper .nav-link {
+/*:root {
+    --sidebar-width: 250px;
+    --sidebar-collapsed: 80px;
+    --transition: 0.25s;
+}*/
+/* Sidebar base */
+/*#sidebar-wrapper {
+    width: var(--sidebar-width);
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;*/ /* LTR default */
+/*z-index: 1;
+    padding-top: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transition: transform var(--transition) ease, width var(--transition) ease;
+}*/
+/* Place sidebar at right in RTL contexts */
+/*html[dir="rtl"] #sidebar-wrapper {
+    left: auto;
+    right: 0;
+}*/
+/* Page content should be under the navbar but above background */
+/*#page-content-wrapper {
+    position: relative;
+    z-index: 1;*/ /* lower than sidebar so sidebar links are clickable */
+/*margin-left: var(--sidebar-width);
+    transition: margin var(--transition) ease;
+}*/
+/* RTL content margin-right */
+/*html[dir="rtl"] #page-content-wrapper {
+    margin-left: 0;
+    margin-right: var(--sidebar-width);
+}*/
+/* Collapsed -> icons only (desktop/tablet) */
+/*#wrapper.sidebar-collapsed #sidebar-wrapper {
+    width: var(--sidebar-collapsed);
+    overflow: hidden;
+}
+
+#wrapper.sidebar-collapsed #page-content-wrapper {
+    margin-left: var(--sidebar-collapsed);
+}
+
+html[dir="rtl"] #wrapper.sidebar-collapsed #page-content-wrapper {
+    margin-left: 0;
+    margin-right: var(--sidebar-collapsed);
+}*/
+/* Hide nav text when collapsed (desktop) */
+/*#wrapper.sidebar-collapsed .nav-text {
+    display: none !important;
+}*/
+/* Center icons when collapsed */
+/*#wrapper.sidebar-collapsed .nav-link {
+    justify-content: center;
+    text-align: center;
+    padding-left: .75rem;
+    padding-right: .75rem;
+}*/
+/* Mobile: hide sidebar off-screen when hidden class present */
+/*#sidebar-wrapper {
+    transform: translateX(0);
+}
+
+html[dir="rtl"] .navbar .ms-auto {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}*/
+/* LTR hide: slide left; RTL hide: slide right (different classes handled by JS) */
+/*#wrapper.sidebar-hidden #sidebar-wrapper {
+    transform: translateX(-110%);
+}
+
+#wrapper.sidebar-hidden-rtl #sidebar-wrapper {
+    transform: translateX(110%);
+}*/
+/* On small screens, content uses full width */
+/*@media (max-width: 991.98px) {
+    #sidebar-wrapper {
+        position: fixed;
+        width: var(--sidebar-width);
+    }
+
+    #page-content-wrapper {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}*/
+/* Sidebar link visuals */
+/*#sidebar-wrapper .nav-link {
+    color: #e6eef8;
+    border-left: 4px solid transparent;
+    padding: .65rem 0.8rem;
+    display: flex;
+    align-items: center;
+    pointer-events: auto;*/ /* ensure clickable */
+/*}
+html[dir="rtl"] #sidebar-wrapper .nav-link {
+    border-left: none;
+    border-right: 3px solid transparent;
+}
+
+    html[dir="rtl"] #sidebar-wrapper .nav-link.active {
+        border-right-color: #0d6efd;*/ /* active highlight */
+/*border-left-color: transparent;
+    }*/
+/* Hover/active */
+/*#sidebar-wrapper .nav-link:hover {
+        background: rgba(255,255,255,0.03);
+        color: #fff;
+        text-decoration: none;
+    }
+
+    #sidebar-wrapper .nav-link.active {
+        background: rgba(255,255,255,0.06);
+        color: #fff;
+        border-left-color: #0d6efd;
+    }*/
+/* Icon width */
+/*.nav-icon {
+    width: 20px;
+    text-align: center;
+}*/
+/* Topbar stays on top (toggle must be clickable) */
+/*.navbar {
+    z-index: 1080;
+}*/
+/* Sidebar under navbar, above page content */
+/*#sidebar-wrapper {
+    z-index: 1060;
+}
+
+#page-content-wrapper {
+    z-index: 1;
+}
+/* ensure navbar and its toggler sit above sidebar on all sizes */
+/*.navbar {
+    z-index: 1100;*/ /* higher than sidebar */
+/*}*/
+/* ensure the toggle button itself is on top (in case of overlapping content) */
+/*#sidebarToggle {
+    z-index: 1110;
+    position: relative;*/ /* ensures z-index applies */
+/*}*/
+/* slightly move the toggle left/right if needed to avoid overlap (optional) */
+/*@media (max-width: 991.98px) {*/
+/* keep the toggler visible on small screens */
+/*#sidebarToggle {
+        margin-left: .25rem;
+    }
+}*/
+/* On small screens, default to icons-only (collapsed) instead of hiding */
+/*@media (max-width: 991.98px) {*/
+/* Make sidebar fixed and icons-only by default */
+/*#sidebar-wrapper {
+        position: fixed;
+        width: var(--sidebar-collapsed);*/ /* icons-only by default */
+/*transform: translateX(0);*/ /* no off-screen hiding */
+/*}*/
+/* Page content uses collapsed width as well */
+/*#page-content-wrapper {
+        margin-left: var(--sidebar-collapsed);
+        margin-right: 0;
+    }*/
+/* RTL: page content uses margin-right */
+/*html[dir="rtl"] #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-collapsed);
+    }*/
+/* When we want to expand sidebar on mobile, apply this class on wrapper */
+/*#wrapper.sidebar-expanded-mobile #sidebar-wrapper {
+        width: var(--sidebar-width);*/ /* expand to full width */
+/*}
+
+    #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: var(--sidebar-width);
+    }
+
+    html[dir="rtl"] #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-width);
+    }*/
+/* Hide nav text by default (icons-only) */
+/*.nav-text {
+        display: none !important;
+    }*/
+/* When sidebar is expanded-mobile, show nav text */
+/*#wrapper.sidebar-expanded-mobile .nav-text {
+        display: inline-block !important;
+    }*/
+/* Ensure nav links center icon when collapsed */
+/*#sidebar-wrapper .nav-link {
         white-space: nowrap;
     }
 
-    #wrapper.sidebar-collapsed .nav-link,
-    /* collapsed on mobile (same visual) */
-    #sidebar-wrapper {
-        /* leave appearance */
-    }
+    #wrapper.sidebar-collapsed .nav-link,*/
+/* collapsed on mobile (same visual) */
+/*#sidebar-wrapper {*/
+/* leave appearance */
+/*}
+}*/
+/* --- Sidebar / collapsed RTL icon centering fix --- */
+
+/* When collapsed, make icons centered both LTR and RTL */
+/*#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link {
+    justify-content: center;
+    text-align: center;
+    padding-left: .5rem;
+    padding-right: .5rem;
+}*/
+
+/* Ensure the icon itself is centered inside the link */
+/*#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link .nav-icon {
+        margin: 0 auto;
+        display: inline-block;
+    }*/
+
+/* RTL: when collapsed ensure icons are centered (not left-aligned) */
+/*html[dir="rtl"] #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link,
+html[dir="rtl"] #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link .nav-icon {
+    justify-content: center;
+    text-align: center;
+    padding-left: .5rem;
+    padding-right: .5rem;
+    margin: 0 auto;
+}*/
+
+/* Active link highlight: LTR uses left border, RTL uses right border */
+/*#sidebar-wrapper .nav-link.active {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
 }
 
+    #sidebar-wrapper .nav-link.active .nav-icon {
+        color: #fff;
+    }
+
+#sidebar-wrapper .nav-link.active {
+    border-left-color: #0d6efd;
+}
+
+html[dir="rtl"] #sidebar-wrapper .nav-link.active {
+    border-left-color: transparent;
+    border-right-color: #0d6efd;
+}*/
+
+/* When collapsed show subtle background even without text */
+/*#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link.active {
+    background: rgba(13,110,253,0.12);
+}*/
+
+/* Ensure clickable area remains full-width when collapsed */
+/*#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link {
+    width: 100%;
+}*/
+
+/* On small screens, show icons-only by default but allow expand */
+/*@media (max-width: 991.98px) {*/
+/* default mobile: icons-only */
+/*#sidebar-wrapper {
+        width: var(--sidebar-collapsed);
+    }
+
+    #page-content-wrapper {
+        margin-left: var(--sidebar-collapsed);
+    }*/
+
+/* expanded mobile (when wrapper has sidebar-expanded-mobile) */
+/*#wrapper.sidebar-expanded-mobile #sidebar-wrapper {
+        width: var(--sidebar-width);
+    }
+
+    #wrapper.sidebar-expanded-mobile #page-content-wrapper {
+        margin-left: var(--sidebar-width);
+    }*/
+
+/* allow RTL mirrored behaviour */
+/*html[dir="rtl"] #page-content-wrapper {
+        margin-left: 0;
+        margin-right: var(--sidebar-collapsed);
+    }
+}*/
 /* admin.css additions for ManageUsers */
 .table img.rounded-circle {
     display: block;
@@ -381,87 +808,7 @@ html[dir="rtl"] .role-filters-group .btn .me-1 {
 html[dir="rtl"] .table-controls {
     direction: ltr;
 }
-/* --- Sidebar / collapsed RTL icon centering fix --- */
 
-/* When collapsed, make icons centered both LTR and RTL */
-#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link {
-    justify-content: center;
-    text-align: center;
-    padding-left: .5rem;
-    padding-right: .5rem;
-}
-
-    /* Ensure the icon itself is centered inside the link */
-    #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link .nav-icon {
-        margin: 0 auto;
-        display: inline-block;
-    }
-
-/* RTL: when collapsed ensure icons are centered (not left-aligned) */
-html[dir="rtl"] #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link,
-html[dir="rtl"] #wrapper.sidebar-collapsed #sidebar-wrapper .nav-link .nav-icon {
-    justify-content: center;
-    text-align: center;
-    padding-left: .5rem;
-    padding-right: .5rem;
-    margin: 0 auto;
-}
-
-/* Active link highlight: LTR uses left border, RTL uses right border */
-#sidebar-wrapper .nav-link.active {
-    background: rgba(255,255,255,0.06);
-    color: #fff;
-}
-
-    #sidebar-wrapper .nav-link.active .nav-icon {
-        color: #fff;
-    }
-
-#sidebar-wrapper .nav-link.active {
-    border-left-color: #0d6efd;
-}
-
-html[dir="rtl"] #sidebar-wrapper .nav-link.active {
-    border-left-color: transparent;
-    border-right-color: #0d6efd;
-}
-
-/* When collapsed show subtle background even without text */
-#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link.active {
-    background: rgba(13,110,253,0.12);
-}
-
-/* Ensure clickable area remains full-width when collapsed */
-#wrapper.sidebar-collapsed #sidebar-wrapper .nav-link {
-    width: 100%;
-}
-
-/* On small screens, show icons-only by default but allow expand */
-@media (max-width: 991.98px) {
-    /* default mobile: icons-only */
-    #sidebar-wrapper {
-        width: var(--sidebar-collapsed);
-    }
-
-    #page-content-wrapper {
-        margin-left: var(--sidebar-collapsed);
-    }
-
-    /* expanded mobile (when wrapper has sidebar-expanded-mobile) */
-    #wrapper.sidebar-expanded-mobile #sidebar-wrapper {
-        width: var(--sidebar-width);
-    }
-
-    #wrapper.sidebar-expanded-mobile #page-content-wrapper {
-        margin-left: var(--sidebar-width);
-    }
-
-    /* allow RTL mirrored behaviour */
-    html[dir="rtl"] #page-content-wrapper {
-        margin-left: 0;
-        margin-right: var(--sidebar-collapsed);
-    }
-}
 
 /* --- Curriculum / buttons helpers --- */
 .curriculum-header {

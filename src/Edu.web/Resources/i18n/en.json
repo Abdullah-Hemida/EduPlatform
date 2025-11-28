@@ -4,7 +4,7 @@
   "Nav.Home": "Home",
   "Nav.Courses": "Courses",
   "Nav.School": "The School",
-  "Nav.PublicSite": "Go to the Website",
+  "Nav.PublicSite": "Home Page",
   "Nav.Profile": "Profile",
 
   "Nav.AdminDashboard": "Statistics dashboard",
@@ -514,6 +514,7 @@
   "Purchase.Pending": "Pending",
   "Purchase.Completed": "Completed",
   "Purchase.Rejected": "Rejected",
+  "Purchase.PriceNote": "Submit your request and we will contact you.",
   "Admin.RecordedCourses": "Recorded Courses",
   "Admin.NumOfRecordedCourses": "Number of pre-prepared courses",
   "Admin.Published": "Published",
@@ -599,6 +600,8 @@
   "Admin.CannotRejectPaid": "Cannot reject a paid payment",
   "Admin.Other": "Other",
   "AdminLevel.NameEn": "Level name (English)",
+  "AdminLevel.NameIt": "Level name (Italian)",
+  "AdminLevel.NameAr": "Level name (Arabic)",
 
   "Notify.PaymentMarkedPaid.Subject": "Your monthly payment has been marked as paid",
   "Notify.PaymentMarkedPaid.Body": "Your payment of {0} for month id {1} has been marked as paid by the administration.",

@@ -71,16 +71,67 @@
     <div id="wrapper" class="d-flex min-vh-100">
         <!-- Sidebar -->
         <nav id="sidebar-wrapper" class="bg-dark text-white d-flex flex-column" role="navigation" aria-label="Main sidebar">
-            <div class=" d-flex align-items-center justify-content-center p-3 gap-2 border-button">
-                <img src="~/uploads/images/AdminDashboard/adminlogo.png" alt="logo" style="height:28px" class="me-2" />
-                <a asp-area="" asp-controller="Home" asp-action="Index" target="_blank" rel="noopener"
-                   class="d-flex align-items-center text-decoration-none text-white sidebar-public-link">
-                    @* <i class="fas fa-external-link-alt nav-icon" aria-hidden="true"></i> *@
-                    <strong class="nav-text ms-2">@Localizer["Nav.PublicSite"]</strong>
+            <div class="">
+                <a asp-area="" asp-controller="Home" asp-action="Index" target="_blank" rel="noopener" class="nav-link px-3 text-nowrap">
+                    <i class="fas fa-home nav-icon"></i>
+                    <span class="nav-text ms-2">@Localizer["Nav.Home"]</span>
                 </a>
             </div>
             <ul class="nav flex-column p-1 mb-0">
-                @* --- ADMIN LINKS --- *@
+                @* --- TEACHER LINKS --- *@ 
+              @if (isTeacher)
+                  {
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="Dashboard" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("TeacherDashboard")" title="@Localizer["Nav.TeacherDashboard"]">
+                            <i class="fas fa-tachometer-alt nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.TeacherDashboard"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("MyPrivateCourses")" title="@Localizer["Nav.MyPrivateCourses"]">
+                            <i class="fas fa-video nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.MyPrivateCourses"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("PurchaseRequests")" title="@Localizer["Admin.PurchaseRequests"]">
+                            <i class="fas fa-shopping-cart nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.PurchaseRequests"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("MyReactiveCourses")" title="@Localizer["Nav.ReactiveCourses"]">
+                            <i class="fas fa-broadcast-tower nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.ReactiveCourses"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="ReactiveEnrollments" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("ReactiveEnrollments")" title="@Localizer["Nav.ReactiveEnrollments"]">
+                            <i class="fas fa-user-friends nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.ReactiveEnrollments"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="Bookings" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("TheBookings")" title="@Localizer["Admin.Bookings"]">
+                            <i class="fas fa-calendar-check nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Booking.SessionBookings"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Teacher" asp-controller="Slots" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("Slots")" title="@Localizer["Slots.Index.Title"]">
+                            <i class="fas fa-clock nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Slots.Index.Title"]</span>
+                        </a>
+                    </li>
+                }
+
                 @if (isAdmin)
                 {
                     <li class="nav-item">
@@ -198,68 +249,9 @@
                     </li>
                 }
 
-                @* --- TEACHER LINKS --- *@
-                @if (isTeacher)
-                {
-                    <li class="nav-item">
-                        <a asp-area="Teacher" asp-controller="Dashboard" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2 @active("TeacherDashboard")" title="@Localizer["Nav.TeacherDashboard"]">
-                            <i class="fas fa-tachometer-alt nav-icon"></i>
-                            <span class="nav-text ms-2">@Localizer["Nav.TeacherDashboard"]</span>
-                        </a>
-                    </li>
-
-                    <li class="nav-item">
-                        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2 @active("MyPrivateCourses")" title="@Localizer["Nav.MyPrivateCourses"]">
-                            <i class="fas fa-video nav-icon"></i>
-                            <span class="nav-text ms-2">@Localizer["Nav.MyPrivateCourses"]</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2  @active("PurchaseRequests")" title="@Localizer["Admin.PurchaseRequests"]">
-                            <i class="fas fa-shopping-cart nav-icon"></i>
-                            <span class="nav-text ms-2">@Localizer["Admin.PurchaseRequests"]</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2 @active("MyReactiveCourses")" title="@Localizer["Nav.ReactiveCourses"]">
-                            <i class="fas fa-broadcast-tower nav-icon"></i>
-                            <span class="nav-text ms-2">@Localizer["Nav.ReactiveCourses"]</span>
-                        </a>
-                    </li>
-
-                    <li class="nav-item">
-                        <a asp-area="Teacher" asp-controller="ReactiveEnrollments" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2 @active("ReactiveEnrollments")" title="@Localizer["Nav.ReactiveEnrollments"]">
-                            <i class="fas fa-user-friends nav-icon"></i>
-                            <span class="nav-text ms-2">@Localizer["Nav.ReactiveEnrollments"]</span>
-                        </a>
-                    </li>
-
-                    <li class="nav-item">
-                        <a asp-area="Teacher" asp-controller="Bookings" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2 @active("TheBookings")" title="@Localizer["Admin.Bookings"]">
-                            <i class="fas fa-calendar-check nav-icon"></i>
-                            <span class="nav-text ms-2">@Localizer["Booking.SessionBookings"]</span>
-                        </a>
-                    </li>
-
-                    <li class="nav-item">
-                        <a asp-area="Teacher" asp-controller="Slots" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2 @active("Slots")" title="@Localizer["Slots.Index.Title"]">
-                            <i class="fas fa-clock nav-icon"></i>
-                            <span class="nav-text ms-2">@Localizer["Slots.Index.Title"]</span>
-                        </a>
-                    </li>
-                }
-
-                @* --- STUDENT LINKS --- *@
+                @* STUDENT LINKS group *@
                 @if (isStudent)
                 {
-
                     <li class="nav-item">
                         <a asp-area="Student" asp-controller="PrivateCourses" asp-action="MyPurchases"
                            class="nav-link d-flex align-items-center gap-2 @active("MyPurchaseRequests")" title="@Localizer["Nav.RecordedCourses"]">
@@ -267,7 +259,6 @@
                             <span class="nav-text ms-2">@Localizer["Nav.RecordedCourses"]</span>
                         </a>
                     </li>
-
                     <li class="nav-item">
                         <a asp-area="Student" asp-controller="ReactiveEnrollments" asp-action="MyEnrollments"
                            class="nav-link d-flex align-items-center gap-2 @active("MyEnrollments")" title="@Localizer["ReactiveCourse.LiveClasses"]">
@@ -275,7 +266,6 @@
                             <span class="nav-text ms-2">@Localizer["ReactiveCourse.LiveClasses"]</span>
                         </a>
                     </li>
-
                     <li class="nav-item">
                         <a asp-area="Student" asp-controller="Bookings" asp-action="MyBookings"
                            class="nav-link d-flex align-items-center gap-2 @active("Bookings")" title="@Localizer["Booking.SessionBookings"]">
@@ -286,18 +276,18 @@
                 }
             </ul>
         </nav>
-
         <!-- Sidebar client-side enhancements -->
         <script>
+
             (function () {
-                document.querySelectorAll('#sidebar-wrapper .nav-link').forEach(function (a) {
-                    a.addEventListener('click', function () {
-                        document.querySelectorAll('#sidebar-wrapper .nav-link.active').forEach(function (el) { el.classList.remove('active'); });
-                        a.classList.add('active');
-                    });
-                    a.setAttribute('tabindex', 0);
-                    a.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') a.click(); });
-                });
+            document.querySelectorAll('#sidebar-wrapper .nav-link').forEach(function (a) {
+            a.addEventListener('click', function () {
+            document.querySelectorAll('#sidebar-wrapper .nav-link.active').forEach(function (el) { el.classList.remove('active'); });
+            a.classList.add('active');
+            });
+            a.setAttribute('tabindex', 0);
+            a.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') a.click(); });
+            });
             })();
         </script>
 

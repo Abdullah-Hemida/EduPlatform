@@ -1,4 +1,148 @@
-﻿// admin.js - updated for mobile icons-only default + expand-on-toggle
+﻿//// admin.js - updated for mobile icons-only default + expand-on-toggle
+//(function () {
+//    // Uses only existing #sidebarToggle in topbar
+//    var BREAK = 992;
+//    var wrapper = document.getElementById('wrapper');
+//    var sidebar = document.getElementById('sidebar-wrapper');
+//    var toggle = document.getElementById('sidebarToggle');
+//    if (!wrapper || !sidebar) return;
+
+//    var storageKey = 'adminSidebarCollapsed';
+//    var isRtl = (document.documentElement.getAttribute('dir') || '').toLowerCase() === 'rtl';
+
+//    function isMobile() { return window.innerWidth < BREAK; }
+
+//    function applyMargins() {
+//        // set margin on #page-content-wrapper based on current wrapper state and direction
+//        var page = document.getElementById('page-content-wrapper');
+//        if (!page) return;
+//        var computedWidth = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim() || '250px';
+//        var collapsed = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-collapsed').trim() || '80px';
+//        var collapsedMobile = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-collapsed-mobile').trim() || '56px';
+
+//        var widthToUse;
+//        if (isMobile()) {
+//            if (wrapper.classList.contains('sidebar-expanded-mobile')) widthToUse = computedWidth;
+//            else widthToUse = collapsedMobile;
+//        } else {
+//            if (wrapper.classList.contains('sidebar-collapsed')) widthToUse = collapsed;
+//            else widthToUse = computedWidth;
+//        }
+
+//        // clear previous inline margins first
+//        page.style.marginLeft = '';
+//        page.style.marginRight = '';
+
+//        if (isRtl) {
+//            page.style.marginRight = widthToUse;
+//            page.style.marginLeft = '0';
+//        } else {
+//            page.style.marginLeft = widthToUse;
+//            page.style.marginRight = '0';
+//        }
+//    }
+
+//    function setCollapsedDesktop(collapsed) {
+//        if (collapsed) wrapper.classList.add('sidebar-collapsed'); else wrapper.classList.remove('sidebar-collapsed');
+//        // remove mobile expanded state
+//        wrapper.classList.remove('sidebar-expanded-mobile');
+//        try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (e) { }
+//        applyMargins();
+//        refreshTooltips();
+//    }
+
+//    function expandMobile() {
+//        wrapper.classList.add('sidebar-expanded-mobile');
+//        wrapper.classList.remove('sidebar-collapsed');
+//        applyMargins();
+//        refreshTooltips();
+//    }
+
+//    function collapseMobile() {
+//        wrapper.classList.remove('sidebar-expanded-mobile');
+//        wrapper.classList.add('sidebar-collapsed');
+//        applyMargins();
+//        refreshTooltips();
+//    }
+
+//    // tooltips management (enable only when text hidden)
+//    var ttInstances = [];
+//    function refreshTooltips() {
+//        try { ttInstances.forEach(function (t) { if (t && t.dispose) t.dispose(); }); } catch (e) { }
+//        ttInstances = [];
+//        // nav-text visible?
+//        var textVisible = document.querySelector('.nav-text') && window.getComputedStyle(document.querySelector('.nav-text')).display !== 'none';
+//        if (textVisible) return;
+//        try {
+//            var els = [].slice.call(document.querySelectorAll('#sidebar-wrapper [data-bs-toggle="tooltip"]'));
+//            els.forEach(function (el) {
+//                var inst = bootstrap.Tooltip.getOrCreateInstance(el, { placement: isRtl ? 'left' : 'right', boundary: 'viewport' });
+//                ttInstances.push(inst);
+//            });
+//        } catch (e) { /* bootstrap not present */ }
+//    }
+
+//    // init state
+//    function init() {
+//        var saved = null;
+//        try { saved = localStorage.getItem(storageKey); } catch (e) { }
+//        if (isMobile()) {
+//            // mobile default: collapsed (thin)
+//            collapseMobile();
+//        } else {
+//            if (saved === '1') setCollapsedDesktop(true); else setCollapsedDesktop(false);
+//        }
+//        applyMargins();
+//        setTimeout(refreshTooltips, 250);
+//    }
+
+//    // wire topbar toggle if present
+//    if (toggle) {
+//        toggle.addEventListener('click', function (e) {
+//            e.preventDefault();
+//            if (isMobile()) {
+//                if (wrapper.classList.contains('sidebar-expanded-mobile')) collapseMobile();
+//                else expandMobile();
+//            } else {
+//                setCollapsedDesktop(!wrapper.classList.contains('sidebar-collapsed'));
+//            }
+//        });
+//    }
+
+//    // clicking a nav link on mobile collapses back (good UX)
+//    document.addEventListener('click', function (ev) {
+//        var link = ev.target.closest && ev.target.closest('#sidebar-wrapper .nav-link');
+//        if (link && isMobile()) {
+//            setTimeout(collapseMobile, 120);
+//        }
+//    });
+
+//    // keyboard activation
+//    document.querySelectorAll('#sidebar-wrapper .nav-link').forEach(function (el) {
+//        el.setAttribute('tabindex', '0');
+//        el.addEventListener('keydown', function (e) {
+//            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+//        });
+//    });
+
+//    // on resize adapt
+//    var resizeTimer = null;
+//    window.addEventListener('resize', function () {
+//        clearTimeout(resizeTimer);
+//        resizeTimer = setTimeout(function () {
+//            if (isMobile()) collapseMobile();
+//            else {
+//                var saved = null;
+//                try { saved = localStorage.getItem(storageKey); } catch (e) { }
+//                if (saved === '1') setCollapsedDesktop(true); else setCollapsedDesktop(false);
+//            }
+//            applyMargins();
+//            refreshTooltips();
+//        }, 120);
+//    });
+
+//    init();
+//})();
 (function () {
     var NAV_BREAK = 992; // px
     var wrapper = document.getElementById('wrapper');
