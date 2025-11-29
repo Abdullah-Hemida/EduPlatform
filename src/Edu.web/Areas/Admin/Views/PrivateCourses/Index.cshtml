@@ -157,38 +157,51 @@
 
 @section Scripts {
     <script>
-        (function(){
+        (function () {
+            // CSRF token (keeps your existing meta approach)
             var tokenMeta = document.querySelector('meta[name="csrf-token"]');
             var token = tokenMeta ? tokenMeta.getAttribute('content') : '';
 
-        function postToggle(id, btn) {
-            fetch('@Url.Action("TogglePublish", "PrivateCourses", new { area = "Admin" })?id=' + encodeURIComponent(id), {
-                method: 'POST',
-                headers: {
-                    'RequestVerificationToken': token,
-                    'Accept': 'application/json'
-                }
-            }).then(r => {
-                if (!r.ok) throw new Error('network');
-                return r.json();
-            }).then(function(data){
-                if (data && data.success) {
-                    if (data.isPublished) {
-                        btn.classList.remove('btn-success'); btn.classList.add('btn-warning');
-                        btn.innerText = '@L["Admin.UnapproveTeacher"].Value';
-                    } else {
-                        btn.classList.remove('btn-warning'); btn.classList.add('btn-success');
-                        btn.innerText = '@L["Admin.ApproveTeacher"].Value';
+            // Localized strings (serialized server-side to a safe JSON literal)
+            const Localized = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new {
+                UnapproveTeacher = L["Admin.UnapproveTeacher"].Value ?? L["Admin.Unapprove"].Value ?? "Unapprove",
+                ApproveTeacher = L["Admin.ApproveTeacher"].Value ?? L["Button.Approve"].Value ?? "Approve",
+                OperationFailed = L["Admin.OperationFailed"].Value ?? "Operation failed",
+                ServerError = L["Admin.ServerError"].Value ?? "Server error"
+            }));
+
+            function postToggle(id, btn) {
+                fetch('@Url.Action("TogglePublish", "PrivateCourses", new { area = "Admin" })?id=' + encodeURIComponent(id), {
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': token,
+                        'Accept': 'application/json'
                     }
-                } else {
-                    alert('@L["Admin.OperationFailed"]');
-                }
-            }).catch(function(){
-                alert('@L["Admin.ServerError"]');
-            });
-        }
-            document.querySelectorAll('.toggle-publish-btn').forEach(function(b){
-                b.addEventListener('click', function(){
+                }).then(function (r) {
+                    if (!r.ok) throw new Error('network');
+                    return r.json();
+                }).then(function (data) {
+                    if (data && data.success) {
+                        if (data.isPublished) {
+                            btn.classList.remove('btn-success');
+                            btn.classList.add('btn-warning');
+                            btn.textContent = Localized.UnapproveTeacher;
+                        } else {
+                            btn.classList.remove('btn-warning');
+                            btn.classList.add('btn-success');
+                            btn.textContent = Localized.ApproveTeacher;
+                        }
+                    } else {
+                        var msg = (data && data.message) ? data.message : Localized.OperationFailed;
+                        alert(msg);
+                    }
+                }).catch(function () {
+                    alert(Localized.ServerError);
+                });
+            }
+
+            document.querySelectorAll('.toggle-publish-btn').forEach(function (b) {
+                b.addEventListener('click', function () {
                     var id = b.getAttribute('data-id');
                     postToggle(id, b);
                 });
@@ -196,5 +209,6 @@
         })();
     </script>
 }
+
 
 
