@@ -5,6 +5,7 @@ using Edu.Infrastructure.Helpers;
 using Edu.Infrastructure.Localization;
 using Edu.Infrastructure.Persistence;
 using Edu.Infrastructure.Services;
+using Edu.Web.Helpers;
 using Edu.Web.Views.Shared.Components.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -87,7 +88,7 @@ var supportedCultures = new[] { "en", "ar", "it" };
 builder.Services.Configure<RequestLocalizationOptions>(opts =>
 {
     var cultures = supportedCultures.Select(c => new CultureInfo(c)).ToList();
-    opts.DefaultRequestCulture = new RequestCulture("en");
+    opts.DefaultRequestCulture = new RequestCulture("it");
     opts.SupportedCultures = cultures;
     opts.SupportedUICultures = cultures;
 
@@ -105,15 +106,16 @@ builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp")
 if (builder.Environment.IsDevelopment())
 {
     // Use NoOp in development
-    builder.Services.AddSingleton<IEmailSender, NoOpEmailSender>();
+    builder.Services.AddSingleton<IEmailSender, DevEmailSender>();
 }
 else
 {
     // Production: real SMTP sender (already implemented)
-    builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+    builder.Services.AddScoped<IEmailSender, MailKitEmailSender>();
 }
-// Register adapter so Microsoft.Identity UI can resolve IEmailSender
-builder.Services.AddScoped<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, IdentityEmailSenderAdapter>();
+
+builder.Services.AddScoped<IUserCultureProvider, UserCultureProvider>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 builder.Services.AddMemoryCache();
 

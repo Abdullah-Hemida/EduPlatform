@@ -24,6 +24,7 @@
                 <h6 class="text-muted">@L["Purchase.Requester"]</h6>
                 <div class="fw-semibold">@(Model.StudentName ?? "—")</div>
                 <div class="small text-muted">@(Model.StudentPhone ?? "—")</div>
+                <div>@L["GuardianPhoneNumber"]: @(Model.GuardianPhoneNumber ?? "_")</div>
             </div>
 
             <div class="col-md-6">
@@ -40,10 +41,7 @@
             <div class="col-md-4">
                 <h6 class="text-muted">@L["Purchase.Amount"]</h6>
                 <div class="fw-semibold">
-                    @(Model.Amount.HasValue 
-                        ? Model.Amount.Value.ToString("N2") 
-                        : L["Admin.NotProvided"])
-                        <span>₤</span>
+                    @(Model.AmountLabel)
                 </div>
 
             <div class="col-md-4">

@@ -442,111 +442,110 @@ namespace Edu.Web.Areas.Admin.Controllers
             return View(courseVm);
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Approve(int id)
-        {
-            var course = await _db.PrivateCourses.Include(pc => pc.Teacher).ThenInclude(t => t.User).FirstOrDefaultAsync(pc => pc.Id == id);
-            if (course == null) return NotFound();
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> Approve(int id)
+        //{
+        //    var course = await _db.PrivateCourses.Include(pc => pc.Teacher).ThenInclude(t => t.User).FirstOrDefaultAsync(pc => pc.Id == id);
+        //    if (course == null) return NotFound();
 
-            course.IsPublished = true;
-            course.IsPublishRequested = false; // clear request
-            var adminId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        //    course.IsPublished = true;
+        //    course.IsPublishRequested = false; // clear request
+        //    var adminId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
-            _db.CourseModerationLogs.Add(new CourseModerationLog
-            {
-                PrivateCourseId = course.Id,
-                AdminId = adminId,
-                Action = "Approved",
-                Note = null,
-                CreatedAtUtc = DateTime.UtcNow
-            });
+        //    _db.CourseModerationLogs.Add(new CourseModerationLog
+        //    {
+        //        PrivateCourseId = course.Id,
+        //        AdminId = adminId,
+        //        Action = "Approved",
+        //        Note = null,
+        //        CreatedAtUtc = DateTime.UtcNow
+        //    });
 
-            try
-            {
-                await _db.SaveChangesAsync();
+        //    try
+        //    {
+        //        await _db.SaveChangesAsync();
 
-                // Send email to teacher if email available
-                var teacherEmail = course.Teacher?.User?.Email;
-                if (!string.IsNullOrEmpty(teacherEmail))
-                {
-                    var subject = $"Your course '{course.Title}' was approved";
-                    var body = $"Hello {course.Teacher?.User?.FullName ?? ""},<br/><br/>" +
-                               $"Your course <strong>{course.Title}</strong> has been approved by the admin and is now live on the platform.<br/><br/>" +
-                               "Regards,<br/>Edu Platform Team";
-                    try { await _emailSender.SendEmailAsync(teacherEmail, subject, body); }
-                    catch (Exception ex) { _logger.LogWarning(ex, "Failed sending approval email for course {CourseId}", id); }
-                }
+        //        // Send email to teacher if email available
+        //        var teacherEmail = course.Teacher?.User?.Email;
+        //        if (!string.IsNullOrEmpty(teacherEmail))
+        //        {
+        //            var subject = $"Your course '{course.Title}' was approved";
+        //            var body = $"Hello {course.Teacher?.User?.FullName ?? ""},<br/><br/>" +
+        //                       $"Your course <strong>{course.Title}</strong> has been approved by the admin and is now live on the platform.<br/><br/>" +
+        //                       "Regards,<br/>Edu Platform Team";
+        //            try { await _emailSender.SendEmailAsync(teacherEmail, subject, body); }
+        //            catch (Exception ex) { _logger.LogWarning(ex, "Failed sending approval email for course {CourseId}", id); }
+        //        }
 
-                TempData["Success"] = "Course approved and published.";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error approving course {CourseId}", id);
-                TempData["Error"] = "Unable to approve course.";
-            }
+        //        TempData["Success"] = "Course approved and published.";
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error approving course {CourseId}", id);
+        //        TempData["Error"] = "Unable to approve course.";
+        //    }
 
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        //    return RedirectToAction(nameof(Details), new { id });
+        //}
 
 
-        // POST: Admin/PrivateCourses/Reject/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Reject(int id, string? adminNote)
-        {
-            var course = await _db.PrivateCourses.Include(pc => pc.Teacher).ThenInclude(t => t.User).FirstOrDefaultAsync(pc => pc.Id == id);
-            if (course == null) return NotFound();
+        //// POST: Admin/PrivateCourses/Reject/5
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> Reject(int id, string? adminNote)
+        //{
+        //    var course = await _db.PrivateCourses.Include(pc => pc.Teacher).ThenInclude(t => t.User).FirstOrDefaultAsync(pc => pc.Id == id);
+        //    if (course == null) return NotFound();
 
-            course.IsPublished = false;
-            course.IsPublishRequested = false;
+        //    course.IsPublished = false;
+        //    course.IsPublishRequested = false;
 
-            var adminId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            _db.CourseModerationLogs.Add(new CourseModerationLog
-            {
-                PrivateCourseId = course.Id,
-                AdminId = adminId,
-                Action = "Rejected",
-                Note = adminNote,
-                CreatedAtUtc = DateTime.UtcNow
-            });
+        //    var adminId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        //    _db.CourseModerationLogs.Add(new CourseModerationLog
+        //    {
+        //        PrivateCourseId = course.Id,
+        //        AdminId = adminId,
+        //        Action = "Rejected",
+        //        Note = adminNote,
+        //        CreatedAtUtc = DateTime.UtcNow
+        //    });
 
-            try
-            {
-                await _db.SaveChangesAsync();
+        //    try
+        //    {
+        //        await _db.SaveChangesAsync();
 
-                // send email to teacher with note
-                var teacherEmail = course.Teacher?.User?.Email;
-                if (!string.IsNullOrEmpty(teacherEmail))
-                {
-                    var subject = $"Your course '{course.Title}' was not approved";
-                    var body = $"Hello {course.Teacher?.User?.FullName ?? ""},<br/><br/>" +
-                               $"Your course <strong>{course.Title}</strong> was not approved by our admin.<br/><br/>" +
-                               $"Admin note: <blockquote>{System.Net.WebUtility.HtmlEncode(adminNote ?? "No note provided")}</blockquote><br/>" +
-                               "Please review the note and update your course accordingly.<br/><br/>Regards,<br/>Edu Platform Team";
-                    try { await _emailSender.SendEmailAsync(teacherEmail, subject, body); }
-                    catch (Exception ex) { _logger.LogWarning(ex, "Failed sending rejection email for course {CourseId}", id); }
-                }
-                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json"))
-                {
-                    return Json(new { success = true });
-                }
+        //        // send email to teacher with note
+        //        var teacherEmail = course.Teacher?.User?.Email;
+        //        if (!string.IsNullOrEmpty(teacherEmail))
+        //        {
+        //            var subject = $"Your course '{course.Title}' was not approved";
+        //            var body = $"Hello {course.Teacher?.User?.FullName ?? ""},<br/><br/>" +
+        //                       $"Your course <strong>{course.Title}</strong> was not approved by our admin.<br/><br/>" +
+        //                       $"Admin note: <blockquote>{System.Net.WebUtility.HtmlEncode(adminNote ?? "No note provided")}</blockquote><br/>" +
+        //                       "Please review the note and update your course accordingly.<br/><br/>Regards,<br/>Edu Platform Team";
+        //            try { await _emailSender.SendEmailAsync(teacherEmail, subject, body); }
+        //            catch (Exception ex) { _logger.LogWarning(ex, "Failed sending rejection email for course {CourseId}", id); }
+        //        }
+        //        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json"))
+        //        {
+        //            return Json(new { success = true });
+        //        }
 
-                TempData["Success"] = "Course rejected.";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error rejecting course {CourseId}", id);
-                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json"))
-                {
-                    return StatusCode(500, new { success = false, message = "Unable to update course." });
-                }
-                TempData["Error"] = "Unable to update course.";
-            }
+        //        TempData["Success"] = "Course rejected.";
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error rejecting course {CourseId}", id);
+        //        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json"))
+        //        {
+        //            return StatusCode(500, new { success = false, message = "Unable to update course." });
+        //        }
+        //        TempData["Error"] = "Unable to update course.";
+        //    }
 
-            return RedirectToAction(nameof(Details), new { id });
-
-        }
+        //    return RedirectToAction(nameof(Details), new { id });
+        //}
 
         // POST: Admin/PrivateCourses/TogglePublish/5 (AJAX-friendly)
         [HttpPost]
@@ -587,35 +586,35 @@ namespace Edu.Web.Areas.Admin.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RequestPublish(int id)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return Challenge();
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> RequestPublish(int id)
+        //{
+        //    var user = await _userManager.GetUserAsync(User);
+        //    if (user == null) return Challenge();
 
-            var course = await _db.PrivateCourses.FindAsync(id);
-            if (course == null) return NotFound();
-            if (course.TeacherId != user.Id) return Forbid();
+        //    var course = await _db.PrivateCourses.FindAsync(id);
+        //    if (course == null) return NotFound();
+        //    if (course.TeacherId != user.Id) return Forbid();
 
-            course.IsPublishRequested = !course.IsPublishRequested;
+        //    course.IsPublishRequested = !course.IsPublishRequested;
 
-            _db.CourseModerationLogs.Add(new CourseModerationLog
-            {
-                PrivateCourseId = course.Id,
-                AdminId = user.Id,
-                Action = course.IsPublishRequested ? "PublishRequested" : "PublishRequestCancelled",
-                Note = null,
-                CreatedAtUtc = DateTime.UtcNow
-            });
+        //    _db.CourseModerationLogs.Add(new CourseModerationLog
+        //    {
+        //        PrivateCourseId = course.Id,
+        //        AdminId = user.Id,
+        //        Action = course.IsPublishRequested ? "PublishRequested" : "PublishRequestCancelled",
+        //        Note = null,
+        //        CreatedAtUtc = DateTime.UtcNow
+        //    });
 
-            await _db.SaveChangesAsync();
+        //    await _db.SaveChangesAsync();
 
-            TempData["Success"] = course.IsPublishRequested
-                ? _localizer["Admin.PublishRequestSent"].Value
-                : _localizer["Admin.PublishRequestCancelledMsg"].Value;
+        //    TempData["Success"] = course.IsPublishRequested
+        //        ? _localizer["Admin.PublishRequestSent"].Value
+        //        : _localizer["Admin.PublishRequestCancelledMsg"].Value;
 
-            return RedirectToAction("Details", new { id });
-        }
+        //    return RedirectToAction("Details", new { id });
+        //}
     }
 }

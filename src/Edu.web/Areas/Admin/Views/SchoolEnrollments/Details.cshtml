@@ -1,0 +1,249 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.SchoolEnrollmentDetailsVm
+@using System.Text.Json
+@using Edu.Domain.Entities
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["Admin.SchoolEnrollments.Title", Model.EnrollmentId];
+}
+
+<h1>@ViewData["Title"]</h1>
+<div class="mb-3 d-flex align-items-center justify-content-between">
+    <a asp-area="Admin" asp-controller="SchoolEnrollments" asp-action="Index" class="btn btn-secondary">@L["Admin.Back"]</a>
+    <button id="btnDeleteEnrollment" class="btn btn-danger">@L["Admin.Delete"]</button>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body d-flex gap-3">
+        <div>
+            @if (!string.IsNullOrEmpty(Model.StudentPhotoUrl))
+            {
+                <img src="@Model.StudentPhotoUrl" width="96" height="96" class="rounded-circle" />
+            }
+        </div>
+        <div>
+            <h5>@(Model.StudentName ?? Model.StudentId)</h5>
+            <div class="small text-muted">@Model.StudentEmail</div>
+            <div class="small text-muted">@Model.StudentPhone</div>
+            <div>@L["GuardianPhoneNumber"] : @Model.GuardianPhoneNumber</div>
+            <div class="mt-2"><strong>@L["Admin.Course"]:</strong> @Model.CourseTitle</div>
+            <div class="mt-1"><strong>@L["Admin.Teacher"]:</strong> @Model.TeacherFullName</div>
+            <div class="mt-1"><strong>@L["Admin.Created"]:</strong> @Model.CreatedAtUtc.ToLocalTime().ToString("g")</div>
+        </div>
+    </div>
+</div>
+
+<h4>@L["Admin.MonthsAndPayments"]</h4>
+
+@foreach (var m in Model.Months)
+{
+    <div class="card mb-2">
+        <div class="card-body">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <strong>@L["Admin.Month"] @m.MonthIndex</strong>
+                    — <span class="fw-semibold">@m.LessonsCount</span>
+                    <small class="text-muted ms-1">@L["Admin.Lessons"]</small>
+                </div>
+                <div>
+                    <small class="text-muted">@m.Payments.Count() @L["Admin.Payments"]</small>
+                </div>
+            </div>
+
+            <table class="table mt-2 table-sm">
+                <thead>
+                    <tr>
+                        <th>@L["Admin.PaymentId"]</th>
+                        <th>@L["Admin.Amount"]</th>
+                        <th>@L["Admin.Status"]</th>
+                        <th>@L["Admin.Created"]</th>
+                        <th>@L["Admin.PaidAt"]</th>
+                        <th>@L["Admin.Note"]</th>
+                        <th class="text-end">@L["Admin.Actions"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (m.Payments.Any())
+                    {
+                        foreach (var p in m.Payments)
+                        {
+                            <tr data-payment-id="@p.PaymentId">
+                                <td>@p.PaymentId</td>
+                                <td>@p.Amount</td>
+                                <td>
+                                    @switch (p.Status)
+                                    {
+                                        case OnlineEnrollmentMonthPaymentStatus.Paid:
+                                            <span class="badge bg-success">@L["Status.Paid"]</span>
+                                            ;
+                                            break;
+                                        case OnlineEnrollmentMonthPaymentStatus.Pending:
+                                            <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+                                            ;
+                                            break;
+                                        case OnlineEnrollmentMonthPaymentStatus.Rejected:
+                                            <span class="badge bg-danger">@L["Status.Rejected"]</span>
+                                            ;
+                                            break;
+                                        default:
+                                            <span class="badge bg-secondary">@L["Admin.Other"]</span>
+                                            ;
+                                            break;
+                                    }
+                                </td>
+                                <td>@p.CreatedAtUtc.ToLocalTime().ToString("g")</td>
+                                <td>@(p.PaidAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                                <td>@p.AdminNote</td>
+                                <td class="text-end">
+                                    @if (p.Status != OnlineEnrollmentMonthPaymentStatus.Paid)
+                                    {
+                                        <button class="btn btn-sm btn-success btn-mark-paid" data-payment-id="@p.PaymentId">@L["Admin.MarkPaid"]</button>
+                                        <button class="btn btn-sm btn-outline-danger btn-reject-payment" data-payment-id="@p.PaymentId">@L["Admin.Reject"]</button>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">—</small>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr><td colspan="7" class="text-muted">@L["Admin.NoPaymentsForMonth"]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<div aria-live="polite" aria-atomic="true" class="position-fixed top-0 end-0 p-3" style="z-index:2050">
+    <div id="toast-container-admin"></div>
+</div>
+
+<div class="modal fade" id="noteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@L["Admin.RejectPaymentModal.Title"]</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="notePaymentId" />
+                <div class="mb-2">
+                    <label class="form-label">@L["Admin.RejectPaymentModal.Note"]</label>
+                    <textarea id="noteText" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnRejectConfirm" class="btn btn-danger">@L["Admin.Reject"]</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">@L["Common.Cancel"]</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@{
+    var jsTextsDetails = JsonSerializer.Serialize(new
+    {
+        confirmDelete = L["Admin.Delete.Confirm"].Value,
+        deleteSuccess = L["Admin.DeleteSuccess"].Value,
+        deleteError = L["Admin.DeleteError"].Value ?? L["Admin.Common.Error"].Value,
+        markPaidConfirm = L["Admin.MarkPaid.Confirm"].Value,
+        markPaidSuccess = L["Admin.MarkPaid.Success"].Value,
+        markPaidError = L["Admin.MarkPaid.Error"].Value ?? L["Admin.Common.Error"].Value,
+        rejectSuccess = L["Admin.Reject.Success"].Value,
+        rejectError = L["Admin.Reject.Error"].Value ?? L["Admin.Common.Error"].Value,
+        statusPaid = L["Status.Paid"].Value,
+        statusRejected = L["Status.Rejected"].Value,
+        statusPending = L["Status.Pending"].Value
+    });
+}
+
+@section Scripts {
+    <script>
+        $(function () {
+            const texts = @Html.Raw(jsTextsDetails);
+
+            const anti = $('input[name="__RequestVerificationToken"]').first().val();
+
+            function showToast(msg, type='success') {
+                const $c = $('#toast-container-admin');
+                const $t = $(`<div class="toast text-bg-${type} border-0" role="alert"><div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`);
+                $c.append($t);
+                new bootstrap.Toast($t[0], { delay: 3500 }).show();
+                $t.on('hidden.bs.toast', () => $t.remove());
+            }
+
+            $('#btnDeleteEnrollment').on('click', function () {
+                if (!confirm(texts.confirmDelete)) return;
+                $.ajax({
+                    url: '/Admin/SchoolEnrollments/Delete',
+                    method: 'POST',
+                    data: { enrollmentId: @Model.EnrollmentId, __RequestVerificationToken: anti },
+                    success: function (res) {
+                        if (res && res.success) {
+                            showToast(res.message || texts.deleteSuccess, 'success');
+                            setTimeout(() => location.href = '/Admin/SchoolEnrollments', 600);
+                        } else {
+                            showToast(res?.message || texts.deleteError, 'danger');
+                        }
+                    },
+                    error: function () { showToast(texts.deleteError, 'danger'); }
+                });
+            });
+
+            $(document).on('click', '.btn-mark-paid', function () {
+                const paymentId = $(this).data('payment-id');
+                if (!confirm(texts.markPaidConfirm)) return;
+                $.ajax({
+                    url: '/Admin/SchoolEnrollments/MarkPaymentPaid',
+                    method: 'POST',
+                    data: { paymentId: paymentId, __RequestVerificationToken: anti },
+                    success: function (res) {
+                        if (res && res.success) {
+                            showToast(texts.markPaidSuccess, 'success');
+                            const $row = $(`tr[data-payment-id="${paymentId}"]`);
+                            $row.find('td:nth-child(3)').html(`<span class="badge bg-success">${texts.statusPaid}</span>`);
+                            $row.find('.btn-mark-paid, .btn-reject-payment').remove();
+                        } else {
+                            showToast(res?.message || texts.markPaidError, 'danger');
+                        }
+                    },
+                    error: function () { showToast(texts.markPaidError, 'danger'); }
+                });
+            });
+
+            $(document).on('click', '.btn-reject-payment', function () {
+                const paymentId = $(this).data('payment-id');
+                $('#notePaymentId').val(paymentId);
+                $('#noteText').val('');
+                new bootstrap.Modal(document.getElementById('noteModal')).show();
+            });
+
+            $('#btnRejectConfirm').on('click', function () {
+                const paymentId = $('#notePaymentId').val();
+                const note = $('#noteText').val();
+                $.ajax({
+                    url: '/Admin/SchoolEnrollments/RejectPayment',
+                    method: 'POST',
+                    data: { paymentId: paymentId, adminNote: note, __RequestVerificationToken: anti },
+                    success: function (res) {
+                        if (res && res.success) {
+                            showToast(texts.rejectSuccess, 'success');
+                            const $row = $(`tr[data-payment-id="${paymentId}"]`);
+                            $row.find('td:nth-child(3)').html(`<span class="badge bg-danger">${texts.statusRejected}</span>`);
+                            $row.find('.btn-mark-paid, .btn-reject-payment').remove();
+                            bootstrap.Modal.getInstance(document.getElementById('noteModal')).hide();
+                        } else {
+                            showToast(res?.message || texts.rejectError, 'danger');
+                        }
+                    },
+                    error: function () { showToast(texts.rejectError, 'danger'); }
+                });
+            });
+        });
+    </script>
+}
+

@@ -59,6 +59,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                     StudentId = p.StudentId,
                     StudentName = p.Student.User.FullName,
                     StudentPhone = p.Student.User.PhoneNumber,
+                    GuardianPhoneNumber = p.Student.GuardianPhoneNumber,
                     PrivateCourseId = p.PrivateCourseId,
                     CourseTitle = p.PrivateCourse.Title,
                     TeacherName = p.PrivateCourse.Teacher.User.FullName,
@@ -134,12 +135,13 @@ namespace Edu.Web.Areas.Admin.Controllers
                 StudentId = pr.StudentId,
                 StudentName = pr.Student?.User?.FullName,
                 StudentPhone = pr.Student?.User?.PhoneNumber,
+                GuardianPhoneNumber = pr.Student?.GuardianPhoneNumber,
                 PrivateCourseId = pr.PrivateCourseId,
                 CourseTitle = pr.PrivateCourse?.Title,
                 TeacherName = pr.PrivateCourse?.Teacher?.User?.FullName,
                 RequestDateUtc = pr.RequestDateUtc,
                 Status = pr.Status.ToString(),
-                Amount = pr.Amount,
+                AmountLabel = pr.Amount.ToEuro(),
                 AdminNote = pr.AdminNote
             };
             ViewData["ActivePage"] = "PurchaseRequests";

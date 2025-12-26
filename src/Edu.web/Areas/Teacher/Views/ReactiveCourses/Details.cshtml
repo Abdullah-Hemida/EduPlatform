@@ -1,4 +1,5 @@
 ﻿@model Edu.Web.Areas.Teacher.ViewModels.ReactiveCourseDetailsVm
+@using Edu.Infrastructure.Helpers
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
@@ -18,8 +19,8 @@
        asp-controller="ReactiveCourses"
        asp-action="Index"
        class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
-        <span class="d-inline ltr-only"><i class="fas fa-arrow-left"></i></span>
-        <span class="d-inline rtl-only"><i class="fas fa-arrow-right"></i></span>
+        <span class="d-inline ltr-only"></span>
+        <span class="d-inline rtl-only"></span>
         <span>@L["Common.Back"]</span>
     </a>
 </div>
@@ -77,41 +78,115 @@
                 </div>
 
                 <div class="card-body">
+
                     @if (!month.Lessons.Any())
                     {
-                        <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                        <div class="text-muted small">@(L["Admin.NoRecords"] ?? "No records.")</div>
                     }
                     else
                     {
                         <div class="list-group list-group-flush">
-                            @foreach (var lesson in month.Lessons)
+                            @foreach(var lesson in month.Lessons)
                             {
-                                <div class="list-group-item d-flex align-items-start justify-content-between">
-                                    <div>
-                                        <div class="fw-semibold">@lesson.Title</div>
-                                        <div class="small text-muted">
-                                            @(lesson.ScheduledUtc.HasValue? lesson.ScheduledUtc.Value.ToLocalTime().ToString("g") : L["ReactiveCourse.NoSchedule"])
+                                var ytId = YouTubeHelper.ExtractYouTubeId(lesson.RecordedVideoUrl);
+                                var embedUrl = !string.IsNullOrEmpty(ytId)
+                                ? $"https://www.youtube-nocookie.com/embed/{ytId}?rel=0"
+                                : null;
+
+                                <div class="list-group-item ps-0 pe-0 py-3" data-lesson-id="@lesson.Id">
+                                    <div class="row gx-3 gy-2 align-items-start">
+                                        <div class="col-md-7">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div style="min-width:0">
+                                                    <div class="fw-semibold text-truncate">@lesson.Title</div>
+                                                    <div class="small text-muted">
+                                                        @(lesson.ScheduledUtc.HasValue
+                                                                                                    ? lesson.ScheduledUtc.Value.ToLocalTime().ToString("g")
+                                                                                                    : (L["ReactiveCourse.NoSchedule"] ?? "No schedule."))
                                         </div>
-                                        <div class="small mt-1">@(!string.IsNullOrEmpty(lesson.Notes) ? lesson.Notes : "")</div>
-                                    </div>
+                                        @if (!string.IsNullOrEmpty(lesson.Notes))
+                                                    {
+                                                        <div class="small mt-1 text-muted">@lesson.Notes</div>
+                                                    }
 
-                                    <div class="text-end d-flex gap-1">
-                                        @if (!string.IsNullOrEmpty(lesson.MeetUrl))
-                                        {
-                                            <a href="@lesson.MeetUrl" target="_blank" class="btn btn-sm btn-outline-primary mb-1">@L["ReactiveCourse.OpenMeet"]</a>
-                                        }
+                                                    @* Attachments (if any) *@
+                                                    @if (lesson.Files != null && lesson.Files.Any())
+                                                    {
+                                                        <div class="mt-2">
+                                                            <strong class="small">@((L["Attachments"] ?? "Attachments"))</strong>
+                                                            <ul class="small list-unstyled mt-1 mb-0">
+                                                                @foreach (var a in lesson.Files)
+                                                                {
+                                                                    <li><a href="@a.PublicUrl" target="_blank" rel="noopener">@a.FileName</a></li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                </div>
 
-                                        <div>
-                                            <button class="btn btn-sm btn-outline-secondary js-edit-lesson"
-                                                    data-lessonid="@lesson.Id"
-                                                    data-monthid="@month.Id"
-                                                    data-courseid="@Model.Id"
-                                                    data-title="@lesson.Title"
-                                                    data-scheduled="@lesson.ScheduledUtc?.ToString("o")"
-                                                    data-meet="@lesson.MeetUrl"
-                                                    data-notes="@lesson.Notes">
-                                                @L["Button.Edit"]
-                                            </button>
+                                                <div class="text-end ms-3">
+                                                    @* hide meet button when recorded video exists *@
+                                                    @if (string.IsNullOrEmpty(lesson.RecordedVideoUrl) && !string.IsNullOrEmpty(lesson.MeetUrl))
+                                                    {
+                                                        <a href="@lesson.MeetUrl" target="_blank" class="btn btn-sm btn-outline-primary mb-1">
+                                                            @(L["ReactiveCourse.OpenMeet"] ?? "Open meet")
+                                                        </a>
+                                                    }
+
+                                                    <button class="btn btn-sm btn-outline-secondary js-edit-lesson mb-1"
+                                                            data-lessonid="@lesson.Id"
+                                                            data-monthid="@lesson.ReactiveCourseMonthId"
+                                                            data-courseid="@Model.Id"
+                                                            data-title="@lesson.Title"
+                                                            data-scheduled="@lesson.ScheduledUtc?.ToString("o")"
+                                                            data-meet="@lesson.MeetUrl"
+                                                            data-recorded="@lesson.RecordedVideoUrl"
+                                                            data-notes="@lesson.Notes">
+                                                        @(L["Button.Edit"] ?? "Edit")
+                                                    </button>
+                                                    <form class="js-delete-lesson" asp-action="DeleteLesson" method="post" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="lessonId" value="@lesson.Id" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">@((L["Button.Delete"] ?? "Delete"))</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+@*                                         <button type="submit" class="btn btn-sm btn-outline-danger">@((L["Button.Delete"] ?? "Delete"))</button>
+ *@                                        <div class="col-md-5">
+                                            @if (!string.IsNullOrEmpty(embedUrl))
+                                            {
+                                                <div class="ratio ratio-16x9">
+                                                    <iframe class="lesson-iframe"
+                                                            src="@embedUrl"
+                                                            loading="lazy"
+                                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                            allowfullscreen
+                                                            frameborder="0"></iframe>
+                                                </div>
+                                            }
+                                            else if (!string.IsNullOrEmpty(lesson.RecordedVideoUrl))
+                                            {
+                                                @* non-YouTube hosted video *@
+                                                <div class="ratio ratio-16x9">
+                                                    <video controls style="width:100%;height:100%;object-fit:cover;">
+                                                        <source src="@lesson.RecordedVideoUrl" />
+                                                        @(L["ReactiveCourse.VideoNotSupported"] ?? "Your browser does not support this video.")
+                                                    </video>
+                                                </div>
+                                            }
+                                            else if (!string.IsNullOrEmpty(lesson.MeetUrl))
+                                            {
+                                                <div class="bg-light rounded d-flex align-items-center justify-content-center" style="min-height:120px;">
+                                                    <small class="text-muted">@(L["ReactiveCourse.Live"] ?? "Live")</small>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-light rounded d-flex align-items-center justify-content-center" style="min-height:120px;">
+                                                    <small class="text-muted">@(L["ReactiveCourse.NoSchedule"] ?? "No schedule")</small>
+                                                </div>
+                                            }
                                         </div>
                                     </div>
                                 </div>
@@ -119,6 +194,8 @@
                         </div>
                     }
                 </div>
+
+
             </div>
         }
     </div>
@@ -172,11 +249,21 @@
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label">@L["ReactiveCourse.RecordedVideoUrl"]</label>
+                    <input id="modalRecorded" name="RecordedVideoUrl" class="form-control" placeholder="https://youtu.be/..." />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">@L["Attachments"]</label>
+                    <input id="modalAttachments" name="Attachments" type="file" multiple class="form-control" />
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label">@L["ReactiveCourse.Notes"]</label>
                     <textarea id="modalNotes" name="Notes" class="form-control" rows="3"></textarea>
                 </div>
-            </div>
 
+            </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@L["Button.Cancel"]</button>
                 <button id="modalSaveBtn" type="button" class="btn btn-primary">@L["Button.Save"]</button>
@@ -187,303 +274,358 @@
 
 @section Scripts {
     <script>
-        (function () {
-            // localized strings injected into JS
-            const txt = {
-                addLesson: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.AddLesson"].Value ?? "Add lesson")),
-                editLesson: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.EditLesson"].Value ?? "Edit lesson")),
-                titleRequired: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.Validation.TitleRequired"].Value ?? "Title is required")),
-                meetUrlInvalid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.Validation.MeetUrlInvalid"].Value ?? "Invalid meeting URL")),
-                serverError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ServerError"].Value ?? "Server error")),
-                operationFailed: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.OperationFailed"].Value ?? "Operation failed")),
-                monthReady: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.MonthReady"].Value ?? "Ready")),
-                markReady: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.MarkReady"].Value ?? "Mark ready")),
-                commonSuccess: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Success"].Value ?? "Success")),
-                commonUpdated: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Updated"].Value ?? "Updated")),
-                commonError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Error"].Value ?? "Error"))
-            };
+        (function ($) {
+            $(function () {
+        // --- localized strings (replace your existing txt object) ---
+        var txt = {
+            addLesson: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.AddLesson"].Value ?? "Add lesson")),
+            editLesson: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.EditLesson"].Value ?? "Edit lesson")),
+            titleRequired: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.Validation.TitleRequired"].Value ?? "Title is required")),
+            meetUrlInvalid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.Validation.MeetUrlInvalid"].Value ?? "Invalid meeting URL")),
+            serverError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ServerError"].Value ?? "Server error")),
+            operationFailed: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.OperationFailed"].Value ?? "Operation failed")),
+            monthReady: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.MonthReady"].Value ?? "Ready")),
+            markReady: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ReactiveCourse.MarkReady"].Value ?? "Mark ready")),
+            commonSuccess: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Success"].Value ?? "Success")),
+            commonUpdated: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Updated"].Value ?? "Updated")),
+            commonError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Common.Error"].Value ?? "Error")),
 
-            // helper: read antiforgery token
-            function getAntiForgeryToken() {
-                const el = document.querySelector('input[name="__RequestVerificationToken"]');
-                return el ? el.value : '';
-            }
+            // strings used by delete handler
+            deleteConfirm: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.DeleteConfirm"].Value ?? "Are you sure?")),
+            lessonDeleted: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["OnlineCourse.LessonDeleted"].Value ?? "Lesson deleted.")),
+            deleteFailed: @Html.Raw(System.Text.Json.JsonSerializer.Serialize("Delete failed.")),
+            serverErrorShort: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ServerError"].Value ?? "Server error"))
+        };
 
-            // show floating alert
-            function showAlert(message, type = 'success') {
-                const container = document.getElementById('alert-container');
-                const alert = document.createElement('div');
-                alert.className = `alert alert-${type} alert-dismissible fade show`;
-                alert.role = 'alert';
-                alert.innerHTML = `${message} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
-                container.appendChild(alert);
-                setTimeout(() => {
-                    try { alert.remove(); } catch (e) { /* ignore */ }
-                }, 4000);
-            }
 
-            // basic URL heuristic
-            function looksLikeUrl(v) {
-                if (!v) return true;
-                try {
-                    const u = new URL(v);
-                    return !!u.host;
-                } catch (e) {
+                // helper: read antiforgery token
+                function getAntiForgeryToken() {
+                    var $el = $('input[name="__RequestVerificationToken"]').first();
+                    return $el.length ? $el.val() : '';
+                }
+
+                // show floating alert (bootstrap-compatible)
+                function showAlert(message, type) {
+                    type = type || 'success';
+                    var $container = $('#alert-container');
+                    if (!$container.length) {
+                        // fallback: prepend to body
+                        $container = $('<div id="alert-container" class="mb-3"></div>').prependTo('body');
+                    }
+                    var $alert = $('<div>')
+                        .addClass('alert alert-' + type + ' alert-dismissible fade show')
+                        .attr('role', 'alert')
+                        .html(message + ' <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>');
+                    $container.append($alert);
+                    setTimeout(function () {
+                        try { $alert.remove(); } catch (e) { /* ignore */ }
+                    }, 4000);
+                }
+
+                // basic URL heuristic
+                function looksLikeUrl(v) {
+                    if (!v) return true;
                     try {
-                        return /zoom|meet|teams|gotomeeting|webex/i.test(v);
-                    } catch (_) {
-                        return false;
-                    }
-                }
-            }
-
-            // modal setup
-            const modalEl = document.getElementById('lessonModal');
-            let bsModal = null;
-            function ensureModal() { if (!bsModal) bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' }); }
-
-            const modalTitleEl = document.getElementById('lessonModalTitle');
-            const modalCourseId = document.getElementById('modalCourseId');
-            const modalMonthId = document.getElementById('modalMonthId');
-            const modalLessonId = document.getElementById('modalLessonId');
-            const modalTitleInput = document.getElementById('modalTitle');
-            const modalScheduled = document.getElementById('modalScheduled');
-            const modalMeet = document.getElementById('modalMeet');
-            const modalNotes = document.getElementById('modalNotes');
-            const modalSaveBtn = document.getElementById('modalSaveBtn');
-
-            function resetErrors() {
-                ['titleError','scheduledError','meetError'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = '';
-                });
-                [modalTitleInput, modalScheduled, modalMeet].forEach(el => {
-                    if (el) el.classList.remove('is-invalid');
-                });
-            }
-
-            // open "Add Lesson" modal
-            document.querySelectorAll('.js-add-lesson').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    ensureModal();
-                    resetErrors();
-                    modalTitleEl.textContent = txt.addLesson;
-                    modalCourseId.value = this.getAttribute('data-courseid') || '';
-                    modalMonthId.value = this.getAttribute('data-monthid') || '';
-                    modalLessonId.value = '';
-                    modalTitleInput.value = '';
-                    modalScheduled.value = '';
-                    modalMeet.value = '';
-                    modalNotes.value = '';
-                    bsModal.show();
-                });
-            });
-
-            // open "Edit Lesson" modal
-            document.querySelectorAll('.js-edit-lesson').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    ensureModal();
-                    resetErrors();
-                    modalTitleEl.textContent = txt.editLesson;
-                    modalCourseId.value = this.getAttribute('data-courseid') || '';
-                    modalMonthId.value = this.getAttribute('data-monthid') || '';
-                    modalLessonId.value = this.getAttribute('data-lessonid') || '';
-                    modalTitleInput.value = this.getAttribute('data-title') || '';
-                    const sched = this.getAttribute('data-scheduled');
-                    modalScheduled.value = sched ? new Date(sched).toISOString().slice(0,16) : '';
-                    modalMeet.value = this.getAttribute('data-meet') || '';
-                    modalNotes.value = this.getAttribute('data-notes') || '';
-                    bsModal.show();
-                });
-            });
-
-            // Ajax add/edit lesson
-            modalSaveBtn.addEventListener('click', async function (ev) {
-                ev.preventDefault();
-                resetErrors();
-
-                const modalToken = getAntiForgeryToken();
-
-                const payload = {
-                    ReactiveCourseId: modalCourseId.value,
-                    ReactiveCourseMonthId: modalMonthId.value,
-                    Title: modalTitleInput.value ? modalTitleInput.value.trim() : '',
-                    ScheduledUtc: modalScheduled.value ? new Date(modalScheduled.value).toISOString() : null,
-                    MeetUrl: modalMeet.value ? modalMeet.value.trim() : '',
-                    Notes: modalNotes.value ? modalNotes.value.trim() : ''
-                };
-
-                let hasErr = false;
-                if (!payload.Title) {
-                    modalTitleInput.classList.add('is-invalid');
-                    document.getElementById('titleError').textContent = txt.titleRequired;
-                    hasErr = true;
-                }
-                if (payload.MeetUrl && !looksLikeUrl(payload.MeetUrl)) {
-                    modalMeet.classList.add('is-invalid');
-                    document.getElementById('meetError').textContent = txt.meetUrlInvalid;
-                    hasErr = true;
-                }
-                if (hasErr) return;
-
-                const isEdit = modalLessonId.value && modalLessonId.value.length > 0;
-                const url = isEdit
-                    ? '@Url.Action("EditLessonAjax", "ReactiveCourses", new { area = "Teacher" })'
-                    : '@Url.Action("AddLessonAjax", "ReactiveCourses", new { area = "Teacher" })';
-
-                if (isEdit) payload.lessonId = parseInt(modalLessonId.value, 10);
-
-                try {
-                    const resp = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'RequestVerificationToken': modalToken,
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                    const text = await resp.text();
-                    let data = null;
-                    try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
-
-                    if (!resp.ok) {
-                        const msg = (data && (data.errors || data.message)) || text || txt.serverError;
-                        showAlert(msg, 'danger');
-                        return;
-                    }
-
-                    if (data && (data.success === true || data.success === "true")) {
-                        bsModal.hide();
-                        location.reload();
-                        return;
-                    }
-
-                    if (data && data.success === false && data.errors) {
-                        if (data.errors.Title) {
-                            modalTitleInput.classList.add('is-invalid');
-                            document.getElementById('titleError').textContent = data.errors.Title;
+                        var u = new URL(v);
+                        return !!u.host;
+                    } catch (e) {
+                        try {
+                            return /zoom|meet|teams|gotomeeting|webex/i.test(v);
+                        } catch (_) {
+                            return false;
                         }
-                        if (data.errors.MeetUrl) {
-                            modalMeet.classList.add('is-invalid');
-                            document.getElementById('meetError').textContent = data.errors.MeetUrl;
-                        }
-                        if (data.errors.General) {
-                            showAlert(data.errors.General, 'danger');
-                        }
-                        return;
                     }
-
-                    showAlert(txt.operationFailed, 'danger');
-                } catch (err) {
-                    showAlert(txt.serverError, 'danger');
                 }
-            });
 
-            // Toggle month ready via AJAX (single unified handler)
-            async function postToggleReady(monthId, desiredReady) {
-                const url = '@Url.Action("SetMonthReadyAjax", "ReactiveCourses", new { area = "Teacher" })';
-                const token = getAntiForgeryToken();
-                try {
-                    const resp = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'RequestVerificationToken': token,
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({ monthId: monthId, ready: desiredReady })
-                    });
-
-                    const text = await resp.text();
-                    let data = null;
-                    try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
-
-                    if (!resp.ok) {
-                        const msg = (data && (data.message || data.errors && data.errors.General)) || text || txt.serverError;
-                        return { success: false, message: msg, data: data };
-                    }
-
-                    if (data && (data.success === true || data.success === "true")) {
-                        return { success: true, data: data };
-                    }
-
-                    const msg = (data && data.message) || txt.operationFailed;
-                    return { success: false, message: msg, data: data };
-                } catch (e) {
-                    return { success: false, message: txt.serverError, data: null };
+                // modal setup
+                var $modalEl = $('#lessonModal');
+                var bsModal = null;
+                function ensureModal() {
+                    if (!bsModal && $modalEl.length) bsModal = new bootstrap.Modal($modalEl[0], { backdrop: 'static' });
                 }
-            }
 
-            // attach toggle handlers (optimistic UI + revert on failure)
-            document.querySelectorAll('.js-toggle-month-ready').forEach(btn => {
-                btn.addEventListener('click', async function (e) {
+                // modal DOM refs
+                var $modalTitleEl = $('#lessonModalTitle');
+                var $modalCourseId = $('#modalCourseId');
+                var $modalMonthId = $('#modalMonthId');
+                var $modalLessonId = $('#modalLessonId');
+                var $modalTitleInput = $('#modalTitle');
+                var $modalScheduled = $('#modalScheduled');
+                var $modalMeet = $('#modalMeet');
+                var $modalNotes = $('#modalNotes');
+                var $modalAttachments = $('#modalAttachments');
+                var $modalRecorded = $('#modalRecorded');
+                var $modalSaveBtn = $('#modalSaveBtn');
+
+                function resetErrors() {
+                    $('#titleError,#scheduledError,#meetError').text('');
+                    $modalTitleInput.removeClass('is-invalid');
+                    $modalScheduled.removeClass('is-invalid');
+                    $modalMeet.removeClass('is-invalid');
+                }
+
+                // Open Add modal
+                $(document).on('click', '.js-add-lesson', function (e) {
                     e.preventDefault();
+                    ensureModal();
+                    resetErrors();
+                    $modalTitleEl.text(txt.addLesson);
+                    $modalCourseId.val($(this).data('courseid') || '');
+                    $modalMonthId.val($(this).data('monthid') || '');
+                    $modalLessonId.val('');
+                    $modalTitleInput.val('');
+                    $modalScheduled.val('');
+                    $modalMeet.val('');
+                    $modalNotes.val('');
+                    if ($modalAttachments.length) $modalAttachments.val('');
+                    if (bsModal) bsModal.show();
+                });
 
-                    const currentlyReady = this.dataset.isready === 'true';
-                    const desiredReady = !currentlyReady;
-                    const monthId = parseInt(this.dataset.monthid, 10);
+                // Open Edit modal
+                $(document).on('click', '.js-edit-lesson', function (e) {
+                    e.preventDefault();
+                    ensureModal();
+                    resetErrors();
+                    $modalTitleEl.text(txt.editLesson);
+                    $modalCourseId.val($(this).data('courseid') || '');
+                    $modalMonthId.val($(this).data('monthid') || '');
+                    $modalLessonId.val($(this).data('lessonid') || '');
+                    $modalTitleInput.val($(this).data('title') || '');
+                    var sched = $(this).data('scheduled');
+                    $modalScheduled.val(sched ? new Date(sched).toISOString().slice(0,16) : '');
+                    $modalMeet.val($(this).data('meet') || '');
+                    $modalNotes.val($(this).data('notes') || '');
+                    if ($modalAttachments.length) $modalAttachments.val('');
+                    if (bsModal) bsModal.show();
+                });
 
-                    const originalClass = this.className;
-                    const originalText = this.textContent;
-                    this.disabled = true;
+                // Save (Add/Edit) handler
+                $modalSaveBtn.on('click', function (ev) {
+                    ev.preventDefault();
+                    resetErrors();
+
+                    var token = getAntiForgeryToken();
+                    var isEdit = $modalLessonId.val() && $modalLessonId.val().length > 0;
+
+                    if (!$modalTitleInput.val() || !$modalTitleInput.val().trim()) {
+                        $modalTitleInput.addClass('is-invalid');
+                        $('#titleError').text(txt.titleRequired);
+                        return;
+                    }
+                    if ($modalMeet.val() && !looksLikeUrl($modalMeet.val())) {
+                        $modalMeet.addClass('is-invalid');
+                        $('#meetError').text(txt.meetUrlInvalid);
+                        return;
+                    }
+
+                    var url = isEdit
+                        ? '@Url.Action("EditLessonAjax", "ReactiveCourses", new { area = "Teacher" })'
+                        : '@Url.Action("AddLessonAjax", "ReactiveCourses", new { area = "Teacher" })';
+
+                    // Build FormData
+                    var fd = new FormData();
+                    fd.append('__RequestVerificationToken', token);
+                    fd.append('ReactiveCourseId', $modalCourseId.val() || '');
+                    fd.append('ReactiveCourseMonthId', $modalMonthId.val() || '');
+                    if (isEdit) fd.append('lessonId', $modalLessonId.val());
+                    fd.append('Title', ($modalTitleInput.val() || '').trim());
+                    if ($modalScheduled.val()) fd.append('ScheduledUtc', new Date($modalScheduled.val()).toISOString());
+                    if ($modalMeet.val()) fd.append('MeetUrl', ($modalMeet.val() || '').trim());
+                    if ($modalRecorded.length && $modalRecorded.val()) fd.append('RecordedVideoUrl', ($modalRecorded.val() || '').trim());
+                    if ($modalNotes.val()) fd.append('Notes', ($modalNotes.val() || '').trim());
+
+                    if ($modalAttachments.length && $modalAttachments[0].files && $modalAttachments[0].files.length) {
+                        for (var i = 0; i < $modalAttachments[0].files.length; i++) {
+                            fd.append('Attachments', $modalAttachments[0].files[i]);
+                        }
+                    }
+
+                    $.ajax({
+                        url: url,
+                        method: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        success: function (response, textStatus, jqXHR) {
+                            // response may be JSON or text parsed by server. Try conservative handling.
+                            var data = response;
+                            if (!jqXHR.status || jqXHR.status >= 400) {
+                                showAlert(txt.serverError, 'danger');
+                                return;
+                            }
+                            if (data && (data.success === true || data.success === "true")) {
+                                if (bsModal) bsModal.hide();
+                                location.reload();
+                                return;
+                            }
+                            if (data && data.success === false && data.errors) {
+                                if (data.errors.Title) {
+                                    $modalTitleInput.addClass('is-invalid');
+                                    $('#titleError').text(data.errors.Title);
+                                }
+                                if (data.errors.MeetUrl) {
+                                    $modalMeet.addClass('is-invalid');
+                                    $('#meetError').text(data.errors.MeetUrl);
+                                }
+                                if (data.errors.General) {
+                                    showAlert(data.errors.General, 'danger');
+                                }
+                                return;
+                            }
+                            showAlert(txt.operationFailed, 'danger');
+                        },
+                        error: function (jqXHR, textStatus, errorThrown) {
+                            showAlert(txt.serverError, 'danger');
+                        }
+                    });
+                });
+
+                // Delete attachment handler (delegated)
+                $(document).on('click', '.js-delete-attachment', function (ev) {
+                    ev.preventDefault();
+                    var id = $(this).data('id');
+                    if (!id) return;
+                    if (!confirm('@(L["Admin.DeleteConfirm"].Value ?? "Are you sure?")')) return;
+
+                    var token = getAntiForgeryToken();
+                    $.ajax({
+                        url: '@Url.Action("DeleteLessonAttachment", "ReactiveCourses", new { area = "Teacher" })',
+                        method: 'POST',
+                        data: { id: id, __RequestVerificationToken: token },
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        success: function (json) {
+                            if (json && json.success) {
+                                location.reload();
+                            } else {
+                                showAlert((json && json.message) ? json.message : 'Delete failed', 'danger');
+                            }
+                        },
+                        error: function () {
+                            showAlert(txt.serverError, 'danger');
+                        }
+                    });
+                });
+
+                // Toggle month ready via AJAX (returns {success,...})
+                async function postToggleReady(monthId, desiredReady) {
+                    var url = '@Url.Action("SetMonthReadyAjax", "ReactiveCourses", new { area = "Teacher" })';
+                    var token = getAntiForgeryToken();
+                    try {
+                        var result = await $.ajax({
+                            url: url,
+                            method: 'POST',
+                            data: JSON.stringify({ monthId: monthId, ready: desiredReady }),
+                            contentType: 'application/json',
+                            headers: { 'RequestVerificationToken': token, 'X-Requested-With': 'XMLHttpRequest' },
+                        });
+                        // ensure consistent return shape
+                        if (result && (result.success === true || result.success === "true")) return { success: true, data: result };
+                        return { success: false, message: (result && result.message) || txt.operationFailed, data: result };
+                    } catch (e) {
+                        return { success: false, message: txt.serverError, data: null };
+                    }
+                }
+
+                // attach toggle handlers (optimistic UI + revert on failure)
+                $(document).on('click', '.js-toggle-month-ready', async function (e) {
+                    e.preventDefault();
+                    var $btn = $(this);
+                    var currentlyReady = $btn.data('isready') === true || $btn.data('isready') === 'true';
+                    var desiredReady = !currentlyReady;
+                    var monthId = parseInt($btn.data('monthid'), 10);
+
+                    var originalClass = $btn.attr('class');
+                    var originalText = $btn.text();
+                    $btn.prop('disabled', true);
 
                     if (desiredReady) {
-                        this.classList.remove('btn-outline-secondary');
-                        this.classList.add('btn-success');
-                        this.textContent = txt.monthReady;
+                        $btn.removeClass('btn-outline-secondary').addClass('btn-success').text(txt.monthReady);
                     } else {
-                        this.classList.remove('btn-success');
-                        this.classList.add('btn-outline-secondary');
-                        this.textContent = txt.markReady;
+                        $btn.removeClass('btn-success').addClass('btn-outline-secondary').text(txt.markReady);
                     }
 
-                    const result = await postToggleReady(monthId, desiredReady);
+                    var result = await postToggleReady(monthId, desiredReady);
 
                     if (result.success) {
-                        this.dataset.isready = desiredReady ? 'true' : 'false';
-                        this.setAttribute('aria-pressed', desiredReady ? 'true' : 'false');
+                        $btn.data('isready', desiredReady ? 'true' : 'false');
+                        $btn.attr('aria-pressed', desiredReady ? 'true' : 'false');
                         showAlert(desiredReady ? txt.commonSuccess : txt.commonUpdated, 'success');
                     } else {
-                        this.className = originalClass;
-                        this.textContent = originalText;
-                        this.dataset.isready = currentlyReady ? 'true' : 'false';
-                        this.setAttribute('aria-pressed', currentlyReady ? 'true' : 'false');
-                        const msg = result.message || txt.operationFailed;
+                        $btn.attr('class', originalClass);
+                        $btn.text(originalText);
+                        $btn.data('isready', currentlyReady ? 'true' : 'false');
+                        $btn.attr('aria-pressed', currentlyReady ? 'true' : 'false');
+                        var msg = result.message || txt.operationFailed;
                         showAlert(msg, 'danger');
                     }
 
-                    this.disabled = false;
+                    $btn.prop('disabled', false);
                 });
-            });
 
-            // small helper to hide/show icons using dir attribute (LTR/RTL)
-            (function dirHelpers() {
-                const htmlDir = document.documentElement.getAttribute('dir') || 'ltr';
-                if (htmlDir === 'rtl') {
-                    document.querySelectorAll('.ltr-only').forEach(el => el.style.display = 'none');
-                } else {
-                    document.querySelectorAll('.rtl-only').forEach(el => el.style.display = 'none');
+                // small helper to hide/show icons using dir attribute (LTR/RTL)
+                (function dirHelpers() {
+                    var htmlDir = document.documentElement.getAttribute('dir') || 'ltr';
+                    if (htmlDir === 'rtl') {
+                        $('.ltr-only').each(function () { $(this).hide(); });
+                    } else {
+                        $('.rtl-only').each(function () { $(this).hide(); });
+                    }
+                })();
+
+        // --- Delete lesson via AJAX (delegated form submit) ---
+        $(document).on('submit', '.js-delete-lesson', function (ev) {
+            ev.preventDefault();
+            var $form = $(this);
+
+            // use serialized localized string instead of inline Razor
+            if (!confirm(txt.deleteConfirm)) return;
+
+            var fd = new FormData($form[0]);
+
+            $.ajax({
+                url: $form.attr('action'),
+                method: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (json) {
+                    if (json && json.success) {
+                        // remove lesson container (adjust selector to match markup)
+                        var $card = $form.closest('.lesson-card');
+                        if (!$card.length) $card = $form.closest('.list-group-item');
+                        if ($card.length) $card.remove();
+                        else if (json.lessonId) $('[data-lesson-id="' + json.lessonId + '"]').remove();
+
+                        // optional user feedback
+                        showAlert(txt.lessonDeleted, 'success');
+                    } else {
+                        var msg = (json && json.message) ? json.message : txt.deleteFailed;
+                        showAlert(msg, 'danger');
+                    }
+                },
+                error: function () {
+                    showAlert(txt.serverErrorShort, 'danger');
                 }
-            })();
+            });
+        });
 
-        })();
+            }); // document ready
+        })(jQuery);
     </script>
-
-    <style>
-        /* minimal direction helpers (no external CSS required) */
-        .ltr-only {
-            display: inline;
-        }
-
-        .rtl-only {
-            display: inline;
-        }
-    </style>
 }
 
+<style>
+    /* minimal direction helpers (no external CSS required) */
+    .ltr-only {
+        display: inline;
+    }
 
+    .rtl-only {
+        display: inline;
+    }
+</style>
 
 
 

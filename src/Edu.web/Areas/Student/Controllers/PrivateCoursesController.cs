@@ -1,15 +1,16 @@
-﻿using Edu.Application.IServices;
+﻿// File: Areas/Student/Controllers/PrivateCoursesController.cs
+using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
-using Edu.Infrastructure.Services;
+using Edu.Infrastructure.Helpers;
 using Edu.Web.Areas.Student.ViewModels;
+using Edu.Web.Helpers;
 using Edu.Web.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using Edu.Infrastructure.Helpers;
 
 namespace Edu.Web.Areas.Student.Controllers
 {
@@ -21,20 +22,13 @@ namespace Edu.Web.Areas.Student.Controllers
         private readonly IFileStorageService _fileStorage;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IStringLocalizer<SharedResource> _localizer;
-        private readonly IEmailSender _emailSender;
+        private readonly INotificationService _notifier;
+        private readonly IWebHostEnvironment _env;
+        private readonly ILogger<PrivateCoursesController> _logger;
 
-        public PrivateCoursesController(
-            ApplicationDbContext db,
-            IFileStorageService fileStorage,
-            UserManager<ApplicationUser> userManager,
-            IStringLocalizer<SharedResource> localizer,
-            IEmailSender emailSender)
+        public PrivateCoursesController(ApplicationDbContext db, IFileStorageService fileStorage, UserManager<ApplicationUser> userManager, IStringLocalizer<SharedResource> localizer, INotificationService notifier, IWebHostEnvironment env, ILogger<PrivateCoursesController> logger)
         {
-            _db = db;
-            _fileStorage = fileStorage;
-            _userManager = userManager;
-            _localizer = localizer;
-            _emailSender = emailSender;
+            _db = db; _fileStorage = fileStorage; _userManager = userManager; _localizer = localizer; _notifier = notifier; _env = env; _logger = logger;
         }
 
         // GET: Student/PrivateCourses/Details/5
@@ -94,7 +88,6 @@ namespace Edu.Web.Areas.Student.Controllers
                         var fr = lesson.Files[i];
                         if (string.IsNullOrEmpty(fr.PublicUrl) && !string.IsNullOrEmpty(fr.Name))
                         {
-                            // find corresponding FileResource entity to get StorageKey
                             var fileEntity = course.PrivateModules.SelectMany(mm => mm.PrivateLessons).SelectMany(ll => ll.Files).FirstOrDefault(x => x.Id == fr.Id);
                             if (fileEntity != null && !string.IsNullOrEmpty(fileEntity.StorageKey))
                             {
@@ -113,69 +106,53 @@ namespace Edu.Web.Areas.Student.Controllers
         }
 
         // POST: Student/PrivateCourses/RequestPurchase
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> RequestPurchase(int PrivateCourseId)
         {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return Challenge();
+            var user = await _userManager.GetUserAsync(User); if (user == null) return Challenge();
+            var course = await _db.PrivateCourses.AsNoTracking().FirstOrDefaultAsync(c => c.Id == PrivateCourseId && c.IsPublished); if (course == null) return NotFound();
 
-            var course = await _db.PrivateCourses.AsNoTracking().FirstOrDefaultAsync(c => c.Id == PrivateCourseId && c.IsPublished);
-            if (course == null) return NotFound();
+            var existsCompleted = await _db.PurchaseRequests.AsNoTracking().AnyAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Completed);
+            if (existsCompleted) { TempData["Info"] = _localizer["Purchase.AlreadyCompleted"].Value; return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId }); }
 
-            var existsCompleted = await _db.PurchaseRequests
-                .AsNoTracking()
-                .AnyAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Completed);
+            var pending = await _db.PurchaseRequests.FirstOrDefaultAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Pending);
+            if (pending != null) { TempData["Info"] = _localizer["Purchase.AlreadyPending"].Value; return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId }); }
 
-            if (existsCompleted)
-            {
-                TempData["Info"] = _localizer["Purchase.AlreadyCompleted"].Value;
-                return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId });
-            }
-
-            var pending = await _db.PurchaseRequests
-                .FirstOrDefaultAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Pending);
-
-            if (pending != null)
-            {
-                TempData["Info"] = _localizer["Purchase.AlreadyPending"].Value;
-                return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId });
-            }
-
-            _db.PurchaseRequests.Add(new PurchaseRequest
-            {
-                PrivateCourseId = PrivateCourseId,
-                StudentId = user.Id,
-                Amount = course.Price,
-                RequestDateUtc = DateTime.UtcNow,
-                Status = PurchaseStatus.Pending
-            });
+            _db.PurchaseRequests.Add(new PurchaseRequest { PrivateCourseId = PrivateCourseId, StudentId = user.Id, Amount = course.Price, RequestDateUtc = DateTime.UtcNow, Status = PurchaseStatus.Pending });
             await _db.SaveChangesAsync();
+
+            // notify admins (fire-and-forget / awaited in dev)
+            await NotifyFireAndForgetAsync(async () =>
+            {
+                await _notifier.NotifyAllAdminsAsync(
+                    "Email.Admin.Purchase.Requested.Subject",
+                    "Email.Admin.Purchase.Requested.Body",
+                    async admin => new object[] { course.Title, user.FullName ?? user.UserName ?? user.Email ?? user.Id, course.Price.ToString("C"), PrivateCourseId }
+                );
+            });
+
             TempData["Success"] = _localizer["Purchase.RequestSent"].Value;
             return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> CancelPurchase(int PrivateCourseId)
         {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return Challenge();
+            var user = await _userManager.GetUserAsync(User); if (user == null) return Challenge();
+            var pending = await _db.PurchaseRequests.FirstOrDefaultAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Pending);
+            if (pending == null) { TempData["Error"] = _localizer["Purchase.NoPending"].Value; return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId }); }
 
-            var pending = await _db.PurchaseRequests
-                .FirstOrDefaultAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Pending);
+            pending.Status = PurchaseStatus.Cancelled; pending.RequestDateUtc = DateTime.UtcNow; _db.PurchaseRequests.Update(pending); await _db.SaveChangesAsync();
 
-            if (pending == null)
+            // notify admins
+            await NotifyFireAndForgetAsync(async () =>
             {
-                TempData["Error"] = _localizer["Purchase.NoPending"].Value;
-                return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId });
-            }
-
-            pending.Status = PurchaseStatus.Cancelled;
-            pending.RequestDateUtc = DateTime.UtcNow;
-
-            _db.PurchaseRequests.Update(pending);
-            await _db.SaveChangesAsync();
+                await _notifier.NotifyAllAdminsAsync(
+                    "Email.Admin.Purchase.Cancelled.Subject",
+                    "Email.Admin.Purchase.Cancelled.Body",
+                    async admin => new object[] { pending.PrivateCourse?.Title ?? "", user.FullName ?? user.UserName ?? user.Email ?? user.Id, PrivateCourseId }
+                );
+            });
 
             TempData["Success"] = _localizer["Purchase.Cancelled"].Value;
             return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId });
@@ -228,7 +205,6 @@ namespace Edu.Web.Areas.Student.Controllers
                 return RedirectToAction(nameof(Details), new { id = courseId });
             }
 
-            // build lesson VM
             var vm = new PrivateLessonVm
             {
                 Id = lesson.Id,
@@ -244,7 +220,6 @@ namespace Edu.Web.Areas.Student.Controllers
                 }).ToList()
             };
 
-            // resolve file urls
             foreach (var fr in vm.Files)
             {
                 var fileEntity = lesson.Files.FirstOrDefault(x => x.Id == fr.Id);
@@ -260,6 +235,11 @@ namespace Edu.Web.Areas.Student.Controllers
             ViewData["ActivePage"] = "MyPurchaseRequests";
             return View(vm);
         }
+        private async Task NotifyFireAndForgetAsync(Func<Task> work)
+        {
+            if (work == null) return; try { if (_env?.IsDevelopment() == true) await work(); else _ = Task.Run(work); } catch (Exception ex) { _logger.LogError(ex, "NotifyFireAndForget failed"); }
+        }
     }
 }
+
 

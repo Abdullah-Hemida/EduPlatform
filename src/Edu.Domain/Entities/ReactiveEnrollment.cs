@@ -12,7 +12,6 @@ namespace Edu.Domain.Entities
         public string? StudentId { get; set; }   // ApplicationUser.Id
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
         public bool IsApproved { get; set; } = false; // Admin approves enrollment (optional)
-
         public ReactiveCourse? ReactiveCourse { get; set; }
         public Student? Student { get; set; }   // your Student entity
         public ICollection<ReactiveEnrollmentMonthPayment> MonthPayments { get; set; } = new List<ReactiveEnrollmentMonthPayment>();

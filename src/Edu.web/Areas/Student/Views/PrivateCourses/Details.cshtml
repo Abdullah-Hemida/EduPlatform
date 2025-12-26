@@ -22,7 +22,6 @@
                     @if (Model.IsPurchased)
                     {
                         <span class="badge bg-success">@L["Status.Completed"]</span>
-                        <a asp-area="Student" asp-controller="PrivateCourses" asp-action="MyPurchases" class="btn btn-outline-secondary btn-sm ms-2">@(L["ReactiveCourse.MyEnrollments"] ?? "My courses")</a>
                     }
                     else
                     {
@@ -91,9 +90,7 @@
             </div>
         </div>
 
-        <a asp-action="Index" class="btn btn-light w-100">
-            <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
-            <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
+        <a asp-area="Student" asp-controller="PrivateCourses" asp-action="MyPurchases" class="btn btn-secondary w-100">
             @L["Common.Back"]
         </a>
     </aside>

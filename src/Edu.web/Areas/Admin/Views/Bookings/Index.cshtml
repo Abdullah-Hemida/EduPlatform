@@ -234,14 +234,14 @@ else
     </nav>
 }
 
-@* Hidden antiforgery token for AJAX *@
+@* Hidden antiforgery token for AJAX already present *@
 <form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
 
 @section Scripts {
     <script>
-        (function () {
-            // localize strings safely by serializing them from server to JS
-            const texts = {
+        (function ($) {
+            // sterilized localized texts (serialized JSON from server)
+            var texts = {
                 confirmMarkPaid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.ConfirmMarkPaid"].Value ?? "Mark this booking as paid?")),
                 promptAmount: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptAmount"].Value ?? "Optional: enter amount (leave empty to keep current)")),
                 promptPaymentRef: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptPaymentRef"].Value ?? "Optional: payment reference / note:")),
@@ -252,31 +252,32 @@ else
                 bookingStatusPaid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.Status.Paid"].Value ?? "Paid"))
             };
 
-            // Get antiforgery token value (from form rendered on page)
             function getAntiForgeryToken() {
-                var f = document.getElementById('antiForgeryForm');
-                if (!f) return '';
-                var tokenInput = f.querySelector('input[name="__RequestVerificationToken"]');
-                return tokenInput ? tokenInput.value : '';
+                return $('#antiForgeryForm input[name="__RequestVerificationToken"]').val() || '';
             }
 
-            // helper: show simple toast (fallback to alert)
             function showMessage(msg) {
-                // if you have a toast implementation use it, else fallback to alert
-                try {
+                // try to use bootstrap toast or alert fallback
+                if (typeof bootstrap !== 'undefined') {
+                    // basic toast fallback; for simplicity use alert here
                     alert(msg);
-                } catch (e) {
+                } else {
                     alert(msg);
                 }
             }
 
-            // MarkPaid handler
-            async function markPaid(id, btn) {
+            $(document).on('click', '.mark-paid-btn', function (e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var id = parseInt($btn.data('id'), 10);
+                if (!id) return;
+
                 if (!confirm(texts.confirmMarkPaid)) return;
 
                 var amountRaw = prompt(texts.promptAmount + ":");
                 var amount = null;
                 if (amountRaw !== null && amountRaw.trim() !== '') {
+                    // parse decimal (allow comma)
                     var parsed = parseFloat(amountRaw.replace(',', '.'));
                     if (!isNaN(parsed)) amount = parsed;
                     else {
@@ -287,66 +288,48 @@ else
 
                 var payload = { Id: id, Amount: amount, PaymentRef: paymentRef };
 
-                btn.disabled = true;
-                btn.classList.add('disabled');
+                $btn.prop('disabled', true).addClass('disabled');
 
-                try {
-                    var res = await fetch('@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })', {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'RequestVerificationToken': getAntiForgeryToken(),
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!res.ok) {
-                        var body = await res.text();
-                        throw new Error('Server error: ' + body);
+                $.ajax({
+                    url: '@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })',
+                    type: 'POST',
+                    contentType: 'application/json; charset=utf-8',
+                    data: JSON.stringify(payload),
+                    headers: {
+                        'RequestVerificationToken': getAntiForgeryToken()
                     }
-
-                    var data = await res.json();
+                }).done(function (data) {
                     if (data && data.success) {
-                        // update UI: badge, price, button
-                        var badge = document.getElementById('badge-' + id);
-                        if (badge) {
-                            badge.className = 'badge bg-success';
-                            badge.innerText = texts.bookingStatusPaid;
+                        // update UI
+                        var badge = $('#badge-' + id);
+                        if (badge && badge.length) {
+                            badge.removeClass().addClass('badge bg-success');
+                            badge.text(texts.bookingStatusPaid);
                         }
 
-                        if (data.price != null || data.priceLabel != null) {
-                            var priceEl = document.getElementById('price-' + id);
-                            if (priceEl) priceEl.innerText = data.priceLabel ?? data.price ?? priceEl.innerText;
+                        var priceEl = $('#price-' + id);
+                        if (priceEl && priceEl.length) {
+                            priceEl.text(data.priceLabel || data.price || priceEl.text());
                         }
 
-                        var newBtn = document.createElement('button');
-                        newBtn.className = 'btn btn-sm btn-success ms-1';
-                        newBtn.disabled = true;
-                        newBtn.innerText = texts.paidLabel;
-
-                        btn.parentNode.replaceChild(newBtn, btn);
+                        // replace button with disabled Paid button
+                        var newBtn = $('<button/>', {
+                            'class': 'btn btn-sm btn-success ms-1',
+                            disabled: true,
+                            text: texts.paidLabel
+                        });
+                        $btn.replaceWith(newBtn);
                     } else {
-                        showMessage(data?.error ?? texts.operationFailed);
-                        btn.disabled = false;
-                        btn.classList.remove('disabled');
+                        showMessage(data && data.error ? data.error : texts.operationFailed);
+                        $btn.prop('disabled', false).removeClass('disabled');
                     }
-                } catch (err) {
+                }).fail(function (xhr, status, err) {
                     console.error(err);
                     showMessage(texts.serverError);
-                    btn.disabled = false;
-                    btn.classList.remove('disabled');
-                }
-            }
-
-            document.querySelectorAll('.mark-paid-btn').forEach(function (b) {
-                b.addEventListener('click', function (e) {
-                    var id = parseInt(this.getAttribute('data-id'), 10);
-                    markPaid(id, this);
+                    $btn.prop('disabled', false).removeClass('disabled');
                 });
             });
-        })();
+        })(jQuery);
     </script>
 }
 

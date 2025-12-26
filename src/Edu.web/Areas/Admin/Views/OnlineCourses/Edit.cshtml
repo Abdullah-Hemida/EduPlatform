@@ -1,0 +1,94 @@
+﻿@model Edu.Web.Areas.Admin.ViewModels.OnlineCourseEditVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["OnlineCourse.EditCourse"] ?? "Edit Online Course";
+}
+
+<div class="card">
+    <div class="card-body">
+        <h4 class="mb-3">@ViewData["Title"]</h4>
+
+        <form asp-area="Admin" asp-controller="OnlineCourses" asp-action="Edit" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input asp-for="Id" type="hidden" />
+
+            <div class="mb-3">
+                <label class="form-label">@(L["OnlineCourse.Title"] ?? "Title")</label>
+                <input asp-for="Title" class="form-control" />
+                <span asp-validation-for="Title" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">@(L["OnlineCourse.Description"] ?? "Description")</label>
+                <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">@(L["OnlineCourse.Level"] ?? "Level")</label>
+                    <select asp-for="LevelId" asp-items="Model.Levels" class="form-select">
+                        <option value="">@(L["Select"] ?? "Select")</option>
+                    </select>
+                    <span asp-validation-for="LevelId" class="text-danger"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">@(L["OnlineCourse.CoverImage"] ?? "Cover image")</label>
+
+                    @if (!string.IsNullOrEmpty(Model.ExistingCoverPublicUrl))
+                    {
+                        <div class="mb-2">
+                            <img src="@Model.ExistingCoverPublicUrl" class="img-fluid rounded" style="max-height:140px;" />
+                        </div>
+                    }
+
+                    <input asp-for="NewCoverImage" type="file" class="form-control" />
+                    <span asp-validation-for="NewCoverImage" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-2">
+                <div class="col-md-4">
+                    <label class="form-label">@(L["OnlineCourse.PricePerMonth"] ?? "Price per month")</label>
+                    <input asp-for="PricePerMonth" class="form-control" />
+                    <span asp-validation-for="PricePerMonth" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">@(L["ReactiveCourse.Duration"] ?? "Duration (months)")</label>
+                    <input asp-for="DurationMonths" class="form-control" />
+                    <span asp-validation-for="DurationMonths" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="mb-3 mt-3">
+                <label class="form-label">@(L["OnlineCourse.IntroductionVideoUrl"] ?? "Introduction video (YouTube URL)")</label>
+                <input asp-for="IntroductionVideoUrl" class="form-control" placeholder="https://www.youtube.com/..." />
+                <span asp-validation-for="IntroductionVideoUrl" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">@(L["OnlineCourse.TeacherName"] ?? "Teacher name (display only)")</label>
+                <input asp-for="TeacherName" class="form-control" />
+                <span asp-validation-for="TeacherName" class="text-danger"></span>
+            </div>
+
+            <div class="form-check form-switch mb-3">
+                <input asp-for="IsPublished" class="form-check-input" />
+                <label class="form-check-label">@(L["OnlineCourse.IsPublished"] ?? "Published")</label>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">@(L["Button.Save"] ?? "Save")</button>
+                <a asp-area="Admin" asp-controller="OnlineCourses" asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary">@L["Common.Cancel"] ?? "Cancel"</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+
+

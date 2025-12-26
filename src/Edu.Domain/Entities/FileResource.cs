@@ -10,6 +10,8 @@ namespace Edu.Domain.Entities
         // optional foreign keys
         public int? SchoolLessonId { get; set; }
         public int? PrivateLessonId { get; set; }
+        public int? OnlineCourseLessonId { get; set; }
+        public int? ReactiveCourseLessonId { get; set; }
 
         // provider-agnostic storage key (recommended to store)
         public string? StorageKey { get; set; }
@@ -30,6 +32,8 @@ namespace Edu.Domain.Entities
         // navigations
         public SchoolLesson? SchoolLesson { get; set; }
         public PrivateLesson? PrivateLesson { get; set; }
+        public OnlineCourseLesson? OnlineCourseLesson { get; set; }
+        public ReactiveCourseLesson? ReactiveCourseLesson { get; set; }
     }
 
     public class FileResourceConfiguration : IEntityTypeConfiguration<FileResource>
@@ -61,7 +65,7 @@ namespace Edu.Domain.Entities
                    .OnDelete(DeleteBehavior.SetNull)
                    .HasConstraintName("FK_FileResource_SchoolLesson");
 
-            // PrivateLesson relationship - be explicit
+            // PrivateLesson relationship
             builder.HasOne(f => f.PrivateLesson)
                    .WithMany(l => l.Files)
                    .HasForeignKey(f => f.PrivateLessonId)
@@ -69,7 +73,22 @@ namespace Edu.Domain.Entities
                    .OnDelete(DeleteBehavior.SetNull)
                    .HasConstraintName("FK_FileResource_PrivateLesson");
 
-            // optional index for fast lookup by storage key
+            // NEW: OnlineCourseLesson relationship (nullable, set null on delete)
+            builder.HasOne(f => f.OnlineCourseLesson)
+                   .WithMany(l => l.Files) // ensure OnlineCourseLesson.Files exists
+                   .HasForeignKey(f => f.OnlineCourseLessonId)
+                   .IsRequired(false)
+                   .OnDelete(DeleteBehavior.SetNull)
+                   .HasConstraintName("FK_FileResource_OnlineCourseLesson");
+
+            builder.HasOne(f => f.ReactiveCourseLesson)
+                   .WithMany(l => l.Files) // ensure OnlineCourseLesson.Files exists
+                   .HasForeignKey(f => f.ReactiveCourseLessonId)
+                   .IsRequired(false)
+                   .OnDelete(DeleteBehavior.SetNull)
+                   .HasConstraintName("FK_FileResource_ReactiveCourseLesson");
+
+            // index for storage key
             builder.HasIndex(f => f.StorageKey).HasDatabaseName("IX_FileResource_StorageKey");
         }
     }

@@ -2,41 +2,38 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
-    Layout = "/Views/Shared/_DashboardLayout.cshtml";
     ViewData["Title"] = L["Admin.PurchaseRequestDetails"] ?? "Purchase Request Details";
+    string fallbackCover = Url.Content("~/images/default-course-cover.png");
 }
 
-<div class="d-flex align-items-center justify-content-between mb-3 mt-2 ">
-    <div>
-        <h3 class="mb-0">@ViewData["Title"]</h3>
-        <div class="small text-muted">@(L["Teacher.PurchaseRequestDetailsSubtitle"] ?? "Details of the purchase request")</div>
-    </div>
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 mt-2">
+    <h3 class="mb-0">@ViewData["Title"]</h3>
 
-    <div class="">
-        <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Index" class="btn btn-outline-secondary btn-sm">
-            <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
-            <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
-            @L["Common.Back"]
-        </a>
-    </div>
+    <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Index" class="btn btn-outline-secondary btn-sm ms-2">
+        @L["Common.Back"]
+    </a>
 </div>
 
 <div class="row g-3">
+    <!-- Main column -->
     <div class="col-lg-8">
         <div class="card mb-3">
             <div class="card-body">
-                <h5 class="mb-1">@Model.CourseTitle</h5>
+                <h5 class="mb-1 text-truncate min-w-0">@Model.CourseTitle</h5>
                 <div class="small text-muted mb-3">@Model.CategoryName</div>
 
-                <dl class="row">
-                    <dt class="col-sm-4 text-muted">@L["Student"]</dt>
-                    <dd class="col-sm-8">@Model.StudentName &nbsp; <span class="small text-muted">(@Model.StudentEmail)</span></dd>
+                <div class="row g-2">
+                    <div class="col-12 col-sm-4 text-muted">@L["Admin.Student"]</div>
+                    <div class="col-12 col-sm-8 min-w-0">
+                        <div class="fw-semibold text-truncate">@Model.StudentName</div>
+                        <div class="small text-muted">@Model.StudentEmail</div>
+                    </div>
 
-                    <dt class="col-sm-4 text-muted">@L["Amount"]</dt>
-                    <dd class="col-sm-8 fw-semibold">@Model.AmountLabel</dd>
+                    <div class="col-12 col-sm-4 text-muted">@L["Admin.Amount"]</div>
+                    <div class="col-12 col-sm-8 fw-semibold">@Model.AmountLabel</div>
 
-                    <dt class="col-sm-4 text-muted">@L["Status"]</dt>
-                    <dd class="col-sm-8">
+                    <div class="col-12 col-sm-4 text-muted">@L["Admin.Status"]</div>
+                    <div class="col-12 col-sm-8">
                         @if (Model.Status == PurchaseStatus.Pending)
                         {
                             <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
@@ -49,41 +46,49 @@
                         {
                             <span class="badge bg-danger">@L["Status.Rejected"]</span>
                         }
-                    </dd>
+                    </div>
 
-                    <dt class="col-sm-4 text-muted">@L["RequestedAt"]</dt>
-                    <dd class="col-sm-8 small text-muted">@Model.RequestDateUtc.ToLocalTime().ToString("f")</dd>
+                    <div class="col-12 col-sm-4 text-muted">@L["Admin.RequestedAt"]</div>
+                    <div class="col-12 col-sm-8 small text-muted">@Model.RequestDateUtc.ToLocalTime().ToString("f")</div>
 
-                    <dt class="col-sm-4 text-muted">@L["Admin.Note"]</dt>
-                    <dd class="col-sm-8">@(!string.IsNullOrEmpty(Model.AdminNote) ? Model.AdminNote : "<span class=\"text-muted small\">No note</span>")</dd>
-                </dl>
+                    <div class="col-12 col-sm-4 text-muted">@L["Admin.Note"]</div>
+                    <div class="col-12 col-sm-8 min-w-0">@(!string.IsNullOrEmpty(Model.AdminNote) ? Model.AdminNote : L["Admin.NoNotes"])</div>
+                </div>
             </div>
         </div>
 
+        <!-- Course card: use order-md to allow flipping in RTL via CSS above -->
         <div class="card">
-            <div class="card-header">
-                <strong>@L["Course"]</strong>
-            </div>
-            <div class="card-body d-flex gap-3 align-items-start">
-                @if (!string.IsNullOrEmpty(Model.CourseCoverUrl))
-                {
-                    <img src="@Model.CourseCoverUrl" alt="@Model.CourseTitle" style="width:140px;height:88px;object-fit:cover" class="rounded" />
-                }
-                <div>
-                    <div class="fw-semibold">@Model.CourseTitle</div>
+            <div class="card-header"><strong>@L["Admin.Course"]</strong></div>
+
+            <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
+                <div class="flex-shrink-0 order-md-1">
+                    <img loading="lazy"
+                         src="@(string.IsNullOrWhiteSpace(Model.CourseCoverUrl) ? fallbackCover : Model.CourseCoverUrl)"
+                         alt="@Model.CourseTitle"
+                         class="thumb-lg" />
+                </div>
+
+                <div class="min-w-0 flex-grow-1 order-md-2">
+                    <div class="fw-semibold text-truncate">@Model.CourseTitle</div>
                     <div class="small text-muted">@Model.CategoryName</div>
-                    <div class="mt-2">
-                        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-sm btn-outline-secondary">@L["Admin.ViewCourse"]</a>
+
+                    <div class="mt-3 d-flex flex-wrap gap-2">
+                        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-sm btn-outline-secondary">
+                            @L["Button.View"]
+                        </a>
+                        @* extra contextual buttons can be added here (they will wrap on small screens) *@
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Aside column -->
     <aside class="col-lg-4">
         <div class="card shadow-sm mb-3">
             <div class="card-body">
-                <h6>@L["Student"]</h6>
+                <h6 class="mb-1">@L["Admin.Student"]</h6>
                 <div class="small text-muted">@Model.StudentName</div>
                 <div class="small text-muted">@Model.StudentEmail</div>
             </div>
@@ -91,13 +96,16 @@
 
         <div class="card shadow-sm">
             <div class="card-body">
-                <h6>@L["Payment"]</h6>
-                <div class="small text-muted">@L["Amount"]</div>
+                <h6 class="mb-1">@L["Admin.Payments"]</h6>
+                <div class="small text-muted">@L["Admin.Amount"]</div>
                 <div class="fw-semibold">@Model.AmountLabel</div>
-                <div class="small text-muted mt-2">@L["Purchase.RequestId"] ?? "Request ID": @Model.Id</div>
             </div>
         </div>
     </aside>
 </div>
+
+
+
+
 
 

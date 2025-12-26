@@ -294,135 +294,353 @@ namespace Edu.Web.Areas.Teacher.Controllers
         public async Task<IActionResult> Details(int id)
         {
             var teacherId = _userManager.GetUserId(User);
+
+            // Load course with navigation properties
             var course = await _db.ReactiveCourses
-                .Include(c => c.Months).ThenInclude(m => m.Lessons)
-                .FirstOrDefaultAsync(c => c.Id == id && c.TeacherId == teacherId);
+                .Where(c => c.Id == id && c.TeacherId == teacherId)
+                .Include(c => c.Months)
+                    .ThenInclude(m => m.Lessons)
+                        .ThenInclude(l => l.Files)
+                .FirstOrDefaultAsync();
 
             if (course == null) return NotFound();
+
+            // Resolve cover URL (best-effort)
+            string? coverPublic = null;
+            if (!string.IsNullOrEmpty(course.CoverImageKey))
+            {
+                try { coverPublic = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey); }
+                catch { coverPublic = course.CoverImageKey; }
+            }
 
             var vm = new ReactiveCourseDetailsVm
             {
                 Id = course.Id,
-                CoverPublicUrl = string.IsNullOrEmpty(course.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(course.CoverImageKey),
                 Title = course.Title,
                 Description = course.Description,
+                CoverPublicUrl = coverPublic,
+                IntroVideoUrl = course.IntroVideoUrl,
+                PricePerMonth = course.PricePerMonth,
                 PricePerMonthLabel = course.PricePerMonth.ToEuro(),
                 DurationMonths = course.DurationMonths,
                 Capacity = course.Capacity,
-                IntroVideoUrl = course.IntroVideoUrl,
-                Months = course.Months
-                            .OrderBy(m => m.MonthIndex)
-                            .Select(m => new ReactiveCourseMonthVm
-                            {
-                                Id = m.Id,
-                                MonthIndex = m.MonthIndex,
-                                IsReadyForPayment = m.IsReadyForPayment,
-                                LessonsCount = m.Lessons.Count,
-                                Lessons = m.Lessons
-                                            .OrderBy(l => l.ScheduledUtc)
-                                            .Select(l => new ReactiveCourseLessonVm
-                                            {
-                                                Id = l.Id,
-                                                Title = l.Title,
-                                                ScheduledUtc = l.ScheduledUtc,
-                                                MeetUrl = l.MeetUrl,
-                                                Notes = l.Notes
-                                            }).ToList()
-                            }).ToList()
+                Months = new List<ReactiveCourseMonthVm>()
             };
+
+            // Defensive: iterate months safely even if EF left null
+            var months = course.Months ?? Enumerable.Empty<ReactiveCourseMonth>();
+
+            foreach (var m in months.OrderBy(mo => mo.MonthIndex))
+            {
+                var monthVm = new ReactiveCourseMonthVm
+                {
+                    Id = m.Id,
+                    MonthIndex = m.MonthIndex,
+                    IsReadyForPayment = m.IsReadyForPayment,
+                    // guarantee non-null Lessons list for the view
+                    Lessons = new List<ReactiveCourseLessonVm>(),
+                    LessonsCount = m.Lessons?.Count ?? 0
+                };
+
+                // Use the month's own lessons (or empty) and order them here
+                var lessons = (m.Lessons ?? Enumerable.Empty<ReactiveCourseLesson>())
+                              .OrderBy(l => l.ScheduledUtc ?? DateTime.MaxValue)
+                              .ToList();
+
+                foreach (var l in lessons)
+                {
+                    var lessonVm = new ReactiveCourseLessonVm
+                    {
+                        Id = l.Id,
+                        Title = l.Title,
+                        ReactiveCourseMonthId = l.ReactiveCourseMonthId,
+                        ScheduledUtc = l.ScheduledUtc,
+                        MeetUrl = l.MeetUrl,
+                        RecordedVideoUrl = l.RecordedVideoUrl,
+                        Notes = l.Notes,
+                        Files = new List<ReactiveFileResourceVm>()
+                    };
+
+                    // Map attached files and resolve public URLs
+                    if (l.Files != null && l.Files.Any())
+                    {
+                        foreach (var f in l.Files)
+                        {
+                            var fileVm = new ReactiveFileResourceVm
+                            {
+                                Id = f.Id,
+                                FileName = f.Name ?? Path.GetFileName(f.FileUrl ?? f.StorageKey ?? "")
+                            };
+
+                            if (!string.IsNullOrEmpty(f.StorageKey))
+                            {
+                                try
+                                {
+                                    fileVm.PublicUrl = await _fileStorage.GetPublicUrlAsync(f.StorageKey);
+                                }
+                                catch
+                                {
+                                    fileVm.PublicUrl = f.FileUrl;
+                                }
+                            }
+                            else
+                            {
+                                fileVm.PublicUrl = f.FileUrl;
+                            }
+
+                            lessonVm.Files.Add(fileVm);
+                        }
+                    }
+
+                    monthVm.Lessons.Add(lessonVm);
+                }
+
+                vm.Months.Add(monthVm);
+            }
+
             ViewData["ActivePage"] = "MyReactiveCourses";
             return View(vm);
         }
 
+        // POST: Teacher/ReactiveCourses/AddLessonAjax
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddLessonAjax([FromBody] ReactiveCourseLessonCreateVm vm)
+        public async Task<IActionResult> AddLessonAjax()
         {
-            var month = await _db.ReactiveCourseMonths.Include(m => m.ReactiveCourse).FirstOrDefaultAsync(m => m.Id == vm.ReactiveCourseMonthId);
+            // Expect multipart/form-data
+            var form = Request.Form;
+            var teacherId = _userManager.GetUserId(User);
+
+            if (!int.TryParse(form["ReactiveCourseMonthId"], out var monthId))
+                return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.MonthNotFound"].Value } });
+
+            var month = await _db.ReactiveCourseMonths
+                                 .Include(m => m.ReactiveCourse)
+                                 .FirstOrDefaultAsync(m => m.Id == monthId);
             if (month == null) return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.MonthNotFound"].Value } });
 
-            var teacherId = _userManager.GetUserId(User);
-            if (month.ReactiveCourse?.TeacherId != teacherId) return Json(new { success = false, errors = new { general = _localizer["Forbid"].Value } });
+            if (month.ReactiveCourse?.TeacherId != teacherId)
+                return Json(new { success = false, errors = new { general = _localizer["Forbid"].Value } });
+
+            // read fields
+            var title = (form["Title"].FirstOrDefault() ?? "").Trim();
+            var meetUrl = (form["MeetUrl"].FirstOrDefault() ?? "").Trim();
+            var notes = (form["Notes"].FirstOrDefault() ?? "").Trim();
+            var scheduledStr = (form["ScheduledUtc"].FirstOrDefault() ?? "").Trim();
+            DateTime? scheduled = null;
+            if (!string.IsNullOrEmpty(scheduledStr))
+            {
+                if (DateTime.TryParse(scheduledStr, out var dt)) scheduled = dt;
+            }
+            var recorded = (form["RecordedVideoUrl"].FirstOrDefault() ?? "").Trim();
 
             var errors = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(vm.Title)) errors["title"] = _localizer["ReactiveCourse.Validation.TitleRequired"].Value;
-            if (!string.IsNullOrWhiteSpace(vm.MeetUrl))
+            if (string.IsNullOrWhiteSpace(title)) errors["Title"] = _localizer["ReactiveCourse.Validation.TitleRequired"].Value;
+            if (!string.IsNullOrWhiteSpace(meetUrl))
             {
-                if (!Uri.TryCreate(vm.MeetUrl.Trim(), UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
-                    errors["meetUrl"] = _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value;
+                if (!Uri.TryCreate(meetUrl, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
+                    errors["MeetUrl"] = _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value;
             }
             if (errors.Any()) return Json(new { success = false, errors });
 
+            // create lesson
             var lesson = new ReactiveCourseLesson
             {
-                ReactiveCourseMonthId = vm.ReactiveCourseMonthId,
-                Title = vm.Title,
-                ScheduledUtc = vm.ScheduledUtc,
-                MeetUrl = string.IsNullOrWhiteSpace(vm.MeetUrl) ? null : vm.MeetUrl.Trim(),
-                Notes = vm.Notes
+                ReactiveCourseMonthId = monthId,
+                Title = title,
+                ScheduledUtc = scheduled,
+                MeetUrl = string.IsNullOrWhiteSpace(meetUrl) ? null : meetUrl,
+                Notes = notes,
+                RecordedVideoUrl = string.IsNullOrWhiteSpace(recorded) ? null : recorded
             };
 
             _db.ReactiveCourseLessons.Add(lesson);
             await _db.SaveChangesAsync();
 
-            return Json(new { success = true });
+            // handle uploaded files
+            var files = Request.Form.Files;
+            if (files != null && files.Count > 0)
+            {
+                foreach (var file in files)
+                {
+                    if (file?.Length > 0)
+                    {
+                        // Save the file to storage
+                        var storageKey = await _fileStorage.SaveFileAsync(file, "reactive-lesson-files");
+
+                        var fr = new FileResource
+                        {
+                            Name = file.FileName,
+                            StorageKey = storageKey,
+                            FileUrl = null,
+                            ReactiveCourseLessonId = lesson.Id
+                        };
+                        _db.FileResources.Add(fr);
+                    }
+                }
+                await _db.SaveChangesAsync();
+            }
+
+            return Json(new { success = true, lessonId = lesson.Id });
         }
 
+        // POST: Teacher/ReactiveCourses/EditLessonAjax
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditLessonAjax([FromBody] ReactiveCourseLessonEditDto dto)
+        public async Task<IActionResult> EditLessonAjax()
         {
+            // accept multipart/form-data
+            var form = Request.Form;
+            if (!int.TryParse(form["lessonId"], out var lessonId) || lessonId <= 0)
+                return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.InvalidLessonId"].Value } });
+
+            var lesson = await _db.ReactiveCourseLessons
+                                  .Include(l => l.ReactiveCourseMonth)
+                                    .ThenInclude(m => m.ReactiveCourse)
+                                  .Include(l => l.Files)
+                                  .FirstOrDefaultAsync(l => l.Id == lessonId);
+
+            if (lesson == null)
+                return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.LessonNotFound"].Value } });
+
+            var teacherId = _userManager.GetUserId(User);
+            if (lesson.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId)
+                return Json(new { success = false, errors = new { general = _localizer["Forbid"].Value } });
+
+            // read fields
+            var title = (form["Title"].FirstOrDefault() ?? "").Trim();
+            var meetUrl = (form["MeetUrl"].FirstOrDefault() ?? "").Trim();
+            var notes = (form["Notes"].FirstOrDefault() ?? "").Trim();
+            var scheduledStr = (form["ScheduledUtc"].FirstOrDefault() ?? "").Trim();
+            DateTime? scheduled = null;
+            if (!string.IsNullOrEmpty(scheduledStr))
+            {
+                if (DateTime.TryParse(scheduledStr, out var dt)) scheduled = dt;
+            }
+            var recorded = (form["RecordedVideoUrl"].FirstOrDefault() ?? "").Trim();
+
+            var errors = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(title)) errors["Title"] = _localizer["ReactiveCourse.Validation.TitleRequired"].Value;
+            if (!string.IsNullOrWhiteSpace(meetUrl))
+            {
+                if (!Uri.TryCreate(meetUrl, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
+                    errors["MeetUrl"] = _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value;
+            }
+
+            if (errors.Any())
+                return Json(new { success = false, errors });
+
+            // update lesson
+            lesson.Title = title;
+            lesson.ScheduledUtc = scheduled;
+            lesson.MeetUrl = string.IsNullOrWhiteSpace(meetUrl) ? null : meetUrl;
+            lesson.Notes = notes;
+            lesson.RecordedVideoUrl = string.IsNullOrWhiteSpace(recorded) ? null : recorded;
+
+            _db.ReactiveCourseLessons.Update(lesson);
+            await _db.SaveChangesAsync();
+
+            // handle new attachments in Request.Form.Files (files input name should be e.g. "Attachments")
+            var files = Request.Form.Files;
+            if (files != null && files.Count > 0)
+            {
+                foreach (var file in files)
+                {
+                    if (file?.Length > 0)
+                    {
+                        var storageKey = await _fileStorage.SaveFileAsync(file, "reactive-lesson-files");
+                        var fr = new FileResource
+                        {
+                            Name = file.FileName,
+                            StorageKey = storageKey,
+                            FileUrl = null,
+                            ReactiveCourseLessonId = lesson.Id
+                        };
+                        _db.FileResources.Add(fr);
+                    }
+                }
+                await _db.SaveChangesAsync();
+            }
+
+            return Json(new { success = true, lessonId = lesson.Id });
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteLesson(int lessonId)
+        {
+            if (lessonId <= 0) return Json(new { success = false, message = "Invalid lesson id." });
+
+            var teacherId = _userManager.GetUserId(User);
+            if (string.IsNullOrEmpty(teacherId)) return Json(new { success = false, message = "Not authenticated." });
+
+            var lesson = await _db.ReactiveCourseLessons
+                                  .Include(l => l.Files)
+                                  .Include(l => l.ReactiveCourseMonth)
+                                    .ThenInclude(m => m.ReactiveCourse)
+                                  .FirstOrDefaultAsync(l => l.Id == lessonId);
+            if (lesson == null) return Json(new { success = false, message = "Lesson not found." });
+            if (lesson.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId) return Json(new { success = false, message = "Forbidden." });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                if (dto == null || dto.LessonId <= 0)
-                    return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.InvalidLessonId"].Value } });
-
-                // load lesson and related course for ownership check
-                var lesson = await _db.ReactiveCourseLessons
-                                      .Include(l => l.ReactiveCourseMonth)
-                                        .ThenInclude(m => m.ReactiveCourse)
-                                      .FirstOrDefaultAsync(l => l.Id == dto.LessonId);
-
-                if (lesson == null)
-                    return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.LessonNotFound"].Value } });
-
-                var teacherId = _userManager.GetUserId(User);
-                if (lesson.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId)
-                    return Json(new { success = false, errors = new { general = _localizer["Forbid"].Value } });
-
-                // server-side validation
-                var errors = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                if (string.IsNullOrWhiteSpace(dto.Title))
-                    errors["title"] = _localizer["ReactiveCourse.Validation.TitleRequired"].Value;
-
-                if (!string.IsNullOrWhiteSpace(dto.MeetUrl))
+                if (lesson.Files != null)
                 {
-                    if (!Uri.TryCreate(dto.MeetUrl.Trim(), UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
-                        errors["meetUrl"] = _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value;
+                    foreach (var fr in lesson.Files.ToList())
+                    {
+                        try { if (!string.IsNullOrEmpty(fr.StorageKey)) await _fileStorage.DeleteFileAsync(fr.StorageKey); }
+                        catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete file {Id}", fr.Id); }
+                    }
+                    _db.FileResources.RemoveRange(lesson.Files);
                 }
 
-                if (errors.Any())
-                    return Json(new { success = false, errors }); // serializer will produce camelCase keys by default
-
-                // update lesson
-                lesson.Title = dto.Title!.Trim();
-                lesson.ScheduledUtc = dto.ScheduledUtc;
-                lesson.MeetUrl = string.IsNullOrWhiteSpace(dto.MeetUrl) ? null : dto.MeetUrl.Trim();
-                lesson.Notes = dto.Notes;
-
-                _db.ReactiveCourseLessons.Update(lesson);
+                _db.ReactiveCourseLessons.Remove(lesson);
                 await _db.SaveChangesAsync();
+                await tx.CommitAsync();
 
-                return Json(new { success = true });
+                return Json(new { success = true, lessonId = lessonId });
             }
             catch (Exception ex)
             {
-                // log the exception (ensure you have an ILogger injected into controller)
-                // _logger?.LogError(ex, "EditLessonAjax failed for teacher {TeacherId}", _userManager.GetUserId(User));
-                // In dev you can return ex.Message (but avoid in production)
-                return Json(new { success = false, errors = new { general = _localizer["Admin.ServerError"].Value } });
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "DeleteLesson failed for {LessonId}", lessonId);
+                return Json(new { success = false, message = "Delete failed." });
             }
         }
+
+        // POST: Teacher/ReactiveCourses/DeleteLessonAttachment/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteLessonAttachment(int id)
+        {
+            // id == FileResource.Id
+            var fr = await _db.FileResources
+                              .Include(f => f.ReactiveCourseLesson)
+                                .ThenInclude(l => l.ReactiveCourseMonth)
+                                  .ThenInclude(m => m.ReactiveCourse)
+                              .FirstOrDefaultAsync(f => f.Id == id);
+            if (fr == null) return Json(new { success = false, message = _localizer["Admin.NotFound"].Value ?? "Not found" });
+
+            var teacherId = _userManager.GetUserId(User);
+            if (fr.ReactiveCourseLesson?.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId)
+                return Json(new { success = false, message = _localizer["Forbid"].Value });
+
+            // delete storage file (best-effort)
+            try
+            {
+                if (!string.IsNullOrEmpty(fr.StorageKey))
+                    await _fileStorage.DeleteFileAsync(fr.StorageKey);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete storage key {Key} for file resource {Id}", fr.StorageKey, fr.Id);
+            }
+
+            _db.FileResources.Remove(fr);
+            await _db.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SetMonthReadyAjax([FromBody] SetMonthReadyAjaxDto dto)
@@ -751,199 +969,3 @@ namespace Edu.Web.Areas.Teacher.Controllers
     }
 }
 
-
-
-
-
-//// GET: Teacher/ReactiveCourses/AddMonth
-//[HttpPost, ValidateAntiForgeryToken]
-//public async Task<IActionResult> AddMonth(int courseId, int monthIndex, DateTime? monthStartUtc, DateTime? monthEndUtc)
-//{
-//    var teacherId = _userManager.GetUserId(User);
-//    var course = await _db.ReactiveCourses.FirstOrDefaultAsync(c => c.Id == courseId && c.TeacherId == teacherId);
-//    if (course == null) return NotFound();
-
-//    var exists = await _db.ReactiveCourseMonths.AnyAsync(m => m.ReactiveCourseId == courseId && m.MonthIndex == monthIndex);
-//    if (exists)
-//    {
-//        TempData["Error"] = _localizer["MonthAlreadyExists", monthIndex].Value;
-//        return RedirectToAction(nameof(Details), new { id = courseId });
-//    }
-
-//    var month = new ReactiveCourseMonth
-//    {
-//        ReactiveCourseId = courseId,
-//        MonthIndex = monthIndex,
-//        MonthStartUtc = monthStartUtc ?? DateTime.UtcNow,
-//        MonthEndUtc = monthEndUtc ?? DateTime.UtcNow.AddMonths(1),
-//        IsReadyForPayment = false
-//    };
-
-//    _db.ReactiveCourseMonths.Add(month);
-//    await _db.SaveChangesAsync();
-
-//    TempData["Success"] = _localizer["MonthAdded", monthIndex].Value;
-//    return RedirectToAction(nameof(Details), new { id = courseId });
-//}
-
-//// GET: Teacher/ReactiveCourses/AddLesson/{monthId}
-//public async Task<IActionResult> AddLesson(int monthId)
-//{
-//    var month = await _db.ReactiveCourseMonths.Include(m => m.ReactiveCourse)
-//        .FirstOrDefaultAsync(m => m.Id == monthId);
-//    if (month == null) return NotFound();
-
-//    var teacherId = _userManager.GetUserId(User);
-//    if (month.ReactiveCourse!.TeacherId != teacherId) return Forbid();
-
-//    var vm = new ReactiveCourseLessonCreateVm
-//    {
-//        ReactiveCourseId = month.ReactiveCourseId,
-//        ReactiveCourseMonthId = monthId
-//    };
-//    ViewData["ActivePage"] = "MyReactiveCourses";
-//    return View(vm);
-//}
-
-//// POST: Teacher/ReactiveCourses/AddLesson
-//[HttpPost, ValidateAntiForgeryToken]
-//public async Task<IActionResult> AddLesson(ReactiveCourseLessonCreateVm vm)
-//{
-//    if (string.IsNullOrWhiteSpace(vm.Title)) ModelState.AddModelError(nameof(vm.Title), _localizer["ReactiveCourse.Validation.TitleRequired"].Value);
-
-//    if (!string.IsNullOrWhiteSpace(vm.MeetUrl))
-//    {
-//        if (!Uri.TryCreate(vm.MeetUrl.Trim(), UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
-//            ModelState.AddModelError(nameof(vm.MeetUrl), _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value);
-//    }
-
-//    var month = await _db.ReactiveCourseMonths.Include(m => m.ReactiveCourse).FirstOrDefaultAsync(m => m.Id == vm.ReactiveCourseMonthId);
-//    if (month == null) return NotFound();
-//    var teacherId = _userManager.GetUserId(User);
-//    if (month.ReactiveCourse?.TeacherId != teacherId) return Forbid();
-
-//    if (!ModelState.IsValid) return View(vm);
-
-//    var lesson = new ReactiveCourseLesson
-//    {
-//        ReactiveCourseMonthId = vm.ReactiveCourseMonthId,
-//        Title = vm.Title,
-//        ScheduledUtc = vm.ScheduledUtc,
-//        MeetUrl = string.IsNullOrWhiteSpace(vm.MeetUrl) ? null : vm.MeetUrl.Trim(),
-//        Notes = vm.Notes
-//    };
-
-//    _db.ReactiveCourseLessons.Add(lesson);
-//    await _db.SaveChangesAsync();
-
-//    TempData["Success"] = _localizer["LessonAdded"].Value;
-//    return RedirectToAction(nameof(Details), new { id = month.ReactiveCourseId });
-//}
-
-//// GET: Teacher/ReactiveCourses/EditLesson/{lessonId}
-//public async Task<IActionResult> EditLesson(int lessonId)
-//{
-//    var lesson = await _db.ReactiveCourseLessons
-//                          .Include(l => l.ReactiveCourseMonth).ThenInclude(m => m.ReactiveCourse)
-//                          .FirstOrDefaultAsync(l => l.Id == lessonId);
-
-//    if (lesson == null) return NotFound();
-
-//    var teacherId = _userManager.GetUserId(User);
-//    if (lesson.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId) return Forbid();
-
-//    var vm = new ReactiveCourseLessonCreateVm
-//    {
-//        ReactiveCourseId = lesson.ReactiveCourseMonth!.ReactiveCourseId,
-//        ReactiveCourseMonthId = lesson.ReactiveCourseMonthId,
-//        Title = lesson.Title ?? "",
-//        ScheduledUtc = lesson.ScheduledUtc,
-//        MeetUrl = lesson.MeetUrl,
-//        Notes = lesson.Notes
-//    };
-//    ViewData["ActivePage"] = "MyReactiveCourses";
-//    ViewData["LessonId"] = lessonId;
-//    return View(vm);
-//}
-
-//// POST: Teacher/ReactiveCourses/EditLesson
-//[HttpPost, ValidateAntiForgeryToken]
-//public async Task<IActionResult> EditLesson(int lessonId, ReactiveCourseLessonCreateVm vm)
-//{
-//    var lesson = await _db.ReactiveCourseLessons.Include(l => l.ReactiveCourseMonth).ThenInclude(m => m.ReactiveCourse).FirstOrDefaultAsync(l => l.Id == lessonId);
-//    if (lesson == null) return NotFound();
-
-//    var teacherId = _userManager.GetUserId(User);
-//    if (lesson.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId) return Forbid();
-
-//    if (string.IsNullOrWhiteSpace(vm.Title)) ModelState.AddModelError(nameof(vm.Title), _localizer["ReactiveCourse.Validation.TitleRequired"].Value);
-//    if (!string.IsNullOrWhiteSpace(vm.MeetUrl))
-//    {
-//        if (!Uri.TryCreate(vm.MeetUrl.Trim(), UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
-//            ModelState.AddModelError(nameof(vm.MeetUrl), _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value);
-//    }
-
-//    if (!ModelState.IsValid)
-//    {
-//        ViewData["LessonId"] = lessonId;
-//        return View(vm);
-//    }
-
-//    lesson.Title = vm.Title;
-//    lesson.ScheduledUtc = vm.ScheduledUtc;
-//    lesson.MeetUrl = string.IsNullOrWhiteSpace(vm.MeetUrl) ? null : vm.MeetUrl.Trim();
-//    lesson.Notes = vm.Notes;
-
-//    _db.ReactiveCourseLessons.Update(lesson);
-//    await _db.SaveChangesAsync();
-
-//    TempData["Success"] = _localizer["LessonUpdated"].Value;
-//    return RedirectToAction(nameof(Details), new { id = lesson.ReactiveCourseMonth!.ReactiveCourseId });
-//}
-
-//// POST: Teacher/ReactiveCourses/SetMonthReady
-//[HttpPost, ValidateAntiForgeryToken]
-//public async Task<IActionResult> SetMonthReady(int monthId, bool ready)
-//{
-//    var month = await _db.ReactiveCourseMonths
-//        .Include(m => m.ReactiveCourse)
-//        .Include(m => m.Lessons)
-//        .FirstOrDefaultAsync(m => m.Id == monthId);
-
-//    if (month == null) return NotFound();
-//    var teacherId = _userManager.GetUserId(User);
-//    if (month.ReactiveCourse!.TeacherId != teacherId) return Forbid();
-
-//    if (ready)
-//    {
-//        var missing = month.Lessons.Any(l => string.IsNullOrEmpty(l.MeetUrl));
-//        if (missing)
-//        {
-//            TempData["Error"] = _localizer["AllLessonsMustHaveMeetUrlBeforeReady"].Value;
-//            return RedirectToAction(nameof(Details), new { id = month.ReactiveCourseId });
-//        }
-//    }
-
-//    month.IsReadyForPayment = ready;
-//    _db.ReactiveCourseMonths.Update(month);
-
-//    _db.ReactiveCourseModerationLogs.Add(new ReactiveCourseModerationLog
-//    {
-//        ReactiveCourseId = month.ReactiveCourseId,
-//        ActorId = teacherId,
-//        ActorName = User.Identity?.Name,
-//        Action = ready ? "MonthReady" : "MonthUnready",
-//        Note = ready
-//            ? _localizer["MonthMarkedReady", month.MonthIndex].Value
-//            : _localizer["MonthMarkedNotReady", month.MonthIndex].Value,
-//        CreatedAtUtc = DateTime.UtcNow
-//    });
-
-//    await _db.SaveChangesAsync();
-
-//    //TempData["Success"] = ready
-//    //    ? _localizer["MonthNowReady"].Value
-//    //    : _localizer["MonthNoLongerReady"].Value;
-
-//    return RedirectToAction(nameof(Details), new { id = month.ReactiveCourseId });
-//}

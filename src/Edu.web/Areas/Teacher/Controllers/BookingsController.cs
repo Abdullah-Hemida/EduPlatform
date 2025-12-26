@@ -1,14 +1,16 @@
-﻿using Edu.Infrastructure.Data;
+﻿using Edu.Application.IServices;
 using Edu.Domain.Entities;
+using Edu.Infrastructure.Data;
+using Edu.Infrastructure.Helpers;
+using Edu.Infrastructure.Services;
+using Edu.Web.Areas.Shared.ViewModels;
+using Edu.Web.Helpers;
+using Edu.Web.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using Edu.Web.Areas.Shared.ViewModels;
-using Edu.Web.Resources;
-using Edu.Infrastructure.Services;
-using Edu.Infrastructure.Helpers;
 
 namespace Edu.Web.Areas.Teacher.Controllers
 {
@@ -19,14 +21,27 @@ namespace Edu.Web.Areas.Teacher.Controllers
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _um;
         private readonly IStringLocalizer<SharedResource> _L;
-        private readonly IEmailSender _emailSender;
+        private readonly IFileStorageService _fileStorage;
+        private readonly INotificationService _notifier;
+        private readonly IWebHostEnvironment _env;
+        private readonly ILogger<BookingsController> _logger;
 
-        public BookingsController(ApplicationDbContext db, UserManager<ApplicationUser> um, IStringLocalizer<SharedResource> L, IEmailSender emailSender)
+        public BookingsController(
+            ApplicationDbContext db,
+            UserManager<ApplicationUser> um,
+            IStringLocalizer<SharedResource> L,
+            IFileStorageService fileStorage,
+            INotificationService notifier,
+            IWebHostEnvironment env,
+            ILogger<BookingsController> logger)
         {
-            _db = db;
-            _um = um;
-            _L = L;
-            _emailSender = emailSender;
+            _db = db ?? throw new ArgumentNullException(nameof(db));
+            _um = um ?? throw new ArgumentNullException(nameof(um));
+            _L = L ?? throw new ArgumentNullException(nameof(L));
+            _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
+            _notifier = notifier ?? throw new ArgumentNullException(nameof(notifier));
+            _env = env;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         // GET: Teacher/Bookings
@@ -42,19 +57,15 @@ namespace Edu.Web.Areas.Teacher.Controllers
             if (pageSize <= 0 || pageSize > 100) pageSize = 10;
 
             var now = DateTime.UtcNow;
+            const int joinWindowMinutes = 15;
+            const int cancelBeforeMinutes = 60;
 
-            // Policy: adjust these values as needed (or move to config)
-            const int joinWindowMinutes = 15;     // allow join from start -15 to end +15
-            const int cancelBeforeMinutes = 60;   // teacher can cancel if slot starts after now + 60min
-
-            // Base query for teacher bookings (use IQueryable to allow further Where assignments)
             IQueryable<Booking> baseQuery = _db.Bookings
                 .AsNoTracking()
                 .Where(b => b.TeacherId == teacherId)
                 .Include(b => b.Slot)
                 .Include(b => b.Student).ThenInclude(s => s.User);
 
-            // apply tab (time) filter
             if (tab == "upcoming")
             {
                 baseQuery = baseQuery.Where(b => b.Slot != null && b.Slot.EndUtc >= now);
@@ -66,24 +77,24 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             var total = await baseQuery.CountAsync();
 
-            // ordering: upcoming ascending, past descending
-            IQueryable<Booking> ordered;
-            if (tab == "past")
-                ordered = baseQuery.OrderByDescending(b => b.Slot!.StartUtc);
-            else
-                ordered = baseQuery.OrderBy(b => b.Slot!.StartUtc);
+            IQueryable<Booking> ordered = tab == "past"
+                ? baseQuery.OrderByDescending(b => b.Slot!.StartUtc)
+                : baseQuery.OrderBy(b => b.Slot!.StartUtc);
 
             var bookings = await ordered
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            var vm = bookings.Select(b =>
+            // Build VMs and collect image keys
+            var vmList = new List<BookingListItemVm>();
+            var imageKeys = new HashSet<string?>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var b in bookings)
             {
                 var startUtc = b.Slot?.StartUtc;
                 var endUtc = b.Slot?.EndUtc;
 
-                // teacher can join when booking is paid and within join window
                 bool canJoin = false;
                 if (b.Status == BookingStatus.Paid && startUtc.HasValue && endUtc.HasValue)
                 {
@@ -92,14 +103,13 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     canJoin = DateTime.UtcNow >= joinStart && DateTime.UtcNow <= joinEnd;
                 }
 
-                // teacher can cancel pending bookings if far enough in future (policy)
                 bool canCancel = false;
                 if (b.Status == BookingStatus.Pending && startUtc.HasValue)
                 {
                     canCancel = startUtc.Value > DateTime.UtcNow.AddMinutes(cancelBeforeMinutes);
                 }
 
-                return new BookingListItemVm
+                var vm = new BookingListItemVm
                 {
                     Id = b.Id,
                     SlotId = b.SlotId,
@@ -110,6 +120,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     StudentId = b.StudentId,
                     StudentName = b.Student?.User?.FullName,
                     StudentPhoneNumber = b.Student?.User?.PhoneNumber,
+                    StudentImageKey = b.Student?.User?.PhotoStorageKey, // new
                     Status = b.Status,
                     RequestedDateUtc = b.RequestedDateUtc,
                     Price = b.Price,
@@ -118,7 +129,38 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     CanJoin = canJoin,
                     CanCancel = canCancel
                 };
-            }).ToList();
+
+                if (!string.IsNullOrWhiteSpace(vm.StudentImageKey))
+                    imageKeys.Add(vm.StudentImageKey);
+
+                vmList.Add(vm);
+            }
+
+            // Resolve image keys -> public URLs (deduplicated)
+            var imageMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            var fallback = Url.Content("~/images/default-avatar.png"); // adjust path as needed
+
+            foreach (var key in imageKeys)
+            {
+                try
+                {
+                    var url = await _fileStorage.GetPublicUrlAsync(key!);
+                    imageMap[key!] = string.IsNullOrEmpty(url) ? fallback : url;
+                }
+                catch
+                {
+                    imageMap[key!] = fallback;
+                }
+            }
+
+            // Assign StudentImageUrl to VMs
+            foreach (var vm in vmList)
+            {
+                if (!string.IsNullOrWhiteSpace(vm.StudentImageKey) && imageMap.ContainsKey(vm.StudentImageKey!))
+                    vm.StudentImageUrl = imageMap[vm.StudentImageKey!];
+                else
+                    vm.StudentImageUrl = fallback;
+            }
 
             ViewData["ActivePage"] = "TheBookings";
             ViewData["BookingsTab"] = tab;
@@ -126,7 +168,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
             ViewData["BookingsPageSize"] = pageSize;
             ViewData["BookingsTotal"] = total;
 
-            return View(vm);
+            return View(vmList);
         }
 
         // GET: Teacher/Bookings/Details/5
@@ -141,6 +183,22 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             if (booking == null) return NotFound();
 
+            var fallback = Url.Content("~/images/default-avatar.png");
+
+            string? studentImageUrl = null;
+            var studentKey = booking.Student?.User?.PhotoStorageKey;
+            if (!string.IsNullOrWhiteSpace(studentKey))
+            {
+                try
+                {
+                    studentImageUrl = await _fileStorage.GetPublicUrlAsync(studentKey);
+                }
+                catch
+                {
+                    studentImageUrl = null;
+                }
+            }
+
             var vm = new BookingDetailsVm
             {
                 Id = booking.Id,
@@ -150,6 +208,8 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 StudentName = booking.Student?.User?.FullName,
                 StudentEmail = booking.Student?.User?.Email,
                 StudentPhoneNumber = booking.Student?.User?.PhoneNumber,
+                GuardianPhoneNumber = booking.Student.GuardianPhoneNumber,
+                StudentImageUrl = string.IsNullOrEmpty(studentImageUrl) ? fallback : studentImageUrl, // new
                 TeacherId = booking.TeacherId,
                 TeacherName = User.Identity?.Name,
                 Status = booking.Status,
@@ -159,6 +219,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 Notes = booking.Notes,
                 ModerationLogs = booking.ModerationLogs.OrderByDescending(l => l.CreatedAtUtc).ToList()
             };
+
             ViewData["ActivePage"] = "TheBookings";
             return View(vm);
         }
@@ -168,7 +229,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
         public async Task<IActionResult> UpdateMeetUrl(UpdateMeetUrlVm vm)
         {
             var teacherId = _um.GetUserId(User);
-            var booking = await _db.Bookings.Include(b => b.Student).FirstOrDefaultAsync(b => b.Id == vm.BookingId && b.TeacherId == teacherId);
+            var booking = await _db.Bookings.Include(b => b.Student).ThenInclude(s => s.User).FirstOrDefaultAsync(b => b.Id == vm.BookingId && b.TeacherId == teacherId);
             if (booking == null) return NotFound();
 
             booking.MeetUrl = vm.MeetUrl;
@@ -186,22 +247,54 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             await _db.SaveChangesAsync();
 
-            // notify student
+            // notify student (localized, best-effort)
             try
             {
-                var studentEmail = booking.Student?.User?.Email;
-                if (!string.IsNullOrEmpty(studentEmail))
+                var studentUser = booking.Student?.User;
+                if (studentUser != null && !string.IsNullOrEmpty(studentUser.Email))
                 {
-                    await _emailSender.SendEmailAsync(studentEmail, _L["Email.Booking.MeetUpdated.Subject"], string.Format(_L["Email.Booking.MeetUpdated.Body"], booking.Id));
+                    await NotifyFireAndForgetAsync(async () =>
+                        await _notifier.SendLocalizedEmailAsync(
+                            studentUser,
+                            "Email.Booking.MeetUpdated.Subject",
+                            "Email.Booking.MeetUpdated.Body",
+                            booking.Id
+                        )
+                    );
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed notifying student about MeetUrl update for booking {BookingId}", booking.Id);
+            }
 
             TempData["Success"] = _L["Booking.MeetUrlUpdated"].Value;
             return RedirectToAction(nameof(Details), new { id = booking.Id });
         }
+
+        // helper to run notifications awaited in Development, or fire-and-forget in other envs
+        private async Task NotifyFireAndForgetAsync(Func<Task> work)
+        {
+            if (work == null) return;
+            try
+            {
+                if (_env?.IsDevelopment() == true)
+                {
+                    await work();
+                }
+                else
+                {
+                    _ = Task.Run(work);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NotifyFireAndForgetAsync failed executing notification work");
+            }
+        }
     }
 }
+
 
 
 

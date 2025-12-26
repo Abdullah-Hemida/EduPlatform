@@ -30,19 +30,27 @@
                         <div class="mt-auto d-flex align-items-center justify-content-between">
                             @if (c.IsAccessible)
                             {
-                                <a asp-controller="School" asp-action="Curriculum" asp-route-id="@c.Id" class="btn btn-outline-primary btn-sm">
+                                <a asp-controller="School"
+                                   asp-action="Curriculum"
+                                   asp-route-id="@c.Id"
+                                   class="btn btn-outline-primary btn-sm">
                                     @L["View"]
                                 </a>
                             }
                             else
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" disabled>
+                                <button type="button"
+                                        class="btn btn-secondary btn-sm"
+                                        disabled
+                                        title="@L["School.NotAssignedTooltip"]">
                                     @L["School.NotAllowed"]
                                 </button>
                             }
+
                             <div class="small text-muted">@c.ModuleCount @L["Admin.Modules"]</div>
                         </div>
                     </div>
+
                 </div>
             </div>
         }

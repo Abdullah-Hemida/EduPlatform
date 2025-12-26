@@ -9,16 +9,16 @@ public class Student
 {
     public string Id { get; set; } = null!; // Same as ApplicationUser.Id
     public ApplicationUser? User { get; set; }
-
-    // New flag - admin toggles this (default false)
     public bool IsAllowed { get; set; } = false;
+    public string GuardianPhoneNumber { get; set; } = string.Empty;
 
     // Navigation
     public ICollection<Booking>? Bookings { get; set; }
     public ICollection<PurchaseRequest>? PurchaseRequests { get; set; }
     public ICollection<ReactiveEnrollment>? ReactiveEnrollments { get; set; }
-}
+    public ICollection<StudentCurriculum> StudentCurricula { get; set; } = new List<StudentCurriculum>();
 
+}
 
 public class StudentConfiguration : IEntityTypeConfiguration<Student>
 {
@@ -31,7 +31,6 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
                .HasForeignKey<Student>(s => s.Id);
     }
 }
-
 public class Admin
 {
     public string Id { get; set; } = null!;

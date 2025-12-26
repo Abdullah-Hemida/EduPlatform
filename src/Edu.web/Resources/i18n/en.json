@@ -3,7 +3,8 @@
   "Site.Title2": "Edu Platform",
   "Nav.Home": "Home",
   "Nav.Courses": "Courses",
-  "Nav.School": "The School",
+  "Nav.AssociationSchool": "Association School",
+  "Nav.OnlineSchool": "Online School",
   "Nav.PublicSite": "Home Page",
   "Nav.Profile": "Profile",
 
@@ -13,7 +14,6 @@
   "Nav.ControlPannel": "Control panel",
 
   "Nav.ReactiveCourses": "Reactive courses",
-
   "Nav.ReactiveEnrollments": "Enrollments",
   "Nav.Teachers": "Teachers",
   "Nav.Students": "Students",
@@ -64,9 +64,12 @@
   "School.Curricula.Many": "{0} curricula",
   "School.NotAllowed": "Not allowed",
   "School.NotAllowedMessage": "You don't have access to view this curriculum. Contact admin for access.",
-  "School.AccessDenied": "You don't have permission to view this content.",
   "School.Showing": "Showing",
   "School.Of": "of",
+
+  "School.AccessDenied": "You don't have access to view this curriculum.",
+  "School.NotAssignedToCurriculum": "You don't have access to this curriculum.",
+  "School.NotAssignedTooltip": "You don't have permission for this curriculum. Contact the administrator.",
 
   "Footer.ContactUs": "Contact Us",
   "Footer.NoContacts": "No contact information available.",
@@ -86,7 +89,7 @@
   "Status.Completed": "Completed",
   "Status.Cancelled": "Cancelled",
 
-  "Account.Register": "Register as a new user",
+  "Account.Register": "Register",
   "Account.Login": "Login",
   "Account.Logout": "Logout",
   "Account.Email": "Email",
@@ -126,7 +129,8 @@
   "Profile.ContactNumber": "WhatsApp / Telegram",
   "Profile.EmailLabel": "Email Address",
   "Profile.DisplayNameLabel": "Full name",
-  "Profile.PhoneLabel": "Phone number",
+  "Profile.PhoneLabel": " your Whatsapp number",
+  "Profile.PhoneGuardianLabel": " your Guardian Whatsapp number",
   "Profile.DateOfBirth": "Date of birth",
   "Profile.UploadPhotoLabel": "Upload photo",
   "Profile.CurrentPhoto": "Current photo",
@@ -135,6 +139,7 @@
   "Profile.IntroVideoPlaceholder": "YouTube URL or Video ID",
   "Profile.SaveProfile": "Save Profile",
   "Profile.SaveTeacher": "Save Teacher Profile",
+  "Profile.PreferredLanguage": "your preferred language",
 
   "Upload.Avatar": "Avatar (png,jpg)",
   "Upload.Document": "ID / Certificate (pdf,img)",
@@ -190,6 +195,12 @@
   "Admin.View": "View",
   "Admin.Delete": "Delete",
   "Admin.Restore": "Restore",
+
+  "Admin.StudentCurricula": "Allowed Curricula",
+  "Admin.StudentCurriculaHint": "Select which curricula this student should have access to.",
+  "Admin.NoCurricula": "No curricula available.",
+  "Admin.StudentAllowed": "Student's permissibility status",
+
 
   "Admin.Search": "Search",
   "Admin.SearchPlaceholder": "Search by name, email, username...",
@@ -328,7 +339,7 @@
   "ReactiveCourse.LessonNotFound": "Lesson not found.",
   "ReactiveCourse.MarkReady": "Mark ready",
   "ReactiveCourse.MonthReady": "Month Ready",
-  "ReactiveCourse.OpenMeet": "Open meeting",
+  "ReactiveCourse.OpenMeet": "Attending the lesson",
   "ReactiveCourse.NoSchedule": "No schedule",
   "ReactiveCourse.Info": "Course info",
   "ReactiveCourse.Unlimited": "Unlimited",
@@ -358,6 +369,10 @@
   "ReactiveCourse.Delete.NotArchived": "Course must be archived before permanent deletion.",
   "ReactiveCourse.Delete.RetentionActive": "Course is still within retention window and cannot be permanently deleted yet.",
   "ReactiveCourse.Deleted": "Course permanently deleted.",
+  "ReactiveCourse.PaymentDetailsSubtitle": "Monthly payment details",
+  "ReactiveCourse.EnrolledAt": "Enrolled at",
+  "ReactiveCourse.TotalPaid": "Total amount paid",
+
   "Course.Price": "Course Price",
   "Course.CreateNew": "Create New Course",
 
@@ -378,6 +393,45 @@
   "Email.Payment.Requested.Body": "Student {2} requested payment for course '{0}', month {1}. Please review in the admin panel.",
   "Email.Payment.Confirmed.Subject": "Your payment has been confirmed",
   "Email.Payment.Confirmed.Body": "Your payment for course {0}, month {1} has been confirmed.",
+
+  "Email.Enrollment.Requested.Subject": "New enrollment request for {0}",
+  "Email.Enrollment.Requested.Body": "Student {1} has requested to enroll in the course \"{0}\".",
+  "Email.PaymentReactiveCourse.Requested.Subject": "Payment request for \"{0}\" — month {1}",
+  "Email.PaymentReactiveCourse.Requested.Body": "Student {2} has requested payment for course \"{0}\" (month {1}).",
+  "Email.Admin.Enrollment.Requested.Subject": "Enrollment request: {0}",
+  "Email.Admin.Enrollment.Requested.Body": "Student {2} requested enrollment in \"{0}\". Teacher: {1}.",
+  "Email.Admin.Payment.Requested.Subject": "Payment request for {0} — month {1}",
+  "Email.Admin.Payment.Requested.Body": "Student {3} requested payment for \"{0}\" (month {1}). Teacher: {2}.",
+
+  "Booking.Email.Subject.Paid": "Booking #{0} — Payment received",
+  "Booking.Email.Body.Paid": "Hello {0},\n\nBooking #{1} has been marked as paid.\nPrice: {2}\nPaymentRef: {3}\n\nBest regards,\nEdu Platform Team",
+
+  "Teacher.Email.Approved.Subject": "Your teacher account has been approved",
+  "Teacher.Email.Approved.Body": "Dear {0},\n\nYour teacher profile has been approved. You can now access your teacher dashboard and manage your courses.\n\nBest regards,\nEdu Platform Team",
+  "Teacher.Email.Rejected.Subject": "Your teacher application was not approved",
+  "Teacher.Email.Rejected.Body": "Dear {0},\n\nWe reviewed your teacher application and it was not approved. Please review your details and reapply when ready.\n\nBest regards,\nEdu Platform Team",
+
+  "Notify.PaymentMarkedPaid.Subject": "Your payment has been marked as paid",
+  "Notify.PaymentMarkedPaid.Body": "We have marked the payment for month {1} as paid. Amount: {0}.",
+  "Notify.PaymentRejected.Subject": "Your payment request was rejected",
+  "Notify.PaymentRejected.Body": "Your payment request (amount {0}) was rejected by an administrator. Note: {1}",
+  "Notify.EnrollmentDeleted.Subject": "Your enrollment was removed",
+  "Notify.EnrollmentDeleted.Body": "Your enrollment in \"{0}\" has been deleted by an administrator.",
+
+  "Email.Booking.RequestedFromStudent.Subject": "New booking request #{0}",
+  "Email.Booking.RequestedFromStudent.Body": "Student {1} requested booking #{0}.",
+  "Email.Booking.Cancelled.Subject": "Booking #{0} cancelled",
+  "Email.Booking.Cancelled.Body": "Student {1} cancelled booking #{0}.",
+  "Email.Booking.Paid.Subject": "Booking #{0} marked as paid",
+  "Email.Booking.Paid.Body": "Booking #{0} has been paid. Amount: {1}.",
+  "Email.Booking.Updated.Subject": "Booking #{0} updated",
+  "Email.Booking.Updated.Body": "Booking #{0} updated. Action: {1}. Note: {2}",
+
+  "Email.Admin.Purchase.Requested.Subject": "Purchase request for \"{0}\"",
+  "Email.Admin.Purchase.Requested.Body": "Student {1} requested purchase for \"{0}\" (amount: {2}). CourseId: {3}.",
+  "Email.Admin.Purchase.Cancelled.Subject": "Purchase request cancelled for \"{0}\"",
+  "Email.Admin.Purchase.Cancelled.Body": "Student {1} cancelled the purchase request for \"{0}\" (amount: {2}). CourseId: {3}.",
+
   "WelcomeTeacherPendingApproval": "Welcome to our platform — your application has been received. Please wait for an admin to review and approve your application. We will notify you by email.",
 
   "ConcurrencyError": "This record was modified by another user. Please reload and try again.",
@@ -563,6 +617,7 @@
   "Admin.RemoveItem": "Remove item",
 
   "Admin.ReactiveEnrollments.Title": "Reactive Enrollments",
+  "Admin.SchoolEnrollments.Title": "School Enrollment requests",
   "Admin.Search.Placeholder": "Search by course, student or teacher...",
   "Admin.Search.Button": "Search",
   "Admin.DeleteOld.Button": "Delete Old",
@@ -598,18 +653,11 @@
   "Admin.PaymentNotFound": "Payment not found",
   "Admin.PaymentAlreadyPaid": "Payment is already paid",
   "Admin.CannotRejectPaid": "Cannot reject a paid payment",
+  "Admin.RequestedAt": "Purchase requested date",
   "Admin.Other": "Other",
   "AdminLevel.NameEn": "Level name (English)",
   "AdminLevel.NameIt": "Level name (Italian)",
   "AdminLevel.NameAr": "Level name (Arabic)",
-
-  "Notify.PaymentMarkedPaid.Subject": "Your monthly payment has been marked as paid",
-  "Notify.PaymentMarkedPaid.Body": "Your payment of {0} for month id {1} has been marked as paid by the administration.",
-  "Notify.PaymentRejected.Subject": "Your monthly payment request was rejected",
-  "Notify.PaymentRejected.Body": "Your payment of {0} was rejected. Note: {1}",
-  "Notify.EnrollmentDeleted.Subject": "Your enrollment has been removed",
-  "Notify.EnrollmentDeleted.Body": "Your enrollment in course {0} was removed by an administrator.",
-
 
   "Slots.Index.Title": "Available times",
   "Slots.Index.Subtitle": "Manage your available slots",
@@ -670,7 +718,7 @@
   "ReactiveCourse.MarkNotReady": "Mark Not Ready",
   "ReactiveCourse.EnrollmentRequested": "Enrollment requested.",
   "ReactiveCourse.Enroll": "enroll in Course",
-  "ReactiveCourse.InfoForStudent": "Click to register and pay, then wait. We will contact you and the lesson links will appear at their scheduled times.",
+  "ReactiveCourse.InfoForStudent": "Click to enroll then click pay for a month then wait. We will contact you and the lesson links will appear at their scheduled times.",
   "ReactiveCourse.AlreadyEnrolled": "You already have an enrollment for this course.",
   "ReactiveCourse.NotEnrolled": "You are not enrolled in this course.",
   "ReactiveCourse.MonthNotPaid": "This month is not paid. Request payment or contact admin.",
@@ -681,8 +729,6 @@
   "Email.Booking.Rejected.Body": "Your booking #{0} was rejected. Note: {1}",
   "Email.Booking.MeetUpdated.Subject": "Meeting link updated",
   "Email.Booking.MeetUpdated.Body": "Your booking #{0} meeting link has been updated.",
-  "Email.Booking.Paid.Subject": "Booking marked as paid",
-  "Email.Booking.Paid.Body": "Booking #{0} has been marked paid. Amount: {1}",
   "Email.Booking.Paid.Subject.Teacher": "A booking was marked paid",
   "Email.Booking.Paid.Body.Teacher": "Booking #{0} for student {1} marked paid.",
   "Course.Info": "Course info",
@@ -693,6 +739,7 @@
 
   "Admin.ReactiveCourse": "Reactive course",
   "Admin.ReactiveEnrollments": "Reactive enrollments",
+  "Admin.SchoolEnrollments": "Online school enrollments",
   "Admin.Reports": "Reports",
   "School.Subtitle": "Structured school curriculum, organized by level and subject.",
   "Curriculum.Info": "Curriculum information",
@@ -751,6 +798,7 @@
   "ReactiveCourse.CancelEnrollment": "Cancel enrollment",
   "ReactiveCourse.CancelPayment": "Cancel payment request",
   "ReactiveCourse.RequestPayment": "Payment request",
+  "ReactiveCourse.RecordedVideoUrl": "the recorded video link",
   "Admin.IsActive": "Active",
 
   "Enroll.Success": "You have successfully enrolled in the course.",
@@ -787,7 +835,41 @@
 
   "Admin.ItemLink": "Item Link",
   "Admin.DeleteSection": "Delete Home Section",
-  "Admin.DeleteSectionConfirm": "Are you sure you want to delete this section?"
+  "Admin.DeleteSectionConfirm": "Are you sure you want to delete this section?",
+
+  "OnlineCourse.IndexTitle": "Online School",
+  "OnlineCourse.CreateCourse": "Create online course",
+  "Admin.DeleteConfirm": "Are you sure you want to delete?",
+  "OnlineCourse.Title": "Title",
+  "OnlineCourse.Description": "Description",
+  "OnlineCourse.Level": "Level",
+  "Select": "Select",
+  "OnlineCourse.CoverImage": "Cover image",
+  "OnlineCourse.CoverHelp": "Recommended size 1200x600",
+  "OnlineCourse.PricePerMonth": "Price per month",
+  "OnlineCourse.IntroductionVideoUrl": "Introduction video (YouTube URL)",
+  "OnlineCourse.TeacherName": "Teacher name",
+  "OnlineCourse.IsPublished": "Published",
+  "OnlineCourse.EditCourse": "Edit online course",
+  "OnlineCourse.ViewRecorded": "View recording",
+  "Attachments": "Attachments",
+  "OnlineCourse.AttachmentsHelp": "Upload files for lesson",
+  "OnlineCourse.Info": "Course info",
+  "OnlineCourse.Created": "Course created.",
+  "OnlineCourse.Updated": "Course updated.",
+  "OnlineCourse.MonthAdded": "Month added.",
+  "OnlineCourse.LessonDeleted": "Lesson deleted.",
+  "OnlineCourse.MonthNowReady": "Month is now ready.",
+  "OnlineCourse.MonthNoLongerReady": "Month is no longer ready.",
+  "OnlineCourse.DeleteBlockedHasData": "Cannot delete: data exists.",
+  "CannotShrinkDurationHasData": "Cannot reduce duration because some months contain lessons or payments.",
+  "AllLessonsMustHaveMeetUrlBeforeReady": "All lessons must have a meeting URL before marking the month as ready.",
+  "OnlineCourse.RecordedVideoUrl": "URL of the recorded lesson video",
+  "Admin.OnlineScoolTitle": "Online School",
+  "OnlineCourse.Published": "Has the course been published?",
+  "ReactiveCourse.Live": "Live lesson",
+  "OnlineSchool.NoCourses": "there are no courses",
+  "GuardianPhoneNumber": "Guardian Phone Number"
 }
 
 

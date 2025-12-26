@@ -1,0 +1,76 @@
+﻿@model Edu.Web.ViewModels.OnlineSchoolIndexVm
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+<div class="row g-3">
+    @if (Model.Courses == null || !Model.Courses.Any())
+    {
+        <div class="col-12 text-center text-muted py-5">@(L["OnlineSchool.NoCourses"] ?? "No courses found")</div>
+    }
+    else
+    {
+        foreach (var c in Model.Courses)
+        {
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    @if (!string.IsNullOrEmpty(c.CoverImageUrl))
+                    {
+                        <img src="@c.CoverImageUrl" alt="@c.Title" class="card-img-top" style="height:160px;object-fit:cover" />
+                    }
+                    else
+                    {
+                        <div class="bg-light d-flex align-items-center justify-content-center" style="height:160px">
+                            <i class="fas fa-video fa-3x text-muted"></i>
+                        </div>
+                    }
+
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title mb-1">@c.Title</h5>
+                        <p class="card-text text-muted small mb-3">@c.Description</p>
+
+                        <div class="mt-auto d-flex align-items-center justify-content-between">
+                            <a asp-area="Student" asp-controller="OnlineSchoolEnrollments" asp-action="Details" asp-route-id="@c.Id" class="btn btn-outline-primary btn-sm">
+                                @(L["View"] ?? "View")
+                            </a>
+
+                            <div class="small text-muted">
+                                @c.DurationMonths @(L["ReactiveCourse.Months"] ?? "months")
+                                <span class="mx-1">•</span>
+                                @c.LessonCount @(L["Admin.Lessons"] ?? "lessons")
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<div class="mt-4">
+    @* Basic server-rendered pagination controls (adapt if you have a pagination partial) *@
+    @{
+        var from = ((Model.Page - 1) * Model.PageSize) + 1;
+        var to = Math.Min(Model.TotalCount, Model.Page * Model.PageSize);
+    }
+    <nav aria-label="Page navigation">
+        <ul class="pagination">
+            @if (Model.Page > 1)
+            {
+                <li class="page-item"><a class="page-link" href="@Url.Action("Index", new { levelId = Model.SelectedLevelId, page = Model.Page - 1, pageSize = Model.PageSize })">Prev</a></li>
+            }
+            else
+            {
+                <li class="page-item disabled"><span class="page-link">Prev</span></li>
+            }
+            <li class="page-item disabled"><span class="page-link">@from - @to of @Model.TotalCount</span></li>
+            @if (Model.Page < Model.TotalPages)
+            {
+                <li class="page-item"><a class="page-link" href="@Url.Action("Index", new { levelId = Model.SelectedLevelId, page = Model.Page + 1, pageSize = Model.PageSize })">Next</a></li>
+            }
+            else
+            {
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+            }
+        </ul>
+    </nav>
+</div>
+

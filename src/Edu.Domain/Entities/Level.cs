@@ -13,8 +13,8 @@ public class Level
     public string NameAr { get; set; } = string.Empty;
     public int Order { get; set; }
     public ICollection<Curriculum>? Curricula { get; set; }
+    public ICollection<OnlineCourse>? OnlineCourses { get; set; }
 }
-
 
 public class LevelConfiguration : IEntityTypeConfiguration<Level>
 {
@@ -26,7 +26,6 @@ public class LevelConfiguration : IEntityTypeConfiguration<Level>
         builder.Property(l => l.NameEn).IsRequired().HasMaxLength(200);
         builder.Property(l => l.NameIt).IsRequired().HasMaxLength(200);
         builder.Property(l => l.NameAr).IsRequired().HasMaxLength(200);
-
         builder.Property(l => l.Order).IsRequired();
     }
 }

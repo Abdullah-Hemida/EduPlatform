@@ -1,8 +1,15 @@
 ﻿@* inside E:\Education\src\Edu.Web\Views\Shared\Components\Footer\Default.cshtml *@ 
 @model Edu.Web.Views.Shared.Components.ViewComponents.FooterVm
+@using System.Globalization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
-<footer class="site-footer text-light pt-5 pb-4 mt-5">
+@{
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var dir = lang == "ar" ? "rtl" : "ltr";
+    var textAlign = lang == "ar" ? "right" : "left";
+}
+
+<footer class="site-footer text-light pt-5 pb-4 mt-5" dir="@dir" style="text-align:@textAlign">
     <div class="container">
         <div class="row gy-4">
             <div class="col-md-6">

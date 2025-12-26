@@ -204,7 +204,20 @@
                             <span class="nav-text ms-2">@Localizer["Admin.ReactiveEnrollments"]</span>
                         </a>
                     </li>
-
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="OnlineCourses" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("OnlineCourses")" title="@Localizer["Admin.ReactiveEnrollments"]">
+                            <i class="fas fa-user-graduate nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.OnlineScoolTitle"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Admin" asp-controller="SchoolEnrollments" asp-action="Index"
+                           class="nav-link d-flex align-items-center gap-2 @active("SchoolEnrollments")" title="@Localizer["Admin.SchoolEnrollments"]">
+                            <i class="fas fa-user-graduate nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Admin.SchoolEnrollments"]</span>
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a asp-area="Admin" asp-controller="Earnings" asp-action="Index"
                            class="nav-link d-flex align-items-center gap-2  @active("Earnings")" title="@Localizer["Admin.Earnings"]">
@@ -271,6 +284,13 @@
                            class="nav-link d-flex align-items-center gap-2 @active("Bookings")" title="@Localizer["Booking.SessionBookings"]">
                             <i class="fas fa-calendar-check nav-icon"></i>
                             <span class="nav-text ms-2">@Localizer["Booking.SessionBookings"]</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="Student" asp-controller="OnlineSchoolEnrollments" asp-action="MyEnrollments"
+                           class="nav-link d-flex align-items-center gap-2 @active("MyOnlineSchoolEnrollments")" title="@Localizer["Nav.OnlineSchool"]">
+                            <i class="fas fa-user-check nav-icon"></i>
+                            <span class="nav-text ms-2">@Localizer["Nav.OnlineSchool"]</span>
                         </a>
                     </li>
                 }

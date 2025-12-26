@@ -94,6 +94,13 @@ namespace Edu.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("PreferredLanguage")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("it");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -324,7 +331,13 @@ namespace Edu.Infrastructure.Migrations
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(512)");
 
+                    b.Property<int?>("OnlineCourseLessonId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PrivateLessonId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReactiveCourseLessonId")
                         .HasColumnType("int");
 
                     b.Property<int?>("SchoolLessonId")
@@ -340,7 +353,11 @@ namespace Edu.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OnlineCourseLessonId");
+
                     b.HasIndex("PrivateLessonId");
+
+                    b.HasIndex("ReactiveCourseLessonId");
 
                     b.HasIndex("SchoolLessonId");
 
@@ -575,6 +592,204 @@ namespace Edu.Infrastructure.Migrations
                     b.ToTable("Levels");
                 });
 
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourse", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CoverImageKey")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DurationMonths")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("IntroductionVideoUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LevelId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PricePerMonth")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("TeacherName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LevelId");
+
+                    b.ToTable("OnlineCourses");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourseLesson", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("MeetUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("OnlineCourseId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OnlineCourseMonthId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecordedVideoUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ScheduledUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OnlineCourseId");
+
+                    b.HasIndex("OnlineCourseMonthId");
+
+                    b.ToTable("OnlineCourseLessons");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourseMonth", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsReadyForPayment")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("MonthEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MonthIndex")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("MonthStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OnlineCourseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OnlineCourseId", "MonthIndex")
+                        .IsUnique();
+
+                    b.ToTable("OnlineCourseMonths");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineEnrollment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OnlineCourseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StudentId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("OnlineCourseId", "StudentId")
+                        .IsUnique()
+                        .HasFilter("[StudentId] IS NOT NULL");
+
+                    b.ToTable("OnlineEnrollments");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineEnrollmentMonthPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdminNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OnlineCourseMonthId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OnlineEnrollmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentReference")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OnlineCourseMonthId");
+
+                    b.HasIndex("OnlineEnrollmentId", "OnlineCourseMonthId");
+
+                    b.ToTable("OnlineEnrollmentMonthPayments");
+                });
+
             modelBuilder.Entity("Edu.Domain.Entities.PrivateCourse", b =>
                 {
                     b.Property<int>("Id")
@@ -798,6 +1013,9 @@ namespace Edu.Infrastructure.Migrations
 
                     b.Property<int>("ReactiveCourseMonthId")
                         .HasColumnType("int");
+
+                    b.Property<string>("RecordedVideoUrl")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ScheduledUtc")
                         .HasColumnType("datetime2");
@@ -1135,12 +1353,31 @@ namespace Edu.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("GuardianPhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsAllowed")
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
 
                     b.ToTable("Students");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.StudentCurriculum", b =>
+                {
+                    b.Property<string>("StudentId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("CurriculumId")
+                        .HasColumnType("int");
+
+                    b.HasKey("StudentId", "CurriculumId");
+
+                    b.HasIndex("CurriculumId");
+
+                    b.ToTable("StudentCurricula");
                 });
 
             modelBuilder.Entity("Edu.Domain.Entities.Teacher", b =>
@@ -1373,11 +1610,23 @@ namespace Edu.Infrastructure.Migrations
 
             modelBuilder.Entity("Edu.Domain.Entities.FileResource", b =>
                 {
+                    b.HasOne("Edu.Domain.Entities.OnlineCourseLesson", "OnlineCourseLesson")
+                        .WithMany("Files")
+                        .HasForeignKey("OnlineCourseLessonId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("FK_FileResource_OnlineCourseLesson");
+
                     b.HasOne("Edu.Domain.Entities.PrivateLesson", "PrivateLesson")
                         .WithMany("Files")
                         .HasForeignKey("PrivateLessonId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("FK_FileResource_PrivateLesson");
+
+                    b.HasOne("Edu.Domain.Entities.ReactiveCourseLesson", "ReactiveCourseLesson")
+                        .WithMany("Files")
+                        .HasForeignKey("ReactiveCourseLessonId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("FK_FileResource_ReactiveCourseLesson");
 
                     b.HasOne("Edu.Domain.Entities.SchoolLesson", "SchoolLesson")
                         .WithMany("Files")
@@ -1385,7 +1634,11 @@ namespace Edu.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("FK_FileResource_SchoolLesson");
 
+                    b.Navigation("OnlineCourseLesson");
+
                     b.Navigation("PrivateLesson");
+
+                    b.Navigation("ReactiveCourseLesson");
 
                     b.Navigation("SchoolLesson");
                 });
@@ -1421,6 +1674,80 @@ namespace Edu.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("HomeSection");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourse", b =>
+                {
+                    b.HasOne("Edu.Domain.Entities.Level", null)
+                        .WithMany("OnlineCourses")
+                        .HasForeignKey("LevelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourseLesson", b =>
+                {
+                    b.HasOne("Edu.Domain.Entities.OnlineCourse", "OnlineCourse")
+                        .WithMany("Lessons")
+                        .HasForeignKey("OnlineCourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Edu.Domain.Entities.OnlineCourseMonth", "OnlineCourseMonth")
+                        .WithMany("Lessons")
+                        .HasForeignKey("OnlineCourseMonthId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("OnlineCourse");
+
+                    b.Navigation("OnlineCourseMonth");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourseMonth", b =>
+                {
+                    b.HasOne("Edu.Domain.Entities.OnlineCourse", "OnlineCourse")
+                        .WithMany("Months")
+                        .HasForeignKey("OnlineCourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OnlineCourse");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineEnrollment", b =>
+                {
+                    b.HasOne("Edu.Domain.Entities.OnlineCourse", "OnlineCourse")
+                        .WithMany("Enrollments")
+                        .HasForeignKey("OnlineCourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Edu.Domain.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId");
+
+                    b.Navigation("OnlineCourse");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineEnrollmentMonthPayment", b =>
+                {
+                    b.HasOne("Edu.Domain.Entities.OnlineCourseMonth", "OnlineCourseMonth")
+                        .WithMany("MonthPayments")
+                        .HasForeignKey("OnlineCourseMonthId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Edu.Domain.Entities.OnlineEnrollment", "OnlineEnrollment")
+                        .WithMany("MonthPayments")
+                        .HasForeignKey("OnlineEnrollmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("OnlineCourseMonth");
+
+                    b.Navigation("OnlineEnrollment");
                 });
 
             modelBuilder.Entity("Edu.Domain.Entities.PrivateCourse", b =>
@@ -1611,6 +1938,25 @@ namespace Edu.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Edu.Domain.Entities.StudentCurriculum", b =>
+                {
+                    b.HasOne("Edu.Domain.Entities.Curriculum", "Curriculum")
+                        .WithMany("StudentCurricula")
+                        .HasForeignKey("CurriculumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Edu.Domain.Entities.Student", "Student")
+                        .WithMany("StudentCurricula")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Curriculum");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("Edu.Domain.Entities.Teacher", b =>
                 {
                     b.HasOne("Edu.Domain.Entities.ApplicationUser", "User")
@@ -1697,6 +2043,8 @@ namespace Edu.Infrastructure.Migrations
                     b.Navigation("SchoolLessons");
 
                     b.Navigation("SchoolModules");
+
+                    b.Navigation("StudentCurricula");
                 });
 
             modelBuilder.Entity("Edu.Domain.Entities.HomeSection", b =>
@@ -1714,6 +2062,34 @@ namespace Edu.Infrastructure.Migrations
             modelBuilder.Entity("Edu.Domain.Entities.Level", b =>
                 {
                     b.Navigation("Curricula");
+
+                    b.Navigation("OnlineCourses");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourse", b =>
+                {
+                    b.Navigation("Enrollments");
+
+                    b.Navigation("Lessons");
+
+                    b.Navigation("Months");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourseLesson", b =>
+                {
+                    b.Navigation("Files");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineCourseMonth", b =>
+                {
+                    b.Navigation("Lessons");
+
+                    b.Navigation("MonthPayments");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.OnlineEnrollment", b =>
+                {
+                    b.Navigation("MonthPayments");
                 });
 
             modelBuilder.Entity("Edu.Domain.Entities.PrivateCourse", b =>
@@ -1742,6 +2118,11 @@ namespace Edu.Infrastructure.Migrations
                     b.Navigation("Enrollments");
 
                     b.Navigation("Months");
+                });
+
+            modelBuilder.Entity("Edu.Domain.Entities.ReactiveCourseLesson", b =>
+                {
+                    b.Navigation("Files");
                 });
 
             modelBuilder.Entity("Edu.Domain.Entities.ReactiveCourseMonth", b =>
@@ -1778,6 +2159,8 @@ namespace Edu.Infrastructure.Migrations
                     b.Navigation("PurchaseRequests");
 
                     b.Navigation("ReactiveEnrollments");
+
+                    b.Navigation("StudentCurricula");
                 });
 
             modelBuilder.Entity("Edu.Domain.Entities.Teacher", b =>

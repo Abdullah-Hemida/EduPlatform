@@ -9,10 +9,12 @@ namespace Edu.Domain.Entities
         public int Id { get; set; }
         public int ReactiveCourseMonthId { get; set; }
         public string? Title { get; set; }
-        public DateTime? ScheduledUtc { get; set; }   // if teacher provides schedule
-        public string? MeetUrl { get; set; }          // required to be set by teacher before ready
+        public DateTime? ScheduledUtc { get; set; }
+        public string? MeetUrl { get; set; }
+        public string? RecordedVideoUrl { get; set; }
         public string? Notes { get; set; }
         public ReactiveCourseMonth? ReactiveCourseMonth { get; set; }
+        public ICollection<FileResource> Files { get; set; } = new List<FileResource>();
     }
     public class ReactiveCourseLessonConfiguration : IEntityTypeConfiguration<ReactiveCourseLesson>
     {

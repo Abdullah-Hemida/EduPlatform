@@ -1,9 +1,8 @@
 ﻿@model Edu.Web.Areas.Admin.ViewModels.UserDetailsViewModel
 @using Edu.Infrastructure.Helpers
-@inject Microsoft.Extensions.Localization.IStringLocalizer<Edu.Web.Areas.Admin.Controllers.ManageUsersController> L
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
-     
     ViewData["Title"] = L["Admin.UserDetails"];
 }
 
@@ -85,15 +84,66 @@
             </div>
         }
 
-        @if (Model.Student != null)
-        {
-            <div class="card mb-3">
-                <div class="card-header"><strong>@L["Admin.StudentInfo"]</strong></div>
-                <div class="card-body">
-                    
-                </div>
+        <div class="card mb-3">
+            <div class="card-header"><strong>@L["Admin.StudentInfo"]</strong></div>
+            <div class="card-body">
+                @if (Model.Student == null)
+                {
+                    <div class="alert alert-warning">
+                        @(L["Admin.NoStudentRecord", ""] ?? "This user has no Student record. Saving curricula will create one.")
+                    </div>
+                }
+                <p>
+                    <strong>@L["Admin.StudentAllowed"]:</strong>
+                    @if (Model.StudentIsAllowed == true)
+                    {
+                        <span class="badge bg-success ms-2">@L["Admin.Allowed"]</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary ms-2">@L["Admin.NotAllowed"]</span>
+                    }
+                </p>
+                <div>@L["GuardianPhoneNumber"] : @Model.GuardianPhoneNumber</div>
+                <form asp-action="AssignCurricula" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+
+                    <div class="mb-2">
+                        <strong>@L["Admin.StudentCurricula"]</strong>
+                        <p class="small text-muted">@L["Admin.StudentCurriculaHint"]</p>
+                    </div>
+
+                    @if (Model.Curricula == null || !Model.Curricula.Any())
+                    {
+                        <p class="text-muted">@L["Admin.NoCurricula"]</p>
+                    }
+                    else
+                    {
+                        foreach (var c in Model.Curricula)
+                        {
+                            var isChecked = Model.SelectedCurriculumIds != null && Model.SelectedCurriculumIds.Contains(c.Id);
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="selectedCurriculumIds" value="@c.Id" id="cur_@c.Id" @(isChecked ? "checked" : "") />
+                                <label class="form-check-label" for="cur_@c.Id">
+                                    @c.Title
+                                    @if (!string.IsNullOrEmpty(c.LevelName))
+                                    {
+                                        <small class="text-muted"> (@c.LevelName)</small>
+                                    }
+                                </label>
+                            </div>
+                        }
+                    }
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">@L["Admin.Save"]</button>
+                        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary ms-2">@L["Admin.Cancel"]</a>
+                    </div>
+                </form>
             </div>
-        }
+        </div>
 
         <div id="ajaxMsgs"></div>
     </div>
@@ -101,10 +151,8 @@
 
 @section Scripts {
     <script src="~/js/admin-users.js"></script>
-    <script>
-        // page-specific handlers (most implemented inside admin-users.js)
-    </script>
 }
+
 
 
 

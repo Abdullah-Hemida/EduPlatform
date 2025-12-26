@@ -3,11 +3,14 @@ using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
 using Edu.Infrastructure.Services;
 using Edu.Web.Areas.Admin.ViewModels;
+using Edu.Web.Helpers;
 using Edu.Web.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using System.Globalization;
+
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -17,13 +20,18 @@ namespace Edu.Web.Areas.Admin.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly IStringLocalizer<SharedResource> _L;
-        private readonly IEmailSender _emailSender;
+        private readonly INotificationService _notifier;
+        private readonly IWebHostEnvironment _env;
+        private readonly ILogger<BookingsController> _logger;
 
-        public BookingsController(ApplicationDbContext db, IStringLocalizer<SharedResource> L, IEmailSender emailSender)
+
+        public BookingsController(ApplicationDbContext db, IStringLocalizer<SharedResource> L, INotificationService notifier, IWebHostEnvironment env, ILogger<BookingsController> logger)
         {
             _db = db;
             _L = L;
-            _emailSender = emailSender;
+            _notifier = notifier;
+            _env = env;
+            _logger = logger;
         }
 
         // GET: Admin/Bookings
@@ -111,7 +119,6 @@ namespace Edu.Web.Areas.Admin.Controllers
                 .Include(b => b.Slot)
                 .Include(b => b.Student).ThenInclude(s => s.User)
                 .Include(b => b.Teacher).ThenInclude(t => t.User)
-                .Include(b => b.ModerationLogs)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (booking == null) return NotFound();
@@ -124,18 +131,19 @@ namespace Edu.Web.Areas.Admin.Controllers
                 StudentName = booking.Student?.User?.FullName,
                 StudentEmail = booking.Student?.User?.Email,
                 StudentPhoneNumber = booking.Student?.User?.PhoneNumber,
+                GuardianPhoneNumber = booking.Student.GuardianPhoneNumber,
                 TeacherName = booking.Teacher?.User?.FullName,
                 Status = booking.Status,
                 RequestedDateUtc = booking.RequestedDateUtc,
                 PriceLabel = booking.Price.ToEuro(),
                 MeetUrl = booking.MeetUrl,
-                Notes = booking.Notes,
-                ModerationLogs = booking.ModerationLogs?.OrderByDescending(l => l.CreatedAtUtc).ToList() ?? new List<BookingModerationLog>()
+                Notes = booking.Notes
             };
 
             ViewData["ActivePage"] = "The Bookings";
             return View(vm);
         }
+
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id, string? note)
         {
@@ -149,37 +157,103 @@ namespace Edu.Web.Areas.Admin.Controllers
             // allow deleting only pending (or cancelled) to be safe:
             if (booking.Status == BookingStatus.Paid)
             {
-                TempData["Error"] = _L["Booking.CannotDeletePaid"] ?? "Cannot delete a paid booking.";
+                TempData["Error"] = _L["Booking.CannotDeletePaid"].Value ?? "Cannot delete a paid booking.";
                 return RedirectToAction("Index");
             }
-
-            // Log deletion (important for audit) BEFORE removing row
-            _db.BookingModerationLogs.Add(new BookingModerationLog
-            {
-                BookingId = booking.Id,
-                ActorId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
-                ActorName = User.Identity?.Name,
-                Action = "DeletedByAdmin",
-                Note = note ?? "Deleted by admin",
-                CreatedAtUtc = DateTime.UtcNow
-            });
 
             _db.Bookings.Remove(booking);
 
             try
             {
                 await _db.SaveChangesAsync();
-                TempData["Success"] = _L["Admin.Deleted"] ?? "Deleted successfully.";
+                TempData["Success"] = _L["Admin.Deleted"].Value ?? "Deleted successfully.";
             }
             catch
             {
-                TempData["Error"] = _L["Admin.OperationFailed"] ?? "Operation failed.";
+                TempData["Error"] = _L["Admin.OperationFailed"].Value ?? "Operation failed.";
             }
 
             return RedirectToAction("Index");
         }
+
+        // DTO for AJAX request
+        public class MarkPaidRequest
+        {
+            public int Id { get; set; }
+            public decimal? Amount { get; set; }
+            public string? PaymentRef { get; set; }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> MarkPaid([FromBody] MarkPaidRequest request)
+        {
+            if (request == null) return BadRequest(new { success = false, error = "Invalid payload" });
+
+            var booking = await _db.Bookings
+                .Include(b => b.Student).ThenInclude(s => s.User)
+                .Include(b => b.Teacher).ThenInclude(t => t.User)
+                .FirstOrDefaultAsync(b => b.Id == request.Id);
+
+            if (booking == null) return NotFound(new { success = false, error = "Booking not found" });
+
+            if (booking.Status == BookingStatus.Paid) return BadRequest(new { success = false, error = "Already paid" });
+
+            booking.Status = BookingStatus.Paid;
+            if (request.Amount.HasValue) booking.Price = request.Amount.Value;
+
+            var paymentRefProp = booking.GetType().GetProperty("PaymentRef");
+            if (paymentRefProp != null && paymentRefProp.CanWrite) paymentRefProp.SetValue(booking, request.PaymentRef);
+
+            var paidAtProp = booking.GetType().GetProperty("PaidAtUtc");
+            if (paidAtProp != null && paidAtProp.CanWrite) paidAtProp.SetValue(booking, DateTime.UtcNow);
+
+            try { await _db.SaveChangesAsync(); }
+            catch (Exception ex) { return StatusCode(500, new { success = false, error = _L["Admin.OperationFailed"].Value ?? "Operation failed" }); }
+
+            // Notify teacher and student via NotificationService (best-effort)
+            try
+            {
+                async Task SendForUser(ApplicationUser? user)
+                {
+                    if (user == null || string.IsNullOrEmpty(user.Email)) return;
+                    await _notifier.SendLocalizedEmailAsync(user, "Booking.Email.Subject.Paid", "Booking.Email.Body.Paid", booking.Id, booking.Price.ToString("C"));
+                }
+
+                var studentUser = booking.Student?.User;
+                var teacherUser = booking.Teacher?.User;
+
+                await NotifyFireAndForgetAsync(async () =>
+                {
+                    if (studentUser != null) await SendForUser(studentUser);
+                    if (teacherUser != null) await SendForUser(teacherUser);
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Notify after MarkPaid failed for booking {BookingId}", booking.Id);
+            }
+
+            var priceLabelRes = booking.Price.ToEuro();
+            return Ok(new { success = true, price = booking.Price, priceLabel = priceLabelRes });
+        }
+
+        // Helper to run notifications awaited in development, fire-and-forget otherwise
+        private async Task NotifyFireAndForgetAsync(Func<Task> work)
+        {
+            if (work == null) return;
+            try
+            {
+                if (_env?.IsDevelopment() == true) await work();
+                else _ = Task.Run(work);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NotifyFireAndForget failed");
+            }
+        }
     }
 }
+
 
 
 

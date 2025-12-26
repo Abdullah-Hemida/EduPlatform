@@ -2,8 +2,8 @@
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
-using Edu.Infrastructure.Services;
 using Edu.Web.Areas.Student.ViewModels;
+using Edu.Web.Helpers;
 using Edu.Web.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -20,31 +20,32 @@ namespace Edu.Web.Areas.Student.Controllers
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IFileStorageService _fileStorage;
-        private readonly IEmailSender _emailSender;
         private readonly ILogger<ReactiveEnrollmentsController> _logger;
         private readonly IStringLocalizer<SharedResource> _localizer;
-
+        private readonly IWebHostEnvironment _env;
+        private readonly INotificationService _notifier;
         public ReactiveEnrollmentsController(
             ApplicationDbContext db,
             UserManager<ApplicationUser> userManager,
             IFileStorageService fileStorage,
-            IEmailSender emailSender,
             ILogger<ReactiveEnrollmentsController> logger,
-            IStringLocalizer<SharedResource> localizer)
+            IStringLocalizer<SharedResource> localizer,
+            IWebHostEnvironment env,
+            INotificationService notifier)
         {
             _db = db;
             _userManager = userManager;
             _fileStorage = fileStorage;
-            _emailSender = emailSender;
             _logger = logger;
             _localizer = localizer;
+            _env = env;
+            _notifier = notifier;
         }
 
         // GET: /Student/ReactiveCourses/Details/5
         [HttpGet("Student/ReactiveCourses/Details/{id:int}")]
         public async Task<IActionResult> Details(int id)
         {
-            // 1. Load lightweight course + months (lessons count only) projection
             var course = await _db.ReactiveCourses
                 .AsNoTracking()
                 .Where(c => c.Id == id && !c.IsArchived)
@@ -75,24 +76,16 @@ namespace Edu.Web.Areas.Student.Controllers
 
             if (course == null) return NotFound();
 
-            // 2. Resolve cover URL (best-effort)
+            // Resolve cover URL
             string? coverPublicUrl = null;
             if (!string.IsNullOrEmpty(course.CoverImageKey))
             {
-                try
-                {
-                    coverPublicUrl = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey);
-                }
-                catch
-                {
-                    coverPublicUrl = course.CoverImageKey;
-                }
+                try { coverPublicUrl = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey); }
+                catch { coverPublicUrl = course.CoverImageKey; }
             }
 
-            // 3. Current student
             var studentId = _userManager.GetUserId(User);
 
-            // Build base months list (no payment state yet)
             var monthsBase = course.Months.Select(m => new StudentCourseMonthVm
             {
                 Id = m.Id,
@@ -103,7 +96,6 @@ namespace Edu.Web.Areas.Student.Controllers
                 LessonsCount = m.LessonsCount
             }).OrderBy(m => m.MonthIndex).ToList();
 
-            // If not authenticated, return public VM
             if (string.IsNullOrEmpty(studentId))
             {
                 var publicVm = new StudentReactiveCourseDetailsVm
@@ -125,14 +117,14 @@ namespace Edu.Web.Areas.Student.Controllers
                 return View(publicVm);
             }
 
-            // 4. Load student's enrollment (if any)
+            // load student's enrollment (if any)
             var enrollment = await _db.ReactiveEnrollments
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.ReactiveCourseId == course.Id && e.StudentId == studentId);
 
             int? enrollmentId = enrollment?.Id;
 
-            // 5. Load payments for this enrollment (single query)
+            // payments for this enrollment
             var paymentList = new List<ReactiveEnrollmentMonthPayment>();
             if (enrollmentId.HasValue)
             {
@@ -142,65 +134,91 @@ namespace Edu.Web.Areas.Student.Controllers
                     .ToListAsync();
             }
 
-            // 6. Build months VMs with per-student payment state + permissions
-            const int allowRequestDayOfMonth = 15; // example gating fallback
-            var utcNow = DateTime.UtcNow;
-            var dayOfMonth = utcNow.Day;
-
+            // Build months with payment state
             foreach (var m in monthsBase)
             {
                 var payment = paymentList.FirstOrDefault(p => p.ReactiveCourseMonthId == m.Id);
                 m.PaymentId = payment?.Id;
                 m.MyPaymentStatus = payment?.Status;
 
-                // Determine CanRequestPayment:
-                bool canRequest = m.IsReadyForPayment && (payment == null);
+                // SIMPLE rule: allow request only if admin marked month ready and student hasn't requested
+                m.CanRequestPayment = m.IsReadyForPayment && (payment == null);
 
-                // optional: enforce midpoint gating if MonthStart/End provided
-                if (m.MonthStartUtc != default && m.MonthEndUtc != default)
-                {
-                    var midpoint = m.MonthStartUtc + TimeSpan.FromTicks((m.MonthEndUtc - m.MonthStartUtc).Ticks / 2);
-                    if (DateTime.UtcNow > midpoint) canRequest = false;
-                }
-                else
-                {
-                    if (dayOfMonth > allowRequestDayOfMonth) canRequest = false;
-                }
-
-                m.CanRequestPayment = canRequest;
                 m.CanCancelPayment = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Pending);
                 m.CanViewLessons = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Paid);
             }
 
-            // 7. If any paid months -> load lessons only for paid months
+            // If any paid months -> load lessons for those months and their attachments
             var paidMonthIds = monthsBase.Where(m => m.CanViewLessons).Select(m => m.Id).ToList();
+            var lessonVmList = new List<StudentCourseLessonVm>();
             if (paidMonthIds.Any())
             {
+                // load lessons (including RecordedVideoUrl)
                 var lessons = await _db.ReactiveCourseLessons
                     .AsNoTracking()
-                    .Where(l => paidMonthIds.Contains(l.ReactiveCourseMonthId))
+                    .Where(l => l.ReactiveCourseMonthId != null && paidMonthIds.Contains(l.ReactiveCourseMonthId))
                     .OrderBy(l => l.ScheduledUtc)
-                    .Select(l => new StudentCourseLessonVm
+                    .Select(l => new
+                    {
+                        l.Id,
+                        l.Title,
+                        l.ScheduledUtc,
+                        l.MeetUrl,
+                        l.Notes,
+                        l.RecordedVideoUrl,
+                        ReactiveCourseMonthId = l.ReactiveCourseMonthId
+                    })
+                    .ToListAsync();
+
+                var lessonIds = lessons.Select(x => x.Id).ToList();
+
+                // fetch file resources for these lessons (best-effort)
+                var files = new List<FileResource>();
+                if (lessonIds.Any())
+                {
+                    files = await _db.FileResources
+                        .AsNoTracking()
+                        .Where(fr => fr.ReactiveCourseLessonId != null && lessonIds.Contains(fr.ReactiveCourseLessonId.Value))
+                        .ToListAsync();
+                }
+
+                // map to VM (resolve public urls via file storage synchronously - consistent with your other code)
+                lessonVmList = lessons.Select(l =>
+                {
+                    var attached = files
+                        .Where(f => f.ReactiveCourseLessonId == l.Id)
+                        .Select(ff => new ReactiveCourseLessonFileVm
+                        {
+                            Id = ff.Id,
+                            FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
+                            PublicUrl = !string.IsNullOrEmpty(ff.StorageKey) ? _fileStorage.GetPublicUrlAsync(ff.StorageKey).Result
+                                        : (ff.FileUrl ?? null)
+                        }).ToList();
+
+                    return new StudentCourseLessonVm
                     {
                         Id = l.Id,
                         Title = l.Title,
                         ScheduledUtc = l.ScheduledUtc,
                         MeetUrl = l.MeetUrl,
                         Notes = l.Notes,
-                        ReactiveCourseMonthId = l.ReactiveCourseMonthId
-                    })
-                    .ToListAsync();
-
-                foreach (var monthVm in monthsBase.Where(m => paidMonthIds.Contains(m.Id)))
-                {
-                    monthVm.Lessons = lessons
-                        .Where(x => x.ReactiveCourseMonthId == monthVm.Id)
-                        .OrderBy(x => x.ScheduledUtc)
-                        .ToList();
-                }
+                        RecordedVideoUrl = l.RecordedVideoUrl,
+                        ReactiveCourseMonthId = l.ReactiveCourseMonthId,
+                        Files = attached
+                    };
+                }).ToList();
             }
 
-            // 8. Build final VM
+            // attach lessons to months
+            foreach (var monthVm in monthsBase.Where(m => paidMonthIds.Contains(m.Id)))
+            {
+                monthVm.Lessons = lessonVmList
+                    .Where(x => x.ReactiveCourseMonthId == monthVm.Id)
+                    .OrderBy(x => x.ScheduledUtc)
+                    .ToList();
+            }
+
+            // build final VM
             var vm = new StudentReactiveCourseDetailsVm
             {
                 CourseId = course.Id,
@@ -225,7 +243,6 @@ namespace Edu.Web.Areas.Student.Controllers
             ViewData["ActivePage"] = "MyEnrollments";
             return View(vm);
         }
-
 
         // POST: Student/ReactiveEnrollments/Enroll
         [HttpPost]
@@ -281,7 +298,30 @@ namespace Edu.Web.Areas.Student.Controllers
 
                 await tx.CommitAsync();
 
-                _ = NotifyTeacherOfEnrollmentAsync(course.TeacherId, course.Title, studentId);
+                // notify in dev synchronously, otherwise fire-and-forget
+                await NotifyFireAndForgetAsync(async () =>
+                {
+                    var teacher = !string.IsNullOrEmpty(course.TeacherId) ? await _userManager.FindByIdAsync(course.TeacherId) : null;
+                    if (teacher != null && !string.IsNullOrEmpty(teacher.Email))
+                    {
+                        await _notifier.SendLocalizedEmailAsync(
+                            teacher,
+                            "Email.Enrollment.Requested.Subject",
+                            "Email.Enrollment.Requested.Body",
+                            course.Title, User.Identity?.Name ?? studentId
+                        );
+                    }
+
+                    await _notifier.NotifyAllAdminsAsync(
+                        "Email.Admin.Enrollment.Requested.Subject",
+                        "Email.Admin.Enrollment.Requested.Body",
+                        async admin =>
+                        {
+                            var teacherDisplayName = teacher?.UserName ?? teacher?.Email ?? course.TeacherId ?? "Teacher";
+                            return new object[] { course.Title, teacherDisplayName, User.Identity?.Name ?? studentId };
+                        }
+                    );
+                });
 
                 return Json(new { success = true, enrollmentId = enr.Id, message = _localizer["Enroll.Success"].Value });
             }
@@ -292,7 +332,6 @@ namespace Edu.Web.Areas.Student.Controllers
                 return StatusCode(500, new { success = false, error = "ServerError", message = msgServerErr });
             }
         }
-
 
         // POST: Student/ReactiveEnrollments/CancelEnroll
         [HttpPost]
@@ -363,7 +402,6 @@ namespace Edu.Web.Areas.Student.Controllers
             }
         }
 
-
         // POST: Student/ReactiveEnrollments/RequestMonthPayment
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -431,7 +469,8 @@ namespace Edu.Web.Areas.Student.Controllers
                     });
                     await _db.SaveChangesAsync();
 
-                    _ = NotifyTeacherOfEnrollmentAsync(course.TeacherId, course.Title, studentId);
+                    // notify teacher + admins (dev: awaited by NotifyFireAndForgetAsync)
+                    await NotifyFireAndForgetAsync(() => NotifyTeacherOfEnrollmentAsync(course.TeacherId, course.Title, studentId));
                 }
 
                 // duplicate pending guard (for this enrollment)
@@ -470,7 +509,8 @@ namespace Edu.Web.Areas.Student.Controllers
 
                 await tx.CommitAsync();
 
-                _ = NotifyTeacherOfPaymentRequestAsync(course.TeacherId, course.Title, month.MonthIndex, studentId);
+                // notify teacher and admins (dev: awaited by NotifyFireAndForgetAsync)
+                await NotifyFireAndForgetAsync(() => NotifyTeacherOfPaymentRequestAsync(course.TeacherId, course.Title, month.MonthIndex, studentId));
 
                 return Json(new { success = true, paymentId = payment.Id, enrollmentId = enrollment.Id, message = _localizer["ReactiveCourse.PaymentRequested"].Value });
             }
@@ -481,7 +521,6 @@ namespace Edu.Web.Areas.Student.Controllers
                 return StatusCode(500, new { success = false, error = "ServerError", message = msgServerErr });
             }
         }
-
 
         // POST: Student/ReactiveEnrollments/CancelMonthPayment
         [HttpPost]
@@ -543,35 +582,93 @@ namespace Edu.Web.Areas.Student.Controllers
             }
         }
 
-        // sample fire-and-forget notification helpers (simple)
+        // --- Notification helpers using INotificationService (centralized) ---
+        private async Task NotifyFireAndForgetAsync(Func<Task> work)
+        {
+            if (work == null) return;
+            try
+            {
+                if (_env?.IsDevelopment() == true)
+                {
+                    await work();
+                }
+                else
+                {
+                    _ = Task.Run(work);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NotifyFireAndForgetAsync failed executing notification work");
+            }
+        }
+
         private async Task NotifyTeacherOfEnrollmentAsync(string teacherId, string courseTitle, string studentId)
         {
             try
             {
-                var teacher = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == teacherId);
+                var teacher = !string.IsNullOrEmpty(teacherId) ? await _userManager.FindByIdAsync(teacherId) : null;
+                var student = !string.IsNullOrEmpty(studentId) ? await _userManager.FindByIdAsync(studentId) : null;
+                var studentDisplayName = student?.UserName ?? student?.Email ?? studentId ?? "Student";
+
                 if (teacher != null && !string.IsNullOrEmpty(teacher.Email))
                 {
-                    var subj = _localizer["Email.Enrollment.Requested.Subject"].Value;
-                    var body = string.Format(_localizer["Email.Enrollment.Requested.Body"].Value, courseTitle, User.Identity?.Name ?? studentId);
-                    await _emailSender.SendEmailAsync(teacher.Email, subj, body);
+                    await _notifier.SendLocalizedEmailAsync(
+                        teacher,
+                        "Email.Enrollment.Requested.Subject",
+                        "Email.Enrollment.Requested.Body",
+                        courseTitle, studentDisplayName
+                    );
                 }
+
+                await _notifier.NotifyAllAdminsAsync(
+                    "Email.Admin.Enrollment.Requested.Subject",
+                    "Email.Admin.Enrollment.Requested.Body",
+                    async admin =>
+                    {
+                        var teacherDisplayName = teacher?.UserName ?? teacher?.Email ?? teacherId ?? "Teacher";
+                        return new object[] { courseTitle, teacherDisplayName, studentDisplayName };
+                    }
+                );
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NotifyTeacherOfEnrollmentAsync failed for teacher {TeacherId} student {StudentId}", teacherId, studentId);
+            }
         }
 
         private async Task NotifyTeacherOfPaymentRequestAsync(string teacherId, string courseTitle, int monthIndex, string studentId)
         {
             try
             {
-                var teacher = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == teacherId);
+                var teacher = !string.IsNullOrEmpty(teacherId) ? await _userManager.FindByIdAsync(teacherId) : null;
+                var student = !string.IsNullOrEmpty(studentId) ? await _userManager.FindByIdAsync(studentId) : null;
+                var studentDisplayName = student?.UserName ?? student?.Email ?? studentId ?? "Student";
+
                 if (teacher != null && !string.IsNullOrEmpty(teacher.Email))
                 {
-                    var subj = _localizer["Email.Payment.Requested.Subject"].Value;
-                    var body = string.Format(_localizer["Email.Payment.Requested.Body"].Value, courseTitle, monthIndex, User.Identity?.Name ?? studentId);
-                    await _emailSender.SendEmailAsync(teacher.Email, subj, body);
+                    await _notifier.SendLocalizedEmailAsync(
+                        teacher,
+                        "Email.PaymentReactiveCourse.Requested.Subject",
+                        "Email.PaymentReactiveCourse.Requested.Body",
+                        courseTitle, monthIndex, studentDisplayName
+                    );
                 }
+
+                await _notifier.NotifyAllAdminsAsync(
+                    "Email.Admin.Payment.Requested.Subject",
+                    "Email.Admin.Payment.Requested.Body",
+                    async admin =>
+                    {
+                        var teacherDisplayName = teacher?.UserName ?? teacher?.Email ?? teacherId ?? "Teacher";
+                        return new object[] { courseTitle, monthIndex, teacherDisplayName, studentDisplayName };
+                    }
+                );
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NotifyTeacherOfPaymentRequestAsync failed for teacher {TeacherId} course {Course} month {MonthIndex} student {StudentId}", teacherId, courseTitle, monthIndex, studentId);
+            }
         }
 
         // GET: Student/ReactiveEnrollments/MyEnrollments
@@ -615,3 +712,4 @@ namespace Edu.Web.Areas.Student.Controllers
         }
     }
 }
+

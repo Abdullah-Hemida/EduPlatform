@@ -1,0 +1,159 @@
+﻿@model Edu.Web.ViewModels.OnlineSchoolIndexVm
+@using System.Globalization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["OnlineSchool.Title"] ?? "Online School";
+    var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+}
+
+@section Hero {
+    @await Html.PartialAsync("_HeroSchoolSection", Model.SchoolHero)
+}
+
+<div class="mt-2 mb-2">
+    <div class="row g-2" id="filterCards" role="list" aria-label="@L["School.FilterByLevel"]">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+            <div class="card h-100 filter-card @(Model.SelectedLevelId == null ? "border-primary" : "border")" data-levelid="">
+                <div class="card-body d-flex flex-column align-items-center justify-content-between text-center">
+                    <div>
+                        <div class="small text-muted">@L["Common.All"]</div>
+                        <div class="fw-bold fs-5">@Model.TotalCount</div>
+                    </div>
+                    <div class="text-muted small">@(L["Nav.Courses"] ?? "Courses")</div>
+                </div>
+            </div>
+        </div>
+
+        @foreach (var level in Model.AllLevels)
+        {
+            var isActive = Model.SelectedLevelId.HasValue && Model.SelectedLevelId.Value == level.Id;
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+                <div class="card h-100 filter-card @(isActive ? "border-primary" : "border")" data-levelid="@level.Id">
+                    <div class="card-body d-flex flex-column justify-content-between text-center">
+                        <div class="fw-semibold">@level.Name</div>
+                        <div class="fw-bold fs-5">@level.CourseCount</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-3">
+    <div>
+        <h5 class="mb-0">@(L["School.FilterByLevel"] ?? "Filter by level")</h5>
+        <small class="text-muted">@(L["School.FilterHelp"] ?? "")</small>
+    </div>
+
+    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-3">
+        <form id="pageSizeForm" method="get" asp-action="Index" class="d-flex align-items-center gap-2">
+            <input type="hidden" name="levelId" id="ps-levelId" value="@(Model.SelectedLevelId?.ToString() ?? "")" />
+            <input type="hidden" name="page" value="1" />
+            <label class="form-label mb-0 small text-nowrap">@L["DataTable.ShowEntries"]</label>
+            <select id="pageSizeSelect" name="pageSize" class="form-select form-select-sm w-auto">
+                @{
+                    var sizes = new[] { 6, 9, 12, 20 };
+                    foreach (var s in sizes)
+                    {
+                        <option value="@s" selected="@(s == Model.PageSize ? "selected" : null)">@s</option>
+                    }
+                }
+            </select>
+            <noscript>
+                <button type="submit" class="btn btn-sm btn-primary ms-2">@L["Button.Apply"]</button>
+            </noscript>
+        </form>
+
+        <div class="small text-muted" id="paginationSummary">
+            @(L["School.Showing"] ?? "Showing")
+            <span id="summaryRange">
+                @(((Model.Page - 1) * Model.PageSize) + 1)-@((Math.Min(Model.TotalCount, Model.Page * Model.PageSize)))
+            </span>
+            @(L["School.Of"] ?? "of")
+            <strong id="summaryTotal">@Model.TotalCount</strong>
+        </div>
+    </div>
+</div>
+
+<div id="coursesContainer">
+    @await Html.PartialAsync("_CoursesGridPartial", Model)
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const container = document.getElementById('coursesContainer');
+            const cards = document.querySelectorAll('.filter-card');
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            const pageSizeForm = document.getElementById('pageSizeForm');
+            const psLevelInput = document.getElementById('ps-levelId');
+
+            function buildListUrl(levelId, page, pageSize) {
+                const params = new URLSearchParams();
+                if (levelId !== null && levelId !== undefined && levelId !== '') params.set('levelId', levelId);
+                if (page) params.set('page', page);
+                if (pageSize) params.set('pageSize', pageSize);
+                params.set('ajax', '1');
+                return `${window.location.origin}${'@Url.Action("Index", "OnlineSchool")'}?${params.toString()}`;
+            }
+
+            function setActiveCard(levelId) {
+                cards.forEach(c => {
+                    const id = c.getAttribute('data-levelid') || '';
+                    if ((id === '' && (levelId === null || levelId === '')) || id === String(levelId)) {
+                        c.classList.add('active'); c.classList.add('border-primary');
+                    } else {
+                        c.classList.remove('active'); c.classList.remove('border-primary');
+                    }
+                });
+            }
+
+            async function loadList(levelId, page = 1, pageSize = @Model.PageSize) {
+                try {
+                    const url = buildListUrl(levelId, page, pageSize);
+                    const res = await fetch(url, { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error('Request failed');
+                    const html = await res.text();
+                    container.innerHTML = html;
+
+                    setActiveCard(levelId);
+                    psLevelInput.value = levelId ?? '';
+
+                    const newUrl = `${window.location.pathname}?${new URLSearchParams({ levelId: levelId ?? '', page: page, pageSize: pageSize }).toString()}`;
+                    history.pushState({ levelId, page, pageSize }, '', newUrl);
+                    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } catch (err) {
+                    console.error(err);
+                    alert('@L["Common.Error"] ?? "Error loading content"');
+                }
+            }
+
+            cards.forEach(c => {
+                c.addEventListener('click', function () {
+                    const levelId = c.getAttribute('data-levelid') || '';
+                    loadList(levelId === '' ? '' : levelId, 1, Number(pageSizeSelect.value));
+                });
+            });
+
+            pageSizeSelect.addEventListener('change', function () {
+                const active = document.querySelector('.filter-card.active');
+                const levelId = active ? (active.getAttribute('data-levelid') || '') : '';
+                loadList(levelId, 1, Number(pageSizeSelect.value));
+            });
+
+            window.addEventListener('popstate', function (e) {
+                const s = e.state;
+                if (s) {
+                    loadList(s.levelId ?? '', s.page ?? 1, s.pageSize ?? @Model.PageSize);
+                } else {
+                    window.location.reload();
+                }
+            });
+
+            setActiveCard('@(Model.SelectedLevelId?.ToString() ?? "")');
+            window.setDirection && window.setDirection('@lang');
+        })();
+    </script>
+}
+

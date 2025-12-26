@@ -94,16 +94,8 @@
     // else: not authenticated -> dashboardUrl stays null
 }
 
-<!-- small CSS for disabled appearance -->
-<style>
-    .disabled-link {
-        pointer-events: none;
-        opacity: 0.5;
-    }
-</style>
-
 <!DOCTYPE html>
-<html lang="@System.Threading.Thread.CurrentThread.CurrentUICulture.TwoLetterISOLanguageName" dir="@ViewData["Direction"]">
+<html lang="@System.Threading.Thread.CurrentThread.CurrentUICulture.TwoLetterISOLanguageName" dir="@dir">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -125,13 +117,14 @@
     @RenderSection("Styles", required: false)
 </head>
 
-<body>   
+<body>
     <nav id="header" class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top py-2">
-        <div class="container-fluid px-3 px-md-4">
+        <div class="container-fluid ">
 
             <!-- Brand -->
             <a class="navbar-brand fw-bold d-flex align-items-center text-decoration-none order-1" href="/">
-                <i class="fas fa-graduation-cap me-2 text-primary fa-lg"></i>
+                @* <i class="fas fa-graduation-cap me-2 text-primary fa-lg"></i> *@
+                <img src="~/uploads/images/future_generation_logo.jpg" class="rounded-pill ms-2" style="width:40px; height:40px;" alt="Future Generation" />
                 <span class="brand-gradient">@Localizer["Site.Title"]</span>
             </a>
 
@@ -141,51 +134,73 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
 
-            <!-- Navbar Links -->
+            <!-- Navbar Links (collapsible) -->
             <div class="collapse navbar-collapse order-3" id="mainNav">
 
                 <!-- Centered navigation links -->
-                <ul class="navbar-nav mx-auto mb-2 mb-lg-0 gap-lg-2">
+                <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
                     <li class="nav-item">
                         <a asp-area="" asp-controller="Home" asp-action="Index" class="nav-link px-3 text-nowrap">
-                            <i class="fas fa-home me-1 text-muted"></i> @Localizer["Nav.Home"]
+                            <i class="fas fa-home me-1 text-muted" aria-hidden="true"></i> @Localizer["Nav.Home"]
                         </a>
                     </li>
 
                     <li class="nav-item">
                         <a asp-area="" asp-controller="School" asp-action="Index" class="nav-link px-3 text-nowrap">
-                            <i class="fas fa-school me-1 text-muted"></i> @Localizer["Nav.School"]
+                            <i class="fas fa-school me-1 text-muted" aria-hidden="true"></i> @Localizer["Nav.AssociationSchool"]
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a asp-area="" asp-controller="OnlineSchool" asp-action="Index" class="nav-link px-3 text-nowrap">
+                            <i class="fas fa-school me-1 text-muted" aria-hidden="true"></i> @Localizer["Nav.OnlineSchool"]
                         </a>
                     </li>
 
-                    <!-- Dropdown for Courses when screen is small -->
+                    <!-- Courses dropdown — becomes full-width stacked list on mobile -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle px-3 text-nowrap" href="#" id="coursesDropdown" role="button"
                            data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-book-open me-1 text-muted"></i> @Localizer["Nav.Courses"]
+                            <i class="fas fa-book-open me-1 text-muted" aria-hidden="true"></i> @Localizer["Nav.Courses"]
                         </a>
-                        <ul class="dropdown-menu shadow-sm border-0 rounded-3" style="width:180px;" aria-labelledby="coursesDropdown">
-                            <li>
-                                <a class="dropdown-item" asp-area="" asp-controller="Teachers" asp-action="Index">
-                                    <i class="fas fa-chalkboard-teacher me-2 text-success"></i> @Localizer["Nav.Teachers"]
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" asp-area="" asp-controller="PrivateCourses" asp-action="Index">
-                                    <i class="fas fa-video me-2 text-danger"></i> @Localizer["Nav.RecordedCourses"]
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" asp-area="" asp-controller="ReactiveCourses" asp-action="Index">
-                                    <i class="fas fa-people-group me-2 text-warning"></i> @Localizer["Nav.ReactiveCourses"]
-                                </a>
-                            </li>
-                        </ul>
+
+                        <div class="dropdown-menu shadow-sm border-0 rounded-3 dropdown-mega fullwidth-mobile"
+                             aria-labelledby="coursesDropdown">
+                            <div class="">
+                                <div class="row gx-1 gy-1">
+                                    <div class="col-12">
+                                        <a class="dropdown-item" asp-area="" asp-controller="Teachers" asp-action="Index">
+                                            <span class="item-icon bg-light text-success"><i class="fas fa-chalkboard-teacher"></i></span>
+                                            <div class="flex-grow-1 min-w-0">
+                                                <div class="fw-semibold text-truncate">@Localizer["Nav.Teachers"]</div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <a class="dropdown-item" asp-area="" asp-controller="PrivateCourses" asp-action="Index">
+                                            <span class="item-icon bg-light text-danger"><i class="fas fa-video"></i></span>
+                                            <div class="flex-grow-1 min-w-0">
+                                                <div class="fw-semibold text-truncate">@Localizer["Nav.RecordedCourses"]</div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <a class="dropdown-item" asp-area="" asp-controller="ReactiveCourses" asp-action="Index">
+                                            <span class="item-icon bg-light text-warning"><i class="fas fa-people-group"></i></span>
+                                            <div class="flex-grow-1 min-w-0">
+                                                <div class="fw-semibold text-truncate">@Localizer["Nav.ReactiveCourses"]</div>
+                                            </div>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </li>
                 </ul>
 
                 <!-- Right side items -->
-                <ul class="navbar-nav ms-lg-auto align-items-lg-center gap-2">
+                <ul class="navbar-nav  align-items-lg-center gap-1 ms-3">
 
                     <!-- Language Selector -->
                     <li class="nav-item me-lg-2">
@@ -194,15 +209,17 @@
 
                     @if (!userIsAuthenticated)
                     {
+                        <!-- Login link (becomes full-width inside collapsed menu) -->
                         <li class="nav-item">
                             <a class="nav-link px-3 text-secondary" href="/Identity/Account/Login">
-                                <i class="fas fa-sign-in-alt me-1"></i> @Localizer["Account.Login"]
+                                <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i> @Localizer["Account.Login"]
                             </a>
                         </li>
+
+                        <!-- Register button — full-width on mobile via CSS -->
                         <li class="nav-item">
-                            <a class="btn btn-primary btn-sm px-3 py-2 fw-semibold rounded-pill shadow-sm"
-                               href="/Identity/Account/Register">
-                                <i class="fas fa-user-plus me-1"></i> @Localizer["Account.Register"]
+                            <a class="btn btn-primary btn-sm px-3 py-2 fw-semibold rounded-pill shadow-sm" href="/Identity/Account/Register">
+                                <i class="fas fa-user-plus me-1" aria-hidden="true"></i> @Localizer["Account.Register"]
                             </a>
                         </li>
                     }
@@ -210,8 +227,7 @@
                     {
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle d-flex align-items-center p-1" href="#" data-bs-toggle="dropdown">
-                                <img src="@(profileImageUrl ?? defaultAvatarUrl)"
-                                     class="rounded-circle me-2 shadow-sm" style="width: 36px; height: 36px; object-fit: cover;" />
+                                <img src="@(profileImageUrl ?? defaultAvatarUrl)" class="rounded-circle me-2 shadow-sm" style="width:36px;height:36px;object-fit:cover" />
                                 <span class="fw-semibold text-dark">@displayName</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 rounded-3">
@@ -222,7 +238,6 @@
                                 </li>
 
                                 @{
-                                    // compute optional CSS class & attributes
                                     var dashboardCss = dashboardDisabled ? "disabled-link" : "";
                                     var ariaDisabled = dashboardDisabled ? "true" : "false";
                                     var tabIndex = dashboardDisabled ? "-1" : "0";
@@ -232,15 +247,14 @@
                                 {
                                     <li>
                                         <a class="dropdown-item @dashboardCss" href="@dashboardUrl" aria-disabled="@ariaDisabled" tabindex="@tabIndex">
-                                            <i class="fas fa-gauge me-2 text-success"></i>
-                                            @Localizer["Nav.ControlPannel"]
+                                            <i class="fas fa-gauge me-2 text-success"></i> @Localizer["Nav.ControlPannel"]
                                         </a>
                                     </li>
                                 }
 
                                 <li><hr class="dropdown-divider my-1" /></li>
                                 <li>
-                                    <form method="post" asp-area="Identity" asp-page="/Account/Logout">
+                                    <form method="post" asp-area="Identity" asp-page="/Account/Logout" class="m-0">
                                         @Html.AntiForgeryToken()
                                         <button type="submit" class="dropdown-item text-danger">
                                             <i class="fas fa-sign-out-alt me-2"></i> @Localizer["Account.Logout"]
@@ -254,6 +268,7 @@
             </div>
         </div>
     </nav>
+
     @{
         var teacherPendingMsg = TempData["TeacherPending"] as string;
         var profileSaved = TempData["ProfileSaved"] as string;

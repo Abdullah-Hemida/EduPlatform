@@ -21,19 +21,6 @@ body {
   margin-bottom: 60px;
 }
 
-/* Reduced container padding */
-.container-fluid.px-3.px-md-4 {
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-}
-
-@media (min-width: 768px) {
-    .container-fluid.px-3.px-md-4 {
-        padding-left: 1.5rem !important;
-        padding-right: 1.5rem !important;
-    }
-}
-
 /* Brand gradient */
 .brand-gradient {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -52,6 +39,10 @@ body {
     transition: all 0.3s ease;
 }
 
+
+
+
+
 /* Proper flexbox layout for desktop */
 @media (min-width: 992px) {
     .navbar {
@@ -62,7 +53,7 @@ body {
 
     .navbar-brand.order-1 {
         flex: 0 0 auto;
-        margin-right: 2rem;
+        margin-right: 0;
     }
 
     .navbar-collapse.order-3 {
@@ -78,13 +69,11 @@ body {
         display: flex;
         justify-content: center;
         flex: 1;
-        max-width: 400px;
-        margin: 0 auto;
+        max-width: 400px;       
     }
 
     .navbar-nav.ms-lg-auto {
-        flex: 0 0 auto;
-        margin-left: auto !important;
+        flex: 0 0 auto;      
     }
 }
 
@@ -115,70 +104,6 @@ body {
     transition: width 0.3s ease;
 }
 
-.nav-item-custom.active .nav-active-indicator {
-    width: 60%;
-}
-
-.nav-item-custom.active {
-    color: #667eea !important;
-    font-weight: 600;
-}
-
-/* Button animations */
-.nav-btn-custom {
-    transition: all 0.3s ease;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 8px;
-}
-
-    .nav-btn-custom:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-    }
-
-/* User avatar animations */
-.user-avatar {
-    width: 38px;
-    height: 38px;
-    object-fit: cover;
-    transition: all 0.3s ease;
-}
-
-.nav-user-toggle:hover .user-avatar {
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-/* Dropdown animations */
-.dropdown-menu {
-    border: none;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-    border-radius: 12px;
-    transform: translateY(10px);
-    opacity: 0;
-    display: block;
-    transition: all 0.3s ease;
-    pointer-events: none;
-}
-
-    .dropdown-menu.show {
-        opacity: 1;
-        transform: translateY(0);
-        pointer-events: all;
-    }
-
-.dropdown-item-custom {
-    transition: all 0.2s ease;
-    border-radius: 6px;
-    margin: 2px 8px;
-    padding: 8px 12px !important;
-}
-
-    .dropdown-item-custom:hover {
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-        transform: translateX(5px);
-    }
 
 /* Mobile improvements */
 @media (max-width: 991.98px) {
@@ -196,11 +121,6 @@ body {
         padding: 20px;
     }
 
-    .nav-item-custom {
-        margin: 5px 0;
-        padding: 10px 15px !important;
-        justify-content: center;
-    }
 
     .nav-active-indicator {
         bottom: 0;
@@ -211,10 +131,6 @@ body {
         transition: height 0.3s ease;
     }
 
-    .nav-item-custom.active .nav-active-indicator {
-        width: 4px;
-        height: 100%;
-    }
 
     .navbar-toggler {
         background: rgba(102, 126, 234, 0.1);
@@ -235,33 +151,90 @@ body {
         border-top: 1px solid #eee;
     }
 
-    .nav-divider {
-        display: none;
-    }
 }
 
 /* Better spacing and shadows */
-.nav-divider {
-    width: 1px;
-    height: 24px;
-    background: linear-gradient(to bottom, transparent, #dee2e6, transparent);
-}
 
 .shadow-sm {
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08) !important;
 }
 
-/* Logout button specific styles */
-.logout-btn {
-    padding: 8px 12px !important;
-    border-radius: 6px;
-    margin: 2px 8px;
-    width: calc(100% - 16px);
+
+
+@media (max-width: 991.98px) {
+    .navbar-collapse .nav-item .nav-link,
+    .navbar-collapse .nav-item .btn {
+        display: block;
+        width: 100%;
+        margin-bottom: .45rem;
+        padding-left: .75rem;
+        padding-right: .75rem;
+    }
+
+    /* Make dropdown menus full width inside collapsed navbar */
+    .dropdown-menu.fullwidth-mobile {
+        width: calc(100% - 2rem) !important;
+        left: 1rem !important;
+        right: 1rem !important;
+        margin: .25rem 0;
+        border-radius: .5rem;
+        padding: .35rem;
+    }
+
+        .dropdown-menu.fullwidth-mobile .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: .1rem;
+            padding: .35rem .4rem;
+        }
+
+        .dropdown-menu.fullwidth-mobile .item-icon {
+            width: 25px;
+            height: 25px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: .375rem;
+            flex: 0 0 36px;
+        }
 }
 
-    .logout-btn:hover {
-        background: rgba(220, 53, 69, 0.1) !important;
+/* Desktop: nicer rows inside dropdowns (grid/compact) */
+@media (min-width: 992px) {
+    .dropdown-mega {
+        min-width: 220px;
+        max-width: 640px;
+        padding: .4rem;
     }
+
+        .dropdown-mega .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: .1rem;
+            padding: .25rem .4rem;
+            border-radius: .45rem;
+        }
+
+        .dropdown-mega .item-icon {
+            width: 25px;
+            height: 25px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: .45rem;
+            flex: 0 0 40px;
+        }
+
+        .dropdown-mega .item-sub {
+            font-size: .82rem;
+            color: var(--bs-muted-color);
+        }
+}
+
+/* small visual helper for the register button inside mobile collapse */
+.navbar-collapse .btn.btn-primary {
+    box-shadow: none;
+}
 
 /*the teacher car*/
 .teacher-photo {

@@ -6,7 +6,7 @@
         public string? StudentId { get; set; }
         public string? StudentName { get; set; }
         public string? StudentPhone { get; set; }
-
+        public string? GuardianPhoneNumber { get; set; }
         public int PrivateCourseId { get; set; }
         public string? CourseTitle { get; set; }
         public string? TeacherName { get; set; }

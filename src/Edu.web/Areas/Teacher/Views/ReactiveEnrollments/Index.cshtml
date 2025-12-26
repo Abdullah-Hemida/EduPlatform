@@ -5,35 +5,125 @@
     ViewData["Title"] = L["Admin.ReactiveEnrollments"];
     var page = ViewBag.Page as int? ?? 1;
     var totalPages = ViewBag.TotalPages as int? ?? 1;
+    string fallback = Url.Content("~/img/default-avatar.png"); // adjust path if needed
 }
 
 <div class="card shadow-sm border-0">
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            <i class="fas fa-users"></i> @ViewData["Title"]
-        </h5>
+        <h5 class="mb-0"><i class="fas fa-users me-2" aria-hidden="true"></i> @ViewData["Title"]</h5>
     </div>
 
     <div class="card-body p-0">
-        <div class="table-responsive">
+        <!-- MOBILE / SMALL: cards (single column xs, two cols sm) -->
+        <div class="d-block d-md-none p-2">
+            <div class="row row-cols-1 row-cols-sm-2 g-2">
+                @if (!Model.Any())
+                {
+                    <div class="col-12">
+                        <div class="card p-3 text-center text-muted">@L["Admin.NoRecords"]</div>
+                    </div>
+                }
+                else
+                {
+                    foreach (var e in Model)
+                    {
+                        <div class="col">
+
+<div class="card h-100 shadow-sm enroll-card">
+    <div class="card-body p-3">
+        <div class="d-flex gap-3 align-items-start">
+            <!-- avatar -->
+            <img src="@(string.IsNullOrWhiteSpace(e.StudentImageUrl) ? fallback : e.StudentImageUrl)"
+                 alt="@e.StudentName"
+                 class="rounded-circle avatar-sm flex-shrink-0" />
+
+            <!-- main content (stacked column) -->
+            <div class="flex-grow-1 min-w-0 d-flex flex-column">
+                <!-- top row: name + meta -->
+                <div class="d-flex align-items-start justify-content-between gap-2">
+                    <div class="min-w-0">
+                        <div class="h6 mb-1 text-truncate">@e.StudentName</div>
+                        <div class="small text-muted text-truncate break-anywhere">@e.StudentPhone</div>
+                        <div class="small text-muted text-truncate break-anywhere mt-1">@e.CourseTitle</div>
+                    </div>
+
+                    <div class="text-muted text-nowrap ms-2 small">@e.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</div>
+                </div>
+
+                <!-- bottom row: badge, months, action button
+                     - stacks vertically on xs, aligns horizontally on sm+
+                     - button is full-width on xs and inline on sm+ -->
+                <div class="d-grid gap-2 d-sm-flex align-items-center mt-3">
+                    <div class="d-flex align-items-center">
+                        @switch (e.PaymentStatus)
+                        {
+                            case "Paid":
+                                <span class="badge bg-success">@L["Status.Paid"]</span>;
+                                break;
+                            case "Partial":
+                                <span class="badge bg-info text-dark">Partial</span>;
+                                break;
+                            case "Pending":
+                                <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>;
+                                break;
+                            case "Rejected":
+                                <span class="badge bg-danger">@L["Status.Rejected"]</span>;
+                                break;
+                            case "Cancelled":
+                                <span class="badge bg-secondary">@L["Status.Cancelled"]</span>;
+                                break;
+                            default:
+                                <span class="badge bg-light text-dark">@L["Status.Unknown"]</span>;
+                                break;
+                        }
+                    </div>
+
+                    <div class="small text-muted text-nowrap ms-sm-3">@($"{e.PaidMonths}/{e.TotalMonths}")</div>
+
+                    <!-- Action button: full width on xs, auto width on sm+ -->
+                    <div class="d-grid d-sm-block ms-sm-auto">
+                        <a asp-area="Teacher"
+                           asp-controller="ReactiveEnrollments"
+                           asp-action="Details"
+                           asp-route-id="@e.Id"
+                           class="btn btn-outline-primary btn-sm"
+                           role="button"
+                           aria-label="@L["Button.View"]">
+                            @L["Button.View"]
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+                        </div> <!-- col -->
+                    }
+                }
+            </div> <!-- row -->
+        </div> <!-- mobile cards -->
+
+        <!-- DESKTOP / TABLET: table (md+) -->
+        <div class="table-responsive d-none d-md-block">
             <table class="table table-striped mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
+                        <th style="width:56px"></th>
                         <th>@L["Admin.Student"]</th>
                         <th>@L["Admin.Phone"]</th>
                         <th>@L["ReactiveCourse.Title"]</th>
                         <th>@L["Admin.Status"]</th>
                         <th>@L["Teacher.PaidMonths"]</th>
                         <th>@L["Teacher.EnrolledAt"]</th>
+                        <th>@L["Button.View"]</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (!Model.Any())
                     {
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">
-                                @L["Admin.NoRecords"]
-                            </td>
+                            <td colspan="7" class="text-center py-4 text-muted">@L["Admin.NoRecords"]</td>
                         </tr>
                     }
                     else
@@ -41,40 +131,55 @@
                         foreach (var e in Model)
                         {
                             <tr>
-                                <td>@e.StudentName</td>
-                                <td>@e.StudentPhone</td>
-                                <td>@e.CourseTitle</td>
-                                <td>
+                                <td class="align-middle">
+                                    <img src="@(string.IsNullOrWhiteSpace(e.StudentImageUrl) ? fallback : e.StudentImageUrl)"
+                                         alt="@e.StudentName"
+                                         class="avatar-md" />
+                                </td>
+
+                                <td class="min-w-0 align-middle">@e.StudentName</td>
+                                <td class="text-nowrap align-middle">@e.StudentPhone</td>
+                                <td class="min-w-0 align-middle">@e.CourseTitle</td>
+                                <td class="align-middle">
                                     @switch (e.PaymentStatus)
                                     {
                                         case "Paid":
-                                            <span class="badge bg-success">@L["Status.Paid"]</span>
+                                            <span class="badge bg-success">@L["Status.Paid"]</span>;
+                                            break;
+                                        case "Partial":
+                                            <span class="badge bg-info text-dark">Partial</span>;
                                             break;
                                         case "Pending":
-                                            <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+                                            <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>;
                                             break;
                                         case "Rejected":
-                                            <span class="badge bg-danger">@L["Status.Rejected"]</span>
+                                            <span class="badge bg-danger">@L["Status.Rejected"]</span>;
                                             break;
                                         case "Cancelled":
-                                            <span class="badge bg-secondary">@L["Status.Cancelled"]</span>
+                                            <span class="badge bg-secondary">@L["Status.Cancelled"]</span>;
                                             break;
                                         default:
-                                            <span class="badge bg-light text-dark">@L["Status.Unknown"]</span>
+                                            <span class="badge bg-light text-dark">@L["Status.Unknown"]</span>;
                                             break;
                                     }
                                 </td>
-                                <td>@e.PaidMonths / @e.TotalMonths</td>
-                                <td>@e.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td class="text-nowrap align-middle">@($"{e.PaidMonths}/{e.TotalMonths}")</td>
+                                <td class="text-nowrap small text-muted align-middle">@e.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    <a asp-area="Teacher" asp-controller="ReactiveEnrollments" asp-action="Details"
+                                     asp-route-id="@e.Id"
+                                       class="btn btn-outline-primary btn-sm flex-grow-1 text-nowrap">
+                                      @L["Button.View"]
+                                    </a>
+                                </td>
                             </tr>
                         }
                     }
                 </tbody>
             </table>
-        </div>
-    </div>
+        </div> <!-- table-responsive -->
+    </div> <!-- card-body -->
 
-    <!-- Pagination -->
     @if (totalPages > 1)
     {
         <div class="card-footer bg-light d-flex justify-content-center">
@@ -103,6 +208,8 @@
         </div>
     }
 </div>
+
+
 
 
 @* @model Edu.Web.Areas.Teacher.ViewModels.ReactiveEnrollmentListVm

@@ -2,6 +2,7 @@
 @using System.Globalization
 @using System.Text.Json
 @using Microsoft.Extensions.Localization
+@using Edu.Infrastructure.Helpers
 @inject IStringLocalizer<Edu.Web.Resources.SharedResource> L
 
 @{
@@ -10,10 +11,8 @@
     var dir = lang == "ar" ? "rtl" : "ltr";
     var textAlign = lang == "ar" ? "right" : "left";
 
-    // plain string dictionary for JS
     var localizedStrings = new Dictionary<string, string>
     {
-        // notifications / toasts
         ["EnrollSuccess"] = L["Enroll.Success"].Value ?? "",
         ["EnrollError"] = L["Enroll.Error"].Value ?? "",
         ["PaySuccess"] = L["Pay.Success"].Value ?? "",
@@ -21,34 +20,29 @@
         ["CancelSuccess"] = L["Cancel.Success"].Value ?? "",
         ["CancelError"] = L["Cancel.Error"].Value ?? "",
 
-        // Confirm messages (titles / bodies)
         ["ConfirmEnroll"] = L["Confirm.Enroll"].Value ?? "",
         ["ConfirmPay"] = L["Confirm.Pay"].Value ?? "",
         ["ConfirmCancel"] = L["Confirm.Cancel"].Value ?? "",
 
-        // Status
         ["StatusPending"] = L["Status.Pending"].Value ?? "",
         ["StatusPaid"] = L["Status.Paid"].Value ?? "",
         ["StatusRejected"] = L["Status.Rejected"].Value ?? "",
         ["NotRequested"] = L["Admin.NotRequested"].Value ?? "",
 
-        // UI Labels & Buttons used dynamically in JS
         ["ReactiveCourse.Enrolled"] = L["ReactiveCourse.Enrolled"].Value ?? "",
         ["ReactiveCourse.CancelEnrollment"] = L["ReactiveCourse.CancelEnrollment"].Value ?? "",
         ["ReactiveCourse.RequestPayment"] = L["ReactiveCourse.RequestPayment"].Value ?? "",
         ["ReactiveCourse.CancelPayment"] = L["ReactiveCourse.CancelPayment"].Value ?? "",
         ["ReactiveCourse.Enroll"] = L["ReactiveCourse.Enroll"].Value ?? "",
 
-        // Confirm modal button labels
         ["Common.Cancel"] = L["Common.Cancel"].Value ?? "Cancel",
         ["Common.Yes"] = L["Common.Yes"].Value ?? "Yes",
 
-        // any other labels you might create dynamically
         ["Booking.OpenMeet"] = L["Booking.OpenMeet"].Value ?? "",
-        ["Booking.NoMeetUrl"] = L["Booking.NoMeetUrl"].Value ?? ""
+        ["Booking.NoMeetUrl"] = L["Booking.NoMeetUrl"].Value ?? "",
+        ["MonthNotReady"] = L["ReactiveCourse.MonthNotReady"].Value ?? (L["OnlineCourse.MonthNotReady"].Value ?? "Month not ready")
     };
 }
-
 
 <div class="row g-3" dir="@dir" style="text-align:@textAlign">
     <div class="col-lg-8">
@@ -116,7 +110,8 @@
                     <div class="list-group" id="months-list">
                         @foreach (var m in Model.Months.OrderBy(x => x.MonthIndex))
                         {
-                            var canRequestAttr = m.CanRequestPayment ? "true" : "false";
+                            // use IsReadyForPayment as authoritative admin flag for client
+                            var canRequestAttr = m.IsReadyForPayment ? "true" : "false";
                             var canCancelAttr = m.CanCancelPayment ? "true" : "false";
                             var canViewAttr = m.CanViewLessons ? "true" : "false";
 
@@ -134,6 +129,7 @@
 
                                 <div class="d-flex align-items-center justify-content-end gap-2">
                                     <div class="action-area">
+                                        @* status badge *@
                                         @if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Paid)
                                         {
                                             <span class="badge bg-success">@L["Status.Paid"]</span>
@@ -151,23 +147,29 @@
                                             <span class="badge bg-secondary">@L["Admin.NotRequested"]</span>
                                         }
 
+                                        @* ACTION (mutually exclusive) *@
                                         @if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Pending && m.CanCancelPayment)
                                         {
                                             <button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="@(m.PaymentId ?? 0)">@L["ReactiveCourse.CancelPayment"]</button>
                                         }
-                                        else if (m.MyPaymentStatus == null && m.CanRequestPayment)
+                                        else if (m.IsReadyForPayment)
                                         {
                                             <button class="btn btn-sm btn-primary ms-2 btnPayMonth"
                                                     data-month-id="@m.Id"
                                                     data-course-id="@Model.CourseId"
-                                                    data-can-request="@canRequestAttr">
+                                                    @(Model.IsEnrolled ? "" : "disabled")>
                                                 @L["ReactiveCourse.RequestPayment"]
                                             </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary ms-2">@localizedStrings["MonthNotReady"]</span>
                                         }
                                     </div>
                                 </div>
                             </div>
 
+                            @* Lesson list visible only if student can view lessons for this month *@
                             <div id="lesson-@m.Id" class="card mb-2 lesson-list" style="display:@(m.CanViewLessons ? "block" : "none")">
                                 <div class="card-body">
                                     <h6>@L["ReactiveCourse.Lessons"] (@L["ReactiveCourse.Month"] @m.MonthIndex)</h6>
@@ -176,24 +178,103 @@
                                         <ul class="list-unstyled">
                                             @foreach (var l in m.Lessons.OrderBy(x => x.ScheduledUtc))
                                             {
-                                                <li class="mb-2 d-flex justify-content-between align-items-center">
-                                                    <div>
-                                                        <strong>@l.Title</strong>
-                                                        <div class="small text-muted">@((l.ScheduledUtc.HasValue) ? l.ScheduledUtc.Value.ToLocalTime().ToString("g") : "")</div>
-                                                        @if (!string.IsNullOrEmpty(l.Notes))
-                                                        {
-                                                            <div class="small mt-1">@l.Notes</div>
-                                                        }
-                                                    </div>
-                                                    <div>
-                                                        @if (!string.IsNullOrWhiteSpace(l.MeetUrl))
-                                                        {
-                                                            <a target="_blank" href="@l.MeetUrl" class="btn btn-sm btn-primary">@L["Booking.OpenMeet"]</a>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-muted small">@L["Booking.NoMeetUrl"]</span>
-                                                        }
+                                                <li class="mb-3">
+                                                    <div class="d-flex justify-content-between align-items-start gap-3">
+                                                        <div style="min-width:0;flex:1">
+                                                            <strong>@l.Title</strong>
+                                                            <div class="small text-muted">@((l.ScheduledUtc.HasValue) ? l.ScheduledUtc.Value.ToLocalTime().ToString("g") : "")</div>
+                                                            @if (!string.IsNullOrEmpty(l.Notes))
+                                                            {
+                                                                <div class="small mt-1">@l.Notes</div>
+                                                            }
+
+                                                            @* Recorded video (if present) *@
+                                                            @if (!string.IsNullOrWhiteSpace(l.RecordedVideoUrl))
+                                                            {
+                                                                var recYt = YouTubeHelper.ExtractYouTubeId(l.RecordedVideoUrl);
+                                                                <div class="mt-2">
+                                                                    @if (!string.IsNullOrEmpty(recYt))
+                                                                    {
+                                                                        <div class="ratio ratio-16x9 mb-2">
+                                                                            <iframe src="https://www.youtube-nocookie.com/embed/@recYt"
+                                                                                    loading="lazy"
+                                                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                                                    allowfullscreen
+                                                                                    frameborder="0"></iframe>
+                                                                        </div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div class="ratio ratio-16x9 mb-2">
+                                                                            <video controls style="width:100%;height:100%;object-fit:cover;">
+                                                                                <source src="@l.RecordedVideoUrl" />
+                                                                                @L["ReactiveCourse.VideoNotSupported"]
+                                                                            </video>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+
+                                                                @* Attachments for recorded lessons *@
+                                                                @if (l.Files != null && l.Files.Any())
+                                                                {
+                                                                    <div class="mt-2">
+                                                                        <strong class="small">@L["Attachments"]</strong>
+                                                                        <ul class="small list-unstyled mt-1 mb-0">
+                                                                            @foreach (var f in l.Files)
+                                                                            {
+                                                                                <li>
+                                                                                    @if (!string.IsNullOrEmpty(f.PublicUrl))
+                                                                                    {
+                                                                                        <a href="@f.PublicUrl" target="_blank" rel="noopener noreferrer">@f.FileName</a>
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        <span class="text-muted">@f.FileName</span>
+                                                                                    }
+                                                                                </li>
+                                                                            }
+                                                                        </ul>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                @* No recorded video -> show Meet link if present (upcoming lessons) *@
+                                                                <div class="mt-2">
+                                                                    @if (!string.IsNullOrWhiteSpace(l.MeetUrl))
+                                                                    {
+                                                                        <a class="btn btn-sm btn-primary" target="_blank" href="@l.MeetUrl">@L["Booking.OpenMeet"]</a>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="small text-muted">@L["Booking.NoMeetUrl"]</span>
+                                                                    }
+                                                                </div>
+
+                                                                @* Attachments may still exist for upcoming lessons *@
+                                                                @if (l.Files != null && l.Files.Any())
+                                                                {
+                                                                    <div class="mt-2">
+                                                                        <strong class="small">@L["Attachments"]</strong>
+                                                                        <ul class="small list-unstyled mt-1 mb-0">
+                                                                            @foreach (var f in l.Files)
+                                                                            {
+                                                                                <li>
+                                                                                    @if (!string.IsNullOrEmpty(f.PublicUrl))
+                                                                                    {
+                                                                                        <a href="@f.PublicUrl" target="_blank" rel="noopener noreferrer">@f.FileName</a>
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        <span class="text-muted">@f.FileName</span>
+                                                                                    }
+                                                                                </li>
+                                                                            }
+                                                                        </ul>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                        </div>
                                                     </div>
                                                 </li>
                                             }
@@ -247,7 +328,6 @@
     </aside>
 </div>
 
-@* toasts container (higher z-index so it appears above sidebar/layout) *@
 <div aria-live="polite" aria-atomic="true" class="position-fixed top-0 end-0 p-3" style="z-index: 12000;">
     <div id="toast-container"></div>
 </div>
@@ -255,19 +335,14 @@
 @section Scripts {
     <script>
         $(function () {
-            // localized dictionary (plain strings) for JS
             const Localized = @Html.Raw(JsonSerializer.Serialize(localizedStrings));
-
-            // anti-forgery token
             const antiForgeryToken = $('#af input[name="__RequestVerificationToken"]').val();
 
-            // action locks
             const actionLocks = {};
             function lock(k) { actionLocks[k] = true; }
             function unlock(k) { delete actionLocks[k]; }
             function isLocked(k) { return !!actionLocks[k]; }
 
-            // toast helper (Bootstrap)
             function showToast(message, type = "success") {
                 const $container = $('#toast-container');
                 const $toast = $(`<div class="toast text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
@@ -282,7 +357,6 @@
                 $toast.on('hidden.bs.toast', function () { $(this).remove(); });
             }
 
-            // modal confirm
             function showConfirm(title, message, onConfirm) {
                 $('#confirmModalTitle').text(title);
                 $('#confirmModalBody').html(message);
@@ -295,41 +369,38 @@
                     if (typeof onConfirm === 'function') onConfirm();
                 });
             }
-        function isAttrTrue($el, attrName) {
-            // attrName without "data-" prefix, e.g. "can-request" -> checks data-can-request attr
-            const val = $el.attr('data-' + attrName);
-            // accept 'true', 'True', '1' or actual boolean from jQuery .data()
-            return val === 'true' || val === 'True' || val === '1' || $el.data(attrName.replace(/-([a-z])/g, (m, c) => c.toUpperCase()) ) === true;
-        }
-            // helpers to update UI state
-        function enablePayButtonsIfAllowed() {
-            // read data-enrolled reliably as string from attribute
-            const enrolledAttr = $('#enroll-area').attr('data-enrolled');
-            const enrolled = enrolledAttr === 'true' || enrolledAttr === 'True' || enrolledAttr === '1' || $('#enroll-area').data('enrolled') === true;
 
-            if (!enrolled) {
-                // user not enrolled: hide/disable all pay buttons
-                $('.btnPayMonth').prop('disabled', true).hide();
-                return;
+            function isAttrTrue($el, attrName) {
+                const val = $el.attr('data-' + attrName);
+                return val === 'true' || val === 'True' || val === '1' || $el.data(attrName.replace(/-([a-z])/g, (m, c) => c.toUpperCase()) ) === true;
             }
 
-            // user is enrolled: show only those months that allow requesting payment
-            $('.btnPayMonth').each(function () {
-                const $btn = $(this);
-                const canReq = isAttrTrue($btn, 'can-request'); // checks data-can-request
-                if (canReq) {
-                    $btn.prop('disabled', false).show();
-                } else {
-                    $btn.prop('disabled', true).hide();
+            function enablePayButtonsIfAllowed() {
+                const enrolledAttr = $('#enroll-area').attr('data-enrolled');
+                const enrolled = enrolledAttr === 'true' || enrolledAttr === 'True' || enrolledAttr === '1' || $('#enroll-area').data('enrolled') === true;
+
+                if (!enrolled) {
+                    $('.btnPayMonth').prop('disabled', true).hide();
+                    return;
                 }
-            });
-        }
+
+                $('.btnPayMonth').each(function () {
+                    const $btn = $(this);
+                    // read data-can-request from the month-card
+                    const $card = $btn.closest('.month-card');
+                    const canReq = isAttrTrue($card, 'can-request');
+                    if (canReq) {
+                        $btn.prop('disabled', false).show();
+                    } else {
+                        $btn.prop('disabled', true).hide();
+                    }
+                });
+            }
 
             function updateCancelEnrollState() {
                 const $btn = $('#btnCancelEnroll');
                 if (!$btn.length) return;
 
-                // If any month has pending (warning badge) or paid (success badge) then disable cancel enroll
                 const hasPendingOrPaid = $('.month-card').filter(function () {
                     return $(this).find('.badge.bg-warning, .badge.bg-success').length > 0;
                 }).length > 0;
@@ -353,43 +424,39 @@
                 updateCancelEnrollState();
             }
 
-        // Also update markMonthPending to ensure future checks are consistent:
-        function markMonthPending(monthId, paymentId) {
-            const $card = $(`.month-card[data-month-id="${monthId}"]`);
-            if (!$card.length) return;
+            function markMonthPending(monthId, paymentId) {
+                const $card = $(`.month-card[data-month-id="${monthId}"]`);
+                if (!$card.length) return;
 
-            $card.attr('data-payment-id', paymentId);
-            $card.find('.badge').first().removeClass().addClass('badge bg-warning text-dark').text(Localized["StatusPending"] || 'Pending');
-            $card.find('.btnPayMonth').remove();
-            if ($card.find('.btnCancelPayment').length === 0) {
-                $card.find('.action-area').append(`<button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="${paymentId}">${escapeHtml(Localized["ReactiveCourse.CancelPayment"] || 'Cancel Payment')}</button>`);
+                $card.attr('data-payment-id', paymentId);
+                $card.find('.badge').first().removeClass().addClass('badge bg-warning text-dark').text(Localized["StatusPending"] || 'Pending');
+                $card.find('.btnPayMonth').remove();
+                if ($card.find('.btnCancelPayment').length === 0) {
+                    $card.find('.action-area').append(`<button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="${paymentId}">${escapeHtml(Localized["ReactiveCourse.CancelPayment"] || 'Cancel Payment')}</button>`);
+                }
+                updateCancelEnrollState();
             }
 
-            // because now there's a pending month -> cannot cancel enrollment
-            updateCancelEnrollState();
-        }
+            function markMonthCancelled(monthId) {
+                const $card = $(`.month-card[data-month-id="${monthId}"]`);
+                if (!$card.length) return;
 
-        // Update usage in markMonthCancelled / other functions that read data-can-request
-        function markMonthCancelled(monthId) {
-            const $card = $(`.month-card[data-month-id="${monthId}"]`);
-            if (!$card.length) return;
+                $card.attr('data-payment-id', 0);
+                $card.find('.badge').first().removeClass().addClass('badge bg-secondary').text(Localized["NotRequested"] || 'Not requested');
+                $card.find('.btnCancelPayment').remove();
 
-            $card.attr('data-payment-id', 0);
-            $card.find('.badge').first().removeClass().addClass('badge bg-secondary').text(Localized["NotRequested"] || 'Not requested');
-            $card.find('.btnCancelPayment').remove();
+                const canRequest = isAttrTrue($card, 'can-request');
+                if (canRequest && $card.find('.btnPayMonth').length === 0) {
+                    $card.find('.action-area').append(
+                        `<button class="btn btn-sm btn-primary ms-2 btnPayMonth" data-month-id="${monthId}" data-course-id="${@Model.CourseId}" data-can-request="${canRequest}">${escapeHtml(Localized["ReactiveCourse.RequestPayment"] || 'Request Payment')}</button>`
+                    );
+                } else if (!canRequest) {
+                    // show localized "month not ready" badge (replace where pay button would be)
+                    $card.find('.action-area').append(`<span class="badge bg-secondary ms-2">${escapeHtml(Localized["MonthNotReady"] || "Month not ready")}</span>`);
+                }
 
-            // read can-request via attribute
-            const canRequest = isAttrTrue($card, 'can-request');
-            if (canRequest && $card.find('.btnPayMonth').length === 0) {
-                // append with proper data attributes (string "true"/"false")
-                $card.find('.action-area').append(
-                    `<button class="btn btn-sm btn-primary ms-2 btnPayMonth" data-month-id="${monthId}" data-course-id="${@Model.CourseId}" data-can-request="${canRequest}">${escapeHtml(Localized["ReactiveCourse.RequestPayment"] || 'Request Payment')}</button>`
-                );
+                updateCancelEnrollState();
             }
-
-            // possible to enable cancel enrollment again if no other pending/paid months exist
-            updateCancelEnrollState();
-        }
 
             function markEnrollmentCancelledUI() {
                 $('#enroll-area').attr('data-enrolled', 'false').attr('data-enrollment-id', 0);
@@ -421,9 +488,7 @@
                 updateCancelEnrollState();
             })();
 
-            // ---------- Delegated handlers ----------
-
-            // ENROLL
+            // ------------- Delegated handlers -------------
             $(document).on('click', '#btnEnroll', function (e) {
                 e.preventDefault();
                 const courseId = $(this).data('course-id');
@@ -438,7 +503,7 @@
                         data: { courseId: courseId, __RequestVerificationToken: antiForgeryToken },
                         success: function (res) {
                             if (res && res.success) {
-                                showToast(Localized["EnrollSuccess"] || "Enrolled", "success");
+                                showToast(res.message || Localized["EnrollSuccess"] || "Enrolled", "success");
                                 markEnrolledUI(res.enrollmentId || 0);
                             } else {
                                 const msg = (res && res.message) ? res.message : (Localized["EnrollError"] || "Error");
@@ -451,7 +516,6 @@
                 });
             });
 
-            // CANCEL ENROLL
             $(document).on('click', '#btnCancelEnroll', function (e) {
                 e.preventDefault();
                 const courseId = $(this).data('course-id');
@@ -466,12 +530,11 @@
                         data: { courseId: courseId, __RequestVerificationToken: antiForgeryToken },
                         success: function (res) {
                             if (res && res.success) {
-                                showToast(Localized["CancelSuccess"] || "Cancelled", "success");
+                                showToast(res.message || Localized["CancelSuccess"] || "Cancelled", "success");
                                 markEnrollmentCancelledUI();
                             } else {
                                 const msg = (res && res.message) ? res.message : (Localized["CancelError"] || "Error");
                                 showToast(msg, "danger");
-                                // still update state from server response if helpful (server may return details)
                                 updateCancelEnrollState();
                             }
                         },
@@ -481,7 +544,6 @@
                 });
             });
 
-            // PAY MONTH
             $(document).on('click', '.btnPayMonth', function (e) {
                 e.preventDefault();
                 const $btn = $(this);
@@ -498,10 +560,8 @@
                         data: { monthId: monthId, courseId: courseId, __RequestVerificationToken: antiForgeryToken },
                         success: function (res) {
                             if (res && res.success) {
-                                showToast(Localized["PaySuccess"] || "Requested", "success");
+                                showToast(res.message || Localized["PaySuccess"] || "Requested", "success");
                                 markMonthPending(monthId, res.paymentId || 0);
-
-                                // if server created an enrollment (it returns enrollmentId)
                                 if (res.enrollmentId) markEnrolledUI(res.enrollmentId);
                             } else {
                                 const msg = (res && res.message) ? res.message : (Localized["PayError"] || "Error");
@@ -514,7 +574,6 @@
                 });
             });
 
-            // CANCEL PAYMENT
             $(document).on('click', '.btnCancelPayment', function (e) {
                 e.preventDefault();
                 const $btn = $(this);
@@ -532,8 +591,7 @@
                         data: { paymentId: paymentId, __RequestVerificationToken: antiForgeryToken },
                         success: function (res) {
                             if (res && res.success) {
-                                showToast(Localized["CancelSuccess"] || "Cancelled", "success");
-                                // remove pending row UI and re-enable cancel enrollment if appropriate
+                                showToast(res.message || Localized["CancelSuccess"] || "Cancelled", "success");
                                 markMonthCancelled(monthId);
                             } else {
                                 const msg = (res && res.message) ? res.message : (Localized["CancelError"] || "Error");
@@ -549,6 +607,7 @@
         });
     </script>
 }
+
 
 
 

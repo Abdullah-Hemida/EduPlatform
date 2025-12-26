@@ -24,6 +24,7 @@
             <h5>@(Model.StudentName ?? Model.StudentId)</h5>
             <div class="small text-muted">@Model.StudentEmail</div>
             <div class="small text-muted">@Model.StudentPhone</div>
+            <div>@L["GuardianPhoneNumber"] : @Model.GuardianPhoneNumber</div>
             <div class="mt-2"><strong>@L["Admin.Course"]:</strong> @Model.CourseTitle</div>
             <div class="mt-1"><strong>@L["Admin.Teacher"]:</strong> @Model.TeacherFullName</div>
             <div class="mt-1"><strong>@L["Admin.Created"]:</strong> @Model.CreatedAtUtc.ToLocalTime().ToString("g")</div>
@@ -38,7 +39,11 @@
     <div class="card mb-2">
         <div class="card-body">
             <div class="d-flex justify-content-between">
-                <div><strong>@L["Admin.Month"] @m.MonthIndex</strong> — @L["Admin.LessonsCount", m.LessonsCount]</div>
+                <div>
+                    <strong>@L["Admin.Month"] @m.MonthIndex</strong>
+                    — <span class="fw-semibold">@m.LessonsCount</span>
+                    <small class="text-muted ms-1">@L["Admin.Lessons"]</small>
+                </div>
                 <div>
                     <small class="text-muted">@m.Payments.Count() @L["Admin.Payments"]</small>
                 </div>

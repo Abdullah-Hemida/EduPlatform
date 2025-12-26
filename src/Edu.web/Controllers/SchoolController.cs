@@ -53,14 +53,25 @@ namespace Edu.Web.Controllers
             var user = await _userManager.GetUserAsync(User);
             bool isAdmin = user != null && await _userManager.IsInRoleAsync(user, "Admin");
             bool studentIsAllowed = false;
+            List<int> assignedCurriculumIds = new();
+
             if (user != null && !isAdmin)
             {
                 var studentRecord = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
                 studentIsAllowed = studentRecord?.IsAllowed ?? false;
+
+                if (studentIsAllowed)
+                {
+                    assignedCurriculumIds = await _db.StudentCurricula
+                        .AsNoTracking()
+                        .Where(sc => sc.StudentId == user.Id)
+                        .Select(sc => sc.CurriculumId)
+                        .ToListAsync();
+                }
             }
 
             // Build Pageable curricula and other metadata via the shared helper ListInternalAsync
-            var (curricula, totalCount) = await ListInternalAsync(levelId, page, pageSize, isAdmin, studentIsAllowed);
+            var (curricula, totalCount) = await ListInternalAsync(levelId, page, pageSize, isAdmin, studentIsAllowed, assignedCurriculumIds);
 
             var vm = new SchoolIndexVm
             {
@@ -89,15 +100,26 @@ namespace Edu.Web.Controllers
             var user = await _userManager.GetUserAsync(User);
             bool isAdmin = user != null && await _userManager.IsInRoleAsync(user, "Admin");
             bool studentIsAllowed = false;
+            List<int> assignedCurriculumIds = new();
+
             if (user != null && !isAdmin)
             {
                 var studentRecord = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
                 studentIsAllowed = studentRecord?.IsAllowed ?? false;
+
+                if (studentIsAllowed)
+                {
+                    assignedCurriculumIds = await _db.StudentCurricula
+                        .AsNoTracking()
+                        .Where(sc => sc.StudentId == user.Id)
+                        .Select(sc => sc.CurriculumId)
+                        .ToListAsync();
+                }
             }
 
             var allLevels = await GetAllLevelsLocalizedAsync();
 
-            var (curricula, totalCount) = await ListInternalAsync(levelId, page, pageSize, isAdmin, studentIsAllowed);
+            var (curricula, totalCount) = await ListInternalAsync(levelId, page, pageSize, isAdmin, studentIsAllowed, assignedCurriculumIds);
 
             var vm = new SchoolIndexVm
             {
@@ -159,7 +181,6 @@ namespace Edu.Web.Controllers
             {
                 Id = l.Id,
                 Order = l.Order,
-                // call helper for localized label
                 Name = LocalizationHelpers.GetLocalizedLevelName(l),
                 CurriculaCountText = (l.Curricula?.Count ?? 0) == 1
                     ? _L["School.Curricula.One"].Value ?? "1 curriculum"
@@ -170,7 +191,7 @@ namespace Edu.Web.Controllers
         // Internal helper that returns page of curricula and totalCount
         // The curricula returned are mapped to CurriculumSummaryVm and respect the access flags
         private async Task<(List<CurriculumSummaryVm> Items, int TotalCount)> ListInternalAsync(
-            int? levelId, int page, int pageSize, bool isAdmin, bool studentIsAllowed)
+            int? levelId, int page, int pageSize, bool isAdmin, bool studentIsAllowed, List<int> assignedCurriculumIds)
         {
             var curriculaQuery = _db.Curricula
                                    .AsNoTracking()
@@ -216,6 +237,8 @@ namespace Edu.Web.Controllers
                     }
                 }
 
+                var isAccessible = isAdmin || (studentIsAllowed && assignedCurriculumIds != null && assignedCurriculumIds.Contains(i.Id));
+
                 curricula.Add(new CurriculumSummaryVm
                 {
                     Id = i.Id,
@@ -225,24 +248,24 @@ namespace Edu.Web.Controllers
                     CoverImageUrl = publicUrl,
                     ModuleCount = i.ModuleCount,
                     Order = i.Order,
-                    IsAccessible = isAdmin || studentIsAllowed
+                    IsAccessible = isAccessible
                 });
             }
             return (curricula, totalCount);
         }
 
-        // GET: /School/Curriculum/5
+        // using System.Globalization; (if not already present)
         public async Task<IActionResult> Curriculum(int id)
         {
             var curriculum = await _db.Curricula
                                       .AsNoTracking()
                                       .Include(c => c.SchoolModules)
-                                      .ThenInclude(m => m.SchoolLessons)
+                                          .ThenInclude(m => m.SchoolLessons)
                                       .FirstOrDefaultAsync(c => c.Id == id);
 
             if (curriculum == null) return NotFound();
 
-            // --- Authorization: only Admin or Students with Student.IsAllowed == true ---
+            // --- Authorization: only Admin or Students with Student.IsAllowed == true AND assigned to this curriculum ---
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
             {
@@ -260,10 +283,26 @@ namespace Edu.Web.Controllers
                     return RedirectToAction("Index");
                 }
 
-                var studentRecord = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
+                // student path: must have Student record and IsAllowed true
+                var studentRecord = await _db.Students
+                                             .AsNoTracking()
+                                             .FirstOrDefaultAsync(s => s.Id == user.Id);
+
                 if (studentRecord == null || !studentRecord.IsAllowed)
                 {
                     TempData["Error"] = _L["School.NotAllowedMessage"].Value ?? "You are not allowed to view this curriculum.";
+                    return RedirectToAction("Index");
+                }
+
+                // AND must be explicitly assigned this curriculum via StudentCurricula join table
+                var assigned = await _db.StudentCurricula
+                                        .AsNoTracking()
+                                        .AnyAsync(sc => sc.StudentId == user.Id && sc.CurriculumId == id);
+
+                if (!assigned)
+                {
+                    // Not assigned -> deny
+                    TempData["Error"] = _L["School.NotAssignedToCurriculum"].Value ?? "You don't have access to this curriculum.";
                     return RedirectToAction("Index");
                 }
             }
@@ -299,7 +338,7 @@ namespace Edu.Web.Controllers
                             }).ToList() ?? new List<ModuleVm>()
             };
 
-            // batch-load files (unchanged)...
+            // batch-load files (unchanged)
             var lessonIds = vm.Modules.SelectMany(m => m.Lessons).Select(l => l.Id).Where(i => i > 0).ToList();
             if (lessonIds.Any())
             {
@@ -343,6 +382,7 @@ namespace Edu.Web.Controllers
             ViewData["Title"] = curriculum.Title;
             return View(vm);
         }
+
 
         // GET: /School/Lesson/123
         public async Task<IActionResult> Lesson(int id)

@@ -1,0 +1,71 @@
+﻿@model List<Edu.Web.Areas.Student.ViewModels.OnlineMyEnrollmentVm>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+@{
+    ViewData["Title"] = L["OnlineCourse.MyEnrollments"] ?? "My Enrollments";
+}
+
+<div>
+    <h3>@(L["OnlineCourse.MyEnrollments"] ?? "My Enrollments")</h3>
+
+    @if (Model == null || !Model.Any())
+    {
+        <div class="alert alert-info">@(L["OnlineCourse.NoEnrollments"] ?? "You have no enrollments yet.")</div>
+    }
+    else
+    {
+        @foreach (var e in Model)
+        {
+            <div class="card mb-2">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5>@e.CourseTitle</h5>
+                        </div>
+                        <div>
+                            <a asp-area="Student"
+                               asp-controller="OnlineSchoolEnrollments"
+                               asp-action="Details"
+                               asp-route-id="@e.CourseId"
+                               class="btn btn-sm btn-outline-secondary">@(L["Button.View"] ?? "View")</a>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        @foreach (var m in e.Months)
+                        {
+                            string cls = "bg-secondary";
+                            string statusLabel;
+
+                            if (m.PaymentStatus == OnlineEnrollmentMonthPaymentStatus.Paid)
+                            {
+                                cls = "bg-success";
+                                statusLabel = L["Status.Paid"].Value ?? "Paid";
+                            }
+                            else if (m.PaymentStatus == OnlineEnrollmentMonthPaymentStatus.Pending)
+                            {
+                                cls = "bg-warning";
+                                statusLabel = L["Status.Pending"].Value ?? "Pending";
+                            }
+                            else if (m.PaymentStatus == OnlineEnrollmentMonthPaymentStatus.Rejected)
+                            {
+                                cls = "bg-danger";
+                                statusLabel = L["Status.Rejected"].Value ?? "Rejected";
+                            }
+                            else
+                            {
+                                statusLabel = L["Admin.NotRequested"].Value ?? "Not requested";
+                            }
+
+                            <span class="badge @cls me-1">
+                                @L["Admin.Month"] @m.MonthIndex - @statusLabel
+                            </span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+

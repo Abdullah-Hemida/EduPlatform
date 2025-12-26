@@ -1,4 +1,4 @@
-﻿using Azure.Core;
+﻿using System.Globalization;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
@@ -11,6 +11,7 @@ using Microsoft.Extensions.Localization;
 using Edu.Web.Resources;
 using Edu.Infrastructure.Services;
 using Edu.Application.IServices;
+using Edu.Infrastructure.Localization; // WithCulture extension
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -25,12 +26,17 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly IStringLocalizer<SharedResource> _localizer;
         private readonly IEmailSender _emailSender;
         private readonly IFileStorageService _fileServic;
+        private readonly IUserCultureProvider _userCultureProvider;
 
         public ManageUsersController(
             UserManager<ApplicationUser> userManager,
             ApplicationDbContext db,
             ILogger<ManageUsersController> logger,
-            IWebHostEnvironment env, IStringLocalizer<SharedResource> localizer, IEmailSender emailSender,IFileStorageService fileStorage)
+            IWebHostEnvironment env,
+            IStringLocalizer<SharedResource> localizer,
+            IEmailSender emailSender,
+            IFileStorageService fileStorage,
+            IUserCultureProvider userCultureProvider)
         {
             _userManager = userManager;
             _db = db;
@@ -39,6 +45,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             _localizer = localizer;
             _emailSender = emailSender;
             _fileServic = fileStorage;
+            _userCultureProvider = userCultureProvider;
         }
 
         // GET: Admin/ManageUsers
@@ -235,6 +242,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                 FullName = user.FullName ?? user.UserName ?? "",
                 Email = user.Email,
                 PhoneNumber = user.PhoneNumber,
+                GuardianPhoneNumber = student?.GuardianPhoneNumber,
                 DateOfBirth = user.DateOfBirth,
                 PhotoStorageKey = user.PhotoStorageKey,
                 Roles = roles,
@@ -242,15 +250,62 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Student = student,
                 StudentIsAllowed = student?.IsAllowed
             };
+
             if (!String.IsNullOrEmpty(user.PhotoStorageKey))
             {
                 vm.PhotoUrl = await _fileServic.GetPublicUrlAsync(user.PhotoStorageKey);
-            } else
+            }
+            else
             {
                 vm.PhotoUrl = null;
             }
 
-            ViewData["Title"] = "User details";
+            // --- load curricula and localized level names ---
+            var curriculaEntities = await _db.Curricula
+                .AsNoTracking()
+                .Include(c => c.Level)
+                .OrderBy(c => c.Level!.Order)
+                .ThenBy(c => c.Order)
+                .ToListAsync();
+
+            // Choose display culture (admin's current UI culture)
+            var displayCulture = CultureInfo.CurrentUICulture;
+
+            static string GetLevelDisplayName(Level? level, CultureInfo culture)
+            {
+                if (level == null) return string.Empty;
+                var two = (culture?.TwoLetterISOLanguageName ?? "en").ToLowerInvariant();
+                return two switch
+                {
+                    "ar" => string.IsNullOrWhiteSpace(level.NameAr) ? (level.NameEn ?? level.NameIt ?? "") : level.NameAr,
+                    "it" => string.IsNullOrWhiteSpace(level.NameIt) ? (level.NameEn ?? level.NameAr ?? "") : level.NameIt,
+                    _ => string.IsNullOrWhiteSpace(level.NameEn) ? (level.NameIt ?? level.NameAr ?? "") : level.NameEn
+                };
+            }
+
+            vm.Curricula = curriculaEntities.Select(c => new CurriculumCheckboxVm
+            {
+                Id = c.Id,
+                Title = c.Title,
+                LevelName = GetLevelDisplayName(c.Level, displayCulture)
+            }).ToList();
+
+            if (student != null)
+            {
+                var assignedIds = await _db.StudentCurricula
+                    .AsNoTracking()
+                    .Where(sc => sc.StudentId == student.Id)
+                    .Select(sc => sc.CurriculumId)
+                    .ToListAsync();
+
+                vm.SelectedCurriculumIds = assignedIds;
+            }
+            else
+            {
+                vm.SelectedCurriculumIds = new List<int>();
+            }
+
+            ViewData["Title"] = _localizer["Admin.UserDetails"].Value ?? "User details";
             ViewData["ActivePage"] = "Users";
             return View(vm);
         }
@@ -280,22 +335,21 @@ namespace Edu.Web.Areas.Admin.Controllers
             // Get the user
             var user = await _userManager.FindByIdAsync(id);
 
-            // Send Approval Email
-            if (user != null)
+            // Send localized Approval Email (fire-and-forget)
+            if (user != null && !string.IsNullOrEmpty(user.Email))
             {
-                await _emailSender.SendEmailAsync(
-                    user.Email!,
-                    "Your Teacher Account Is Approved",
-                    $"Dear {user.FullName},<br/><br/>" +
-                    $"Your teacher profile has been approved. You can now access your dashboard.<br/><br/>" +
-                    $"Best regards,<br/>Edu Platform Team"
+                // use resource keys (make sure they exist in your en/it/ar)
+                _ = SendLocalizedEmailToUserAsync(
+                    user,
+                    "Teacher.Email.Approved.Subject",
+                    "Teacher.Email.Approved.Body",
+                    user.FullName ?? user.UserName ?? ""
                 );
             }
 
             TempData["Success"] = _localizer["TeacherApproved"].Value;
             return RedirectToLocal(returnUrl);
         }
-
 
         // POST (redirecting): Unapprove teacher (server flow)
         [HttpPost]
@@ -321,19 +375,67 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             var user = await _userManager.FindByIdAsync(id);
 
-            if (user != null)
+            if (user != null && !string.IsNullOrEmpty(user.Email))
             {
-                await _emailSender.SendEmailAsync(
-                    user.Email!,
-                    "Your Teacher Application Was Rejected",
-                    $"Dear {user.FullName},<br/><br/>" +
-                    $"Your application was not approved. Please review your information and try again.<br/><br/>" +
-                    $"Best regards,<br/>Edu Platform Team"
+                _ = SendLocalizedEmailToUserAsync(
+                    user,
+                    "Teacher.Email.Rejected.Subject",
+                    "Teacher.Email.Rejected.Body",
+                    user.FullName ?? user.UserName ?? ""
                 );
             }
 
             TempData["Success"] = _localizer["TeacherRejected"].Value;
             return RedirectToLocal(returnUrl);
+        }
+
+        // Helper to redirect to provided returnUrl or Index
+        private IActionResult RedirectToLocal(string? returnUrl)
+        {
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                return Redirect(returnUrl);
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        // ----------------------
+        // Helper: send one localized email to a user (safe, logs errors)
+        // ----------------------
+        private async Task SendLocalizedEmailToUserAsync(ApplicationUser recipient, string subjectKey, string bodyKey, params object[] args)
+        {
+            if (recipient == null || string.IsNullOrEmpty(recipient.Email)) return;
+
+            try
+            {
+                // Resolve culture for this user (fast sync method)
+                var culture = _userCultureProvider.GetCulture(recipient) ?? CultureInfo.CurrentUICulture;
+
+                // Get culture-aware localizer (requires WithCulture extension)
+                var localized = _localizer.WithCulture(culture);
+
+                // Subject (use key fallback if missing)
+                var subjLocalized = localized[subjectKey];
+                var subj = subjLocalized.ResourceNotFound ? subjectKey : subjLocalized.Value;
+
+                // Body (use formatted overload if args present)
+                string body;
+                if (args != null && args.Length > 0)
+                {
+                    var bodyLocalized = localized[bodyKey, args];
+                    body = bodyLocalized.ResourceNotFound ? string.Format(bodyKey, args) : bodyLocalized.Value;
+                }
+                else
+                {
+                    var bodyLocalized = localized[bodyKey];
+                    body = bodyLocalized.ResourceNotFound ? bodyKey : bodyLocalized.Value;
+                }
+
+                await _emailSender.SendEmailAsync(recipient.Email, subj, body);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed sending localized email to user {UserId} ({Email}) using keys {SubjKey}/{BodyKey}", recipient.Id, recipient.Email, subjectKey, bodyKey);
+            }
         }
 
         // POST (redirecting): Soft delete (toggle) — server flow friendly
@@ -428,26 +530,14 @@ namespace Edu.Web.Areas.Admin.Controllers
             return PhysicalFile(filePath, contentType, fileName);
         }
 
-        // Helper to redirect to provided returnUrl or Index
-        private IActionResult RedirectToLocal(string? returnUrl)
-        {
-            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                return Redirect(returnUrl);
-
-            return RedirectToAction(nameof(Index));
-        }
         [HttpPost]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ToggleStudentAllowedAjax(string id, bool setTo)
         {
-            if (string.IsNullOrEmpty(id))
-                return BadRequest(new { success = false, message = "Invalid id." });
-
+            if (string.IsNullOrEmpty(id)) return BadRequest(new { success = false, message = "Invalid id." });
             // Find user (optional check)
             var user = await _userManager.FindByIdAsync(id);
-            if (user == null)
-                return NotFound(new { success = false, message = "User not found." });
-
+            if (user == null) return NotFound(new { success = false, message = "User not found." });
             // Find or create student record
             var student = await _db.Students.FindAsync(id);
             if (student == null)
@@ -460,18 +550,69 @@ namespace Edu.Web.Areas.Admin.Controllers
                 student.IsAllowed = setTo;
                 _db.Students.Update(student);
             }
-
             await _db.SaveChangesAsync();
-
             var text = setTo ? _localizer["Admin.Allowed"].Value ?? "Allowed" : _localizer["Admin.NotAllowed"].Value ?? "Not allowed";
-
-            return Json(new
-            {
-                success = true,
-                isAllowed = setTo,
-                message = text
-            });
+            return Json(new { success = true, isAllowed = setTo, message = text });
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AssignCurricula(string id, [FromForm] int[] selectedCurriculumIds)
+        {
+            if (string.IsNullOrEmpty(id)) return BadRequest();
+
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return NotFound();
+
+            // ensure Student record exists (create if absent)
+            var student = await _db.Students.FirstOrDefaultAsync(s => s.Id == id);
+            if (student == null)
+            {
+                student = new Domain.Entities.Student { Id = id, IsAllowed = false };
+                _db.Students.Add(student);
+                await _db.SaveChangesAsync();
+            }
+
+            // normalize inputs
+            var newSet = (selectedCurriculumIds ?? Array.Empty<int>()).Distinct().ToArray();
+
+            // load existing assignments
+            var existing = await _db.StudentCurricula
+                .Where(sc => sc.StudentId == id)
+                .Select(sc => sc.CurriculumId)
+                .ToListAsync();
+
+            var toAdd = newSet.Except(existing).ToList();
+            var toRemove = existing.Except(newSet).ToList();
+
+            if (toAdd.Any())
+            {
+                var ents = toAdd.Select(cid => new StudentCurriculum { StudentId = id, CurriculumId = cid });
+                await _db.StudentCurricula.AddRangeAsync(ents);
+            }
+
+            if (toRemove.Any())
+            {
+                var removeEntities = await _db.StudentCurricula
+                    .Where(sc => sc.StudentId == id && toRemove.Contains(sc.CurriculumId))
+                    .ToListAsync();
+
+                _db.StudentCurricula.RemoveRange(removeEntities);
+            }
+
+            try
+            {
+                await _db.SaveChangesAsync();
+                TempData["Success"] = _localizer["Admin.SaveSuccess"].Value ?? "Saved.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed updating curricula assignments for student {StudentId}", id);
+                TempData["Error"] = _localizer["Admin.OperationFailed"].Value ?? "Operation failed.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id });
+        }
     }
 }

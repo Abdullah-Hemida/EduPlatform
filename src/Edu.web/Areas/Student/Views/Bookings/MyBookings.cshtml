@@ -18,7 +18,7 @@
     int totalPages = (int)Math.Ceiling(total / (double)pageSize);
 }
 
-<h3>@L["Booking.Title"]</h3>
+<h3 class="mb-3">@L["Booking.Title"]</h3>
 
 <nav class="mb-3">
     <ul class="nav nav-tabs">
@@ -46,69 +46,123 @@
 }
 else
 {
-    <table class="table table-hover table-responsive">
-        <thead>
-            <tr>
-                <th>@L["Slots.Times"]</th>
-                <th>@L["Booking.Teacher"]</th>
-                <th>@L["Booking.Meet"]</th>
-                <th>@L["Booking.Status"]</th>
-                <th>@L["Booking.Price"]</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
+    <!-- MOBILE: cards for xs & sm -->
+    <div class="d-block d-md-none">
+        <div class="row g-2">
             @foreach (var b in Model)
             {
-                <tr>
-                    <td>
-                        <div class="fw-semibold">@b.SlotStartLocalString</div>
-                        <div class="small text-muted">@b.SlotTimes</div>
-                    </td>
+                <div class="col-12">
+                    <div class="card booking-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column gap-2">
+                            <div class="d-flex align-items-start gap-3">
 
-                    <td>@(b.TeacherName ?? "-")</td>
+                                <div class="min-w-0 flex-grow-1">
+                                    <div class="d-flex align-items-start justify-content-between">
+                                        <div class="min-w-0">
+                                            <div class="fw-semibold truncate-inline">@b.SlotStartLocalString</div>
+                                            <div class="small text-muted truncate-inline break-any">@b.SlotTimes</div>
+                                            <div class="small text-muted mt-1 truncate-inline">@(!string.IsNullOrWhiteSpace(b.TeacherName) ? b.TeacherName : "-")</div>
+                                        </div>
 
-                    <td>
-                        @if (b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl))
-                        {
-                            <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-box-arrow-up-right me-1"></i> @(L["Booking.Join"] ?? "Join")
-                            </a>
-                        }
-                        else
-                        {
-                            @("-")
-                        }
-                    </td>
+                                        <div class="meta-right text-end ms-2">
+                                            <span class="badge @(b.Status == BookingStatus.Paid ? "bg-success" : "bg-warning text-dark")">
+                                                @(L[$"Booking.Status.{b.Status}"] ?? b.Status.ToString())
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <td>
-                        <span class="badge @(b.Status == BookingStatus.Paid ? "bg-success" : "bg-warning text-dark")">
-                            @(L[$"Booking.Status.{b.Status}"] ?? b.Status.ToString())
-                        </span>
-                    </td>
+                            <div class="d-flex gap-2 flex-column flex-sm-row">
+                                @if (b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl))
+                                {
+                                    <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer"
+                                       class="btn btn-primary btn-sm btn-collapse-full">
+                                        <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i> @(L["Booking.Join"] ?? "Join")
+                                    </a>
+                                }
 
-                    <td>@(b.PriceLabel ?? "-")</td>
-
-                    <td class="text-end">
-                        <a asp-action="Details" asp-route-id="@b.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
-
-                        @if (b.CanCancel)
-                        {
-                            <form asp-action="Cancel" method="post" class="d-inline-block ms-1"
-                                  onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="id" value="@b.Id" />
-                                <button type="submit" class="btn btn-sm btn-danger">@L["Button.Cancel"]</button>
-                            </form>
-                        }
-                    </td>
-                </tr>
+                                @if (b.CanCancel)
+                                {
+                                    <form asp-action="Cancel" method="post" class="m-0 w-100" onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@b.Id" />
+                                        <button type="submit" class="btn btn-outline-danger btn-sm btn-collapse-full">@L["Button.Cancel"]</button>
+                                    </form>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
             }
-        </tbody>
-    </table>
+        </div>
+    </div>
 
-    <nav aria-label="Bookings pages">
-        <ul class="pagination justify-content-center">
+    <!-- DESKTOP / TABLET (md+): table -->
+    <div class="table-responsive d-none d-md-block">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th class="col-times">@L["Slots.Times"]</th>
+                    <th class="col-teacher">@L["Booking.Teacher"]</th>
+                    <th class="text-center">@L["Booking.Meet"]</th>
+                    <th>@L["Booking.Status"]</th>
+                    <th>@L["Booking.Price"]</th>
+                    <th class="col-actions text-end"></th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var b in Model)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold truncate-inline">@b.SlotStartLocalString</div>
+                            <div class="small text-muted break-any">@b.SlotTimes</div>
+                        </td>
+
+                        <td class="break-any">@(!string.IsNullOrWhiteSpace(b.TeacherName) ? b.TeacherName : "-")</td>
+
+                        <td class="text-center">
+                            @if (b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl))
+                            {
+                                <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i> @(L["Booking.Join"] ?? "Join")
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+
+                        <td>
+                            <span class="badge @(b.Status == BookingStatus.Paid ? "bg-success" : "bg-warning text-dark")">
+                                @(L[$"Booking.Status.{b.Status}"] ?? b.Status.ToString())
+                            </span>
+                        </td>
+
+                        <td>@(b.PriceLabel ?? "-")</td>
+
+                        <td class="text-end col-actions">
+                            @if (b.CanCancel)
+                            {
+                                <form asp-action="Cancel" method="post" class="d-inline-block ms-1" onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@b.Id" />
+                                    <button type="submit" class="btn btn-sm btn-danger">@L["Button.Cancel"]</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="Bookings pages" class="mt-3">
+        <ul class="pagination justify-content-center mb-0">
             @{
                 Func<int, string> buildUrl = pageNumber => Url.Action("MyBookings", new { tab = tab, page = pageNumber, pageSize = pageSize });
             }
@@ -127,6 +181,7 @@ else
         </ul>
     </nav>
 }
+
 
 
 

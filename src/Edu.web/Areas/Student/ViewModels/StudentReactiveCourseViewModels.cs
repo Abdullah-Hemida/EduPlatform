@@ -61,9 +61,16 @@ namespace Edu.Web.Areas.Student.ViewModels
         public string? Title { get; set; }
         public DateTime? ScheduledUtc { get; set; }
         public string? MeetUrl { get; set; }
+        public string? RecordedVideoUrl { get; set; }
         public string? Notes { get; set; }
+        public List<ReactiveCourseLessonFileVm> Files { get; set; } = new();
     }
-
+    public class ReactiveCourseLessonFileVm
+    {
+        public int Id { get; set; }
+        public string FileName { get; set; } = "";
+        public string? PublicUrl { get; set; }
+    }
     public class MyEnrollmentVm
     {
         public int EnrollmentId { get; set; }

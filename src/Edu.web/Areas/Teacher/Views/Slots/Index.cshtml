@@ -1,14 +1,18 @@
 ﻿@model List<Edu.Web.Areas.Teacher.ViewModels.SlotListItemVm>
 @using Edu.Domain.Entities
+@using System.Globalization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
     ViewData["Title"] = L["Slots.Index.Title"];
+    var shortDtFmt = CultureInfo.CurrentUICulture.DateTimeFormat.ShortDatePattern + " " + CultureInfo.CurrentUICulture.DateTimeFormat.ShortTimePattern;
 }
 
-<div class="d-flex justify-content-between mb-3">
-    <h4>@L["Slots.Index.Title"]</h4>
-    <a asp-action="Create" class="btn btn-primary">@L["Slots.Create"] <i class="fas fa-plus-circle ms-1"></i></a>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">@L["Slots.Index.Title"]</h4>
+    <a asp-action="Create" class="btn btn-primary btn-sm">
+        @L["Slots.Create"] <i class="fas fa-plus-circle ms-1" aria-hidden="true"></i>
+    </a>
 </div>
 
 @if (!Model.Any())
@@ -17,36 +21,95 @@
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>@L["Slots.Times"]</th>
-                <th>@L["Slots.Capacity"]</th>
-                <th>@L["Slots.Price"]</th>
-                <th>@L["Slots.LocationUrl"]</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
+    <!-- Mobile cards: xs single column, sm two columns -->
+    <div class="d-block d-md-none mb-3">
+        <div class="row row-cols-1 row-cols-sm-2 g-2">
             @foreach (var s in Model)
             {
-                <tr>
-                    <td>@s.StartLocal.ToString("g") - @s.EndLocal.ToString("g")</td>
-                    <td>@s.Capacity (@s.AvailableSeats available)</td>
-                    <td>@(s.PriceLabel)</td>
-                    <td>@(string.IsNullOrEmpty(s.LocationUrl) ? "-" : s.LocationUrl)</td>
-                    <td class="text-end">
-                        <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-secondary">@L["Button.Edit"]</a>
-                        <form asp-action="Delete" method="post" class="d-inline ms-1" onsubmit="return confirm('@L["ConfirmDelete"]')">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="id" value="@s.Id" />
-                            <button class="btn btn-sm btn-danger">@L["Button.Delete"]</button>
-                        </form>
-                    </td>
-                </tr>
+                <div class="col">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <div class="mb-2">
+                                <div class="fw-semibold text-truncate">
+                                    <div>@($"{s.StartLocal.ToLocalTime().ToString(shortDtFmt)}")</div>
+                                    <div>@($"{s.EndLocal.ToLocalTime().ToString(shortDtFmt)}")</div>
+                                    
+                                </div>
+                                <div class="small text-muted break-any">@(!string.IsNullOrEmpty(s.LocationUrl) ? s.LocationUrl : "-")</div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center gap-3 mt-auto">
+                                <div>
+                                    <div class="small text-muted">@L["Slots.Capacity"]</div>
+                                    <div class="fw-semibold">@s.Capacity (@s.AvailableSeats)</div>
+                                </div>
+
+                                <div class="text-end">
+                                    <div class="small text-muted">@L["Slots.Price"]</div>
+                                    <div class="fw-semibold">@s.PriceLabel</div>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 d-grid gap-2">
+                                <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-outline-secondary btn-sm w-100 w-md-auto">
+                                    @L["Button.Edit"]
+                                </a>
+
+                                <form asp-action="Delete" method="post" class="m-0">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@s.Id" />
+                                    <button type="submit" class="btn btn-danger btn-sm w-100 w-md-auto" onclick="return confirm('@L["ConfirmDelete"]')">
+                                        @L["Button.Delete"]
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             }
-        </tbody>
-    </table>
+        </div>
+    </div>
+
+    <!-- Desktop / tablet: table for md+ (responsive wrapper prevents overflow) -->
+    <div class="table-responsive d-none d-md-block">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>@L["Slots.Times"]</th>
+                    <th>@L["Slots.Capacity"]</th>
+                    <th>@L["Slots.Price"]</th>
+                    <th>@L["Slots.LocationUrl"]</th>
+                    <th class="text-end"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold text-truncate">
+                                @($"{s.StartLocal.ToLocalTime().ToString(shortDtFmt)} — {s.EndLocal.ToLocalTime().ToString(shortDtFmt)}")
+                            </div>
+                        </td>
+                        <td>@s.Capacity (@s.AvailableSeats)</td>
+                        <td class="fw-semibold">@s.PriceLabel</td>
+                        <td class="break-any">@(!string.IsNullOrEmpty(s.LocationUrl) ? s.LocationUrl : "-")</td>
+                        <td class="text-end">
+                            <a asp-action="Edit" asp-route-id="@s.Id" class="btn btn-sm btn-outline-secondary">@L["Button.Edit"]</a>
+
+                            <form asp-action="Delete" method="post" class="d-inline ms-1" onsubmit="return confirm('@L["ConfirmDelete"]')">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@s.Id" />
+                                <button class="btn btn-sm btn-danger">@L["Button.Delete"]</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 }
+
+
 
 

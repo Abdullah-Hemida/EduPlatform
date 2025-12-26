@@ -1,7 +1,6 @@
 ﻿using Edu.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection.Emit;
 
 namespace Edu.Infrastructure.Data
 {
@@ -23,7 +22,6 @@ namespace Edu.Infrastructure.Data
         public DbSet<PrivateModule> PrivateModules { get; set; }
         public DbSet<PrivateCourse> PrivateCourses { get; set; }
         public DbSet<PrivateLesson> PrivateLessons { get; set; }
-
         public DbSet<Booking> Bookings { get; set; }
         public DbSet<Slot> Slots { get; set; }
         public DbSet<PurchaseRequest> PurchaseRequests { get; set; }
@@ -44,7 +42,12 @@ namespace Edu.Infrastructure.Data
         public DbSet<FooterContact> FooterContacts { get; set; }
         public DbSet<SocialLink> SocialLinks { get; set; }
         public DbSet<HeroSection> HeroSections { get; set; }
-
+        public DbSet<StudentCurriculum> StudentCurricula { get; set; } = null!;
+        public DbSet<OnlineCourse> OnlineCourses { get; set; }
+        public DbSet<OnlineCourseMonth> OnlineCourseMonths { get; set; }
+        public DbSet<OnlineCourseLesson> OnlineCourseLessons { get; set; }
+        public DbSet<OnlineEnrollment> OnlineEnrollments { get; set; }
+        public DbSet<OnlineEnrollmentMonthPayment> OnlineEnrollmentMonthPayments { get; set; }
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
@@ -83,6 +86,12 @@ namespace Edu.Infrastructure.Data
             builder.ApplyConfiguration(new HomeSectionItemTranslationConfiguration());
             builder.ApplyConfiguration(new FooterContactConfiguration());
             builder.ApplyConfiguration(new SocialLinkConfiguration());
+            builder.ApplyConfiguration(new StudentCurriculumConfiguration());
+            builder.ApplyConfiguration(new OnlineCourseConfiguration());
+            builder.ApplyConfiguration(new OnlineCourseMonthConfiguration());
+            builder.ApplyConfiguration(new OnlineCourseLessonConfiguration());
+            builder.ApplyConfiguration(new OnlineEnrollmentConfiguration());
+            builder.ApplyConfiguration(new OnlineEnrollmentMonthPaymentConfiguration());
         }
     }
 }

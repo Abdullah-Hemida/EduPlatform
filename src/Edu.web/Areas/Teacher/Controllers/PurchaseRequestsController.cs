@@ -9,9 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Edu.Web.Areas.Teacher.Controllers
 {
@@ -33,16 +30,14 @@ namespace Edu.Web.Areas.Teacher.Controllers
         }
 
         // GET: Teacher/PurchaseRequests
-        public async Task<IActionResult> Index(string? q = null, PurchaseStatus? FilterStatus = null)
+        public async Task<IActionResult> Index(string? q = null, PurchaseStatus? FilterStatus = null, int page = 1, int pageSize = 10)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            // Ensure this user exists as a Teacher record
             var teacher = await _db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == user.Id);
             if (teacher == null) return Forbid();
 
-            // Query purchase requests tied to this teacher's private courses
             var teacherCourseIdsQuery = _db.PrivateCourses
                                            .AsNoTracking()
                                            .Where(c => c.TeacherId == user.Id)
@@ -65,7 +60,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var norm = q.Trim();
-                // search by student name/email or course title or request id
                 query = query.Where(pr =>
                     (pr.PrivateCourse != null && pr.PrivateCourse.Title != null && pr.PrivateCourse.Title.Contains(norm)) ||
                     (pr.Student != null && pr.Student.User != null && pr.Student.User.FullName != null && pr.Student.User.FullName.Contains(norm)) ||
@@ -74,13 +68,26 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 );
             }
 
-            // order by newest first
-            var items = await query.OrderByDescending(pr => pr.RequestDateUtc).ToListAsync();
+            // total count before paging
+            var totalCount = await query.CountAsync();
+
+            // clamp page/pageSize
+            pageSize = Math.Max(1, Math.Min(100, pageSize)); // safe bounds
+            page = Math.Max(1, page);
+
+            var items = await query
+                        .OrderByDescending(pr => pr.RequestDateUtc)
+                        .Skip((page - 1) * pageSize)
+                        .Take(pageSize)
+                        .ToListAsync();
 
             var vm = new PurchaseRequestListVm
             {
                 Query = q,
                 FilterStatus = FilterStatus,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
                 Requests = items.Select(pr => new PurchaseRequestItemVm
                 {
                     Id = pr.Id,
@@ -95,7 +102,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 }).ToList()
             };
 
-            // prepare SelectList (enum values as strings so model binder can map)
             ViewData["StatusOptions"] = new SelectList(new[]
             {
         new { Value = "", Text = _localizer["Common.All"].Value },
@@ -107,7 +113,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
             ViewData["ActivePage"] = "PurchaseRequests";
             return View(vm);
         }
-
 
         // GET: Teacher/PurchaseRequests/Details/5
         public async Task<IActionResult> Details(int id)

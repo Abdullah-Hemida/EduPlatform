@@ -2,293 +2,355 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
-    Layout = "/Views/Shared/_DashboardLayout.cshtml";
     ViewData["Title"] = L["Nav.TeacherDashboard"];
     string crop(string? s, int len = 140) => string.IsNullOrEmpty(s) ? "" : (s.Length <= len ? s : s.Substring(0, len) + "…");
 }
 
-<div>
-    <h4 class="mb-1 mt-1">@L["Nav.TeacherDashboard"]</h4>
-    <div class="small text-muted">@L["Manage.TeacherSectionTitle"]</div>
-</div>
+<div class="container-fluid">
+    <div class="mb-2">
+        <h4 class="mb-1 mt-1">@L["Nav.TeacherDashboard"]</h4>
+        <div class="small text-muted">@L["Manage.TeacherSectionTitle"]</div>
+    </div>
 
-<!-- Summary cards -->
-<div class="row g-3 mb-3">
-    <!-- Total Courses -->
-    <div class="col-6 col-md-3">
-        <div class="card shadow-sm border-0">
-            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
-                <i class="fa-solid fa-book-open text-primary fa-2x mb-1"></i>
-                <div class="small text-muted">@L["Courses.TotalCourses"]</div>
-                <div class="h5 fw-bold">@Model.TotalCourses</div>
+    <!-- Summary cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-4 col-lg-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-center">
+                    <i class="fa-solid fa-book-open text-primary fa-2x mb-1" aria-hidden="true"></i>
+                    <div class="small text-muted">@L["Courses.TotalCourses"]</div>
+                    <div class="h5 fw-bold">@Model.TotalCourses</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-lg-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-center">
+                    <i class="fa-solid fa-sack-dollar text-success fa-2x mb-1" aria-hidden="true"></i>
+                    <div class="small text-muted">@L["Earnings.Total"]</div>
+                    <div class="h5 fw-bold">@Model.TotalEarnings</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-lg-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-center">
+                    <i class="fa-solid fa-calendar-check text-warning fa-2x mb-1" aria-hidden="true"></i>
+                    <div class="small text-muted">@L["Teacher.BookingRequested"]</div>
+                    <div class="h5 fw-bold">@Model.UpcomingBookingsCount</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-lg-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-center">
+                    <i class="fa-solid fa-hourglass-half text-danger fa-2x mb-1" aria-hidden="true"></i>
+                    <div class="small text-muted">@L["Admin.NumOfBendingPurchaseRequests"]</div>
+                    <div class="h5 fw-bold">@Model.PendingPurchaseRequests</div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Total Earnings -->
-    <div class="col-6 col-md-3">
-        <div class="card shadow-sm border-0">
-            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
-                <i class="fa-solid fa-sack-dollar text-success fa-2x mb-1"></i>
-                <div class="small text-muted">@L["Earnings.Total"]</div>
-                <div class="h5 fw-bold">@Model.TotalEarnings</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Booking Requested -->
-    <div class="col-6 col-md-3">
-        <div class="card shadow-sm border-0">
-            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
-                <i class="fa-solid fa-calendar-check text-warning fa-2x mb-1"></i>
-                <div class="small text-muted">@L["Teacher.BookingRequested"]</div>
-                <div class="h5 fw-bold">@Model.UpcomingBookingsCount</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pending Purchase Requests -->
-    <div class="col-6 col-md-3">
-        <div class="card shadow-sm border-0">
-            <div class="card-body dash-card d-flex flex-column align-items-center justify-content-center gap-2">
-                <i class="fa-solid fa-hourglass-half text-danger fa-2x mb-1"></i>
-                <div class="small text-muted">@L["Admin.NumOfBendingPurchaseRequests"]</div>
-                <div class="h5 fw-bold">@Model.PendingPurchaseRequests</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3">
-    <!-- Left column: upcoming bookings + purchase requests -->
-    <div class="col-lg-6">
-        <div class="card mb-3">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <div><strong>@L["Status.Pending"]</strong></div>
-                <div class="small text-muted">@L["Admin.BookingsSubtitle"]</div>
-            </div>
-            <div class="card-body">
-                @if (!Model.UpcomingBookings.Any())
-                {
-                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
-                }
-                else
-                {
-                    <div class="list-group list-group-flush">
-                        @foreach (var b in Model.UpcomingBookings)
-                        {
-                            <div class="list-group-item d-flex align-items-center justify-content-between">
-                                <div>
-                                    <div class="fw-semibold">@(b.StudentName ?? b.StudentEmail ?? ("#" + b.Id))</div>
-                                    <div class="small text-muted">@b.RequestedDateUtc.ToLocalTime().ToString("g")</div>
-                                </div>
-                                <div class="text-end">
-                                    <div class="small text-muted">@b.Status</div>
-                                    <div class="mt-1">
-                                        <a asp-area="Teacher" asp-controller="Bookings" asp-action="Details" asp-route-id="@b.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <div><strong>@L["Admin.PurchaseRequestsSubtitle"]</strong></div>
-                <div class="small text-muted">@L["Admin.PurchaseRequests"]</div>
-            </div>
-            <div class="card-body">
-                @if (!Model.RecentPurchaseRequests.Any())
-                {
-                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
-                }
-                else
-                {
-                    <div class="list-group list-group-flush">
-                        @foreach (var pr in Model.RecentPurchaseRequests)
-                        {
-                            <div class="list-group-item d-flex align-items-center justify-content-between">
-                                <div>
-                                    <div class="fw-semibold">@pr.CourseTitle</div>
-                                    <div class="small text-muted">@pr.StudentName</div>
-                                </div>
-                                <div class="text-end">
-                                    <div class="small text-muted">@pr.RequestDateUtc.ToLocalTime().ToString("g")</div>
-                                    <div class="mt-1">
-                                        <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Details" asp-route-id="@pr.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-
-    <!-- Right column: courses + earnings -->
-    <div class="col-lg-6">
-        <div class="card mb-3">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <div class="fw-semibold">@(L["Earnings.Total"] ?? "Earnings")</div>
-                <div class="small text-muted">@(L["Earnings.Last6Months"] ?? "Last 6 months")</div>
-            </div>
-            <div class="card-body">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div>
-                        <div class="small text-muted">@L["Earnings.Total"]</div>
-                        <div class="h4">@Model.TotalEarningsLabel</div>
-                        <div class="small text-muted">@(L["Earnings.Accumulated"] ?? "Accumulated earnings (all time)")</div>
-                    </div>
-                    <div class="flex-grow-1">
-                        <div id="earnings-sparkline" class="w-100" aria-hidden="true"></div>
-                    </div>
+    <div class="row g-3">
+        <!-- Left column -->
+        <div class="col-12 col-lg-6">
+            <!-- Upcoming bookings -->
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong>@L["Status.Pending"]</strong>
+                    <div class="small text-muted">@L["Admin.BookingsSubtitle"]</div>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table table-sm table-borderless mb-0">
-                        <thead>
-                            <tr>
-                                <th class="small text-muted">@L["ReactiveCourse.Month"]</th>
-                                <th class="small text-muted text-end">@L["Purchase.Amount"]</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var m in Model.MonthlyEarnings)
+                <div class="card-body">
+                    @if (!Model.UpcomingBookings.Any())
+                    {
+                        <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var b in Model.UpcomingBookings)
                             {
-                                <tr>
-                                    <td class="small">@m.Label</td>
-                                    <td class="small text-end fw-semibold">@m.AmountLabel</td>
-                                </tr>
+                                <!-- xs: stacked, sm+: horizontal -->
+                                <div class="list-group-item d-flex flex-column flex-sm-row align-items-start gap-2">
+                                    <div class="d-flex flex-column flex-grow-1 min-w-0">
+                                        <div class="fw-semibold text-truncate min-w-0 break-anywhere">@((b.StudentName ?? b.StudentEmail) ?? ("#" + b.Id))</div>
+                                        <div class="small text-muted">@b.RequestedDateUtc.ToLocalTime().ToString("g")</div>
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2 ms-sm-3 mt-2 mt-sm-0">
+                                        <div class="small text-muted text-nowrap">@b.Status</div>
+                                        <div class="btn-group-wrap ms-2">
+                                            <a asp-area="Teacher" asp-controller="Bookings" asp-action="Details" asp-route-id="@b.Id"
+                                               class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                        </div>
+                                    </div>
+                                </div>
                             }
-                        </tbody>
-                    </table>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Purchase requests -->
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong>@L["Admin.PurchaseRequestsSubtitle"]</strong>
+                    <div class="small text-muted">@L["Admin.PurchaseRequests"]</div>
+                </div>
+
+                <div class="card-body">
+                    @if (!Model.RecentPurchaseRequests.Any())
+                    {
+                        <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var pr in Model.RecentPurchaseRequests)
+                            {
+                                <div class="list-group-item d-flex flex-column flex-sm-row align-items-start gap-2">
+                                    <div class="d-flex flex-column flex-grow-1 min-w-0">
+                                        <div class="fw-semibold text-truncate min-w-0 break-anywhere">@pr.CourseTitle</div>
+                                        <div class="small text-muted">@pr.StudentName</div>
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2 ms-sm-3 mt-2 mt-sm-0">
+                                        <div class="small text-muted text-nowrap">@pr.RequestDateUtc.ToLocalTime().ToString("g")</div>
+                                        <div class="btn-group-wrap ms-2">
+                                            <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Details" asp-route-id="@pr.Id"
+                                               class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
         </div>
 
-        <div class="card mb-3">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <div><strong>@L["Teachers.PrivateCourses"]</strong></div>
-                <div class="small text-muted">@L["Admin.CategoriesSubtitle"]</div>
+        <!-- Right column -->
+        <div class="col-12 col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <div class="fw-semibold">@(L["Earnings.Total"] ?? "Earnings")</div>
+                    <div class="small text-muted">@(L["Earnings.Last6Months"] ?? "Last 6 months")</div>
+                </div>
+
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-md-row align-items-start gap-3 mb-3">
+                        <div class="text-start">
+                            <div class="small text-muted">@L["Earnings.Total"]</div>
+                            <div class="h4">@Model.TotalEarningsLabel</div>
+                            <div class="small text-muted">@(L["Earnings.Accumulated"] ?? "Accumulated earnings (all time)")</div>
+                        </div>
+
+                        <div class="flex-grow-1 w-100">
+                            <div id="earnings-sparkline" class="w-100" aria-hidden="true" style="min-height:48px;"></div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive-sm">
+                        <table class="table table-sm table-borderless mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="small text-muted">@L["ReactiveCourse.Month"]</th>
+                                    <th class="small text-muted text-end">@L["Purchase.Amount"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in Model.MonthlyEarnings)
+                                {
+                                    <tr>
+                                        <td class="small break-anywhere">@m.Label</td>
+                                        <td class="small text-end fw-semibold">@m.AmountLabel</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                @if (!Model.Courses.Any())
-                {
-                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
-                }
-                else
-                {
-                    <div class="list-group list-group-flush mb-2">
-                        @foreach (var c in Model.Courses)
-                        {
-                            <div class="list-group-item d-flex align-items-center gap-3">
-                                <div style="width:90px;">
-                                    @if (!string.IsNullOrEmpty(c.CoverImageUrl))
-                                    {
-                                        <img src="@c.CoverImageUrl" alt="@c.Title" class="rounded" style="width:90px;height:60px;object-fit:cover" />
-                                    }
-                                    else
-                                    {
-                                        <div class="bg-light border rounded small text-center py-2">@L["Admin.NoVideo"]</div>
-                                    }
-                                </div>
 
-                                <div class="flex-grow-1">
-                                    <div class="d-flex align-items-start justify-content-between">
-                                        <div>
-                                            <div class="fw-semibold">@c.Title</div>
-                                            <div class="small text-muted">@crop(c.CategoryName, 40) • @c.LessonCount @L["Admin.Lessons"]</div>
-                                        </div>
+            <!-- Courses -->
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong>@L["Teachers.PrivateCourses"]</strong>
+                    <div class="small text-muted">@L["Admin.CategoriesSubtitle"]</div>
+                </div>
 
-                                        <div class="text-end">
-                                            <div class="small text-muted">@c.PriceLabel</div>
-                                            <div class="mt-1">
-                                                <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@c.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
-                                                <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Edit" asp-route-id="@c.Id" class="btn btn-sm btn-outline-secondary">@L["Button.Edit"]</a>
+                <div class="card-body">
+                    @if (!Model.Courses.Any())
+                    {
+                        <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush mb-2">
+                            @foreach (var c in Model.Courses)
+                            {
+                                <div class="list-group-item d-flex flex-column flex-sm-row align-items-start gap-3">
+                                    <div class="flex-shrink-0 img-preview">
+                                        @if (!string.IsNullOrEmpty(c.CoverImageUrl))
+                                        {
+                                            <img src="@c.CoverImageUrl" alt="@c.Title" class="img-fluid rounded safe-img" />
+                                        }
+                                        else
+                                        {
+                                            <div class="bg-light border rounded small text-center py-2" style="width:90px;height:60px">@L["Admin.NoVideo"]</div>
+                                        }
+                                    </div>
+
+                                    <div class="flex-grow-1 min-w-0">
+                                        <div class="d-flex align-items-start justify-content-between">
+                                            <div class="me-2">
+                                                <div class="fw-semibold text-truncate">@c.Title</div>
+                                                <div class="small text-muted">@crop(c.CategoryName, 40) • @c.LessonCount @L["Admin.Lessons"]</div>
+                                            </div>
+
+                                            <div class="text-end ms-3">
+                                                <div class="small text-muted">@c.PriceLabel</div>
+                                                <div class="mt-1 btn-group-wrap">
+                                                    <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@c.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                                    <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Edit" asp-route-id="@c.Id" class="btn btn-sm btn-outline-secondary">@L["Button.Edit"]</a>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        }
-                    </div>
+                            }
+                        </div>
 
-                    <div class="mt-2 text-end">
-                        <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-sm btn-link">@L["Nav.Courses"]</a>
-                    </div>
-                }
+                        <div class="mt-2 text-end">
+                            <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-sm btn-link">@L["Nav.Courses"]</a>
+                        </div>
+                    }
+                </div>
             </div>
-        </div>
 
-        <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <div class="fw-semibold">@(L["ReactiveCourse.MyReactiveCourses"] ?? "Reactive Courses")</div>
-                <div class="small text-muted">@L["Nav.Courses"]</div>
-            </div>
-            <div class="card-body">
-                @if (!Model.ReactiveCourses.Any())
-                {
-                    <div class="text-muted small">@L["Admin.NoRecords"]</div>
-                }
-                else
-                {
-                    <div class="list-group list-group-flush">
-                        @foreach (var rc in Model.ReactiveCourses)
-                        {
-                            <div class="list-group-item d-flex align-items-center justify-content-between gap-3">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div style="width:70px;">
-                                        @if (!string.IsNullOrEmpty(rc.CoverPublicUrl))
-                                        {
-                                            <img src="@rc.CoverPublicUrl" alt="@rc.Title" class="rounded" style="width:70px;height:48px;object-fit:cover" />
-                                        }
-                                        else
-                                        {
-                                            <div class="bg-light border rounded small text-center py-2" style="width:70px;height:48px;">@L["NoImage"]</div>
-                                        }
+            <!-- Reactive Courses -->
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <div class="fw-semibold">@(L["ReactiveCourse.MyReactiveCourses"] ?? "Reactive Courses")</div>
+                    <div class="small text-muted">@L["Nav.Courses"]</div>
+                </div>
+
+                <div class="card-body">
+                    @if (!Model.ReactiveCourses.Any())
+                    {
+                        <div class="text-muted small">@L["Admin.NoRecords"]</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var rc in Model.ReactiveCourses)
+                            {
+                                <div class="list-group-item d-flex flex-column flex-sm-row align-items-start justify-content-between gap-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="flex-shrink-0" style="width:70px;">
+                                            @if (!string.IsNullOrEmpty(rc.CoverPublicUrl))
+                                            {
+                                                <img src="@rc.CoverPublicUrl" width="70" height="48" alt="@rc.Title" class="img-fluid rounded safe-img" />
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-light border rounded small text-center py-2" style="width:70px;height:48px;">@L["NoImage"]</div>
+                                            }
+                                        </div>
+
+                                        <div class="min-w-0">
+                                            <div class="fw-semibold text-truncate" style="max-width:220px;">@rc.Title</div>
+                                            <div class="small text-muted">@rc.EnrollmentsCount @L["ReactiveCourse.MyEnrollments"] • @rc.MonthsReadyCount @L["ReactiveCourse.MonthReady"]</div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div class="fw-semibold">@rc.Title</div>
-                                        <div class="small text-muted">@rc.EnrollmentsCount @L["ReactiveCourse.MyEnrollments"] </div>
-                                        <div class="small text-muted"> @rc.MonthsReadyCount @L["ReactiveCourse.MonthReady"]</div>
+
+                                    <div class="text-end ms-sm-3 mt-2 mt-sm-0">
+                                        <div class="small text-muted">@rc.PricePerMonthLabel @L["Teachers.PerMonth"]</div>
+                                        <div class="mt-1">
+                                            <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@rc.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
+                                        </div>
                                     </div>
                                 </div>
-
-                                <div class="text-end">
-                                    <div class="small text-muted">@rc.PricePerMonthLabel @L["Teachers.PerMonth"]</div>
-                                    <div class="mt-1">
-                                        <a asp-area="Teacher" asp-controller="ReactiveCourses" asp-action="Details" asp-route-id="@rc.Id" class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
+                            }
+                        </div>
+                    }
+                </div>
             </div>
-        </div>
 
+        </div>
     </div>
 </div>
+    <style>
+        /* Tiny utilities to fix shrinking/overflow issues */
+        .min-w-0 {
+            min-width: 0 !important;
+        }
+        /* allows flex items to shrink */
+        .break-anywhere {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        /* prevents long words from expanding page */
+        .img-preview {
+            width: 90px;
+            max-width: 30%;
+            flex-shrink: 0;
+            height: auto;
+        }
+        /* keeps preview images sane */
+        .btn-group-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .25rem;
+        }
+        /* allow buttons to wrap on narrow screens */
+        .list-item-flex {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: .5rem;
+        }
+        /* safe list group layout */
+        /* ensure all images and svg don't exceed container */
+        .safe-img, #earnings-sparkline svg {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        /* make small tables scroll inside container on xs/sm */
+        .table-responsive-sm {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        /* avoid cards causing overflow if their children are large */
+        .card-body {
+            overflow: visible;
+        }
+        /* optional: keep layout from accidentally allowing horizontal scroll (safe): */
+        /* body { overflow-x: hidden; }  <-- only enable if you are sure nothing must scroll horizontally */
+    </style>
 
 @section Scripts {
     <script>
         (function () {
+            // Sparkline: smaller and safer on very narrow screens
             const monthly = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MonthlyEarnings.Select(m => new { m.Label, m.Amount })));
 
             function drawSparkline(items) {
                 const container = document.getElementById('earnings-sparkline');
                 if (!container) return;
 
-                const w = Math.max(200, container.clientWidth || 280);
-                const h = 48;
-                const padding = 6;
+                const w = Math.max(120, Math.min(480, container.clientWidth || 200));
+                const h = 44;
+                const padding = 4;
                 const cols = items.length || 1;
-                const gap = 6;
-                const barW = Math.max(6, Math.floor((w - padding * 2 - gap * (cols - 1)) / cols));
+                const gap = 4;
+                const barW = Math.max(3, Math.floor((w - padding * 2 - gap * (cols - 1)) / cols));
                 const max = Math.max.apply(null, items.map(i => i.Amount)) || 1;
 
                 const svgNS = 'http://www.w3.org/2000/svg';
@@ -321,11 +383,14 @@
             let to;
             window.addEventListener('resize', function () {
                 clearTimeout(to);
-                to = setTimeout(() => drawSparkline(monthly), 150);
+                to = setTimeout(() => drawSparkline(monthly), 120);
             });
         })();
     </script>
 }
+
+
+
 
 
 

@@ -7,7 +7,13 @@ namespace Edu.Web.Areas.Teacher.ViewModels
     {
         public string? Query { get; set; }
         public PurchaseStatus? FilterStatus { get; set; }
-        public List<PurchaseRequestItemVm> Requests { get; set; } = new();
+        public List<PurchaseRequestItemVm> Requests { get; set; } = new List<PurchaseRequestItemVm>();
+
+        // Paging
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 10;
+        public int TotalCount { get; set; } = 0;
+        public int TotalPages => PageSize > 0 ? (int)Math.Ceiling(TotalCount / (double)PageSize) : 1;
     }
 
     public class PurchaseRequestItemVm

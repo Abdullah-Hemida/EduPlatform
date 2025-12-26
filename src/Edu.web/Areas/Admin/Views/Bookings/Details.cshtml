@@ -30,6 +30,9 @@
                         <h6 class="text-muted">@L["Booking.Student"]</h6>
                         <div class="fw-semibold">@(Model.StudentName ?? "—")</div>
                         <div class="small text-muted">@(Model.StudentEmail ?? "—")</div>
+                        <div class="small text-muted">@(Model.StudentPhoneNumber ?? "—")</div>
+
+                        <div>@L["GuardianPhoneNumber"] - @(Model.GuardianPhoneNumber ?? "—")</div>
                     </div>
                     <div class="col-md-6">
                         <h6 class="text-muted">@L["Booking.Teacher"]</h6>
@@ -68,102 +71,102 @@
             </div>
         </div>
 
-        <!-- logs -->
-        <div class="card">
-            <div class="card-header"><strong>@L["Admin.Notes"]</strong></div>
-            <div class="card-body">
-                @if (Model.ModerationLogs == null || !Model.ModerationLogs.Any())
-                {
-                    <div class="text-muted small">@L["Admin.NoNotes"]</div>
-                }
-                else
-                {
-                    <ul class="list-group">
-                        @foreach (var log in Model.ModerationLogs)
-                        {
-                            <li class="list-group-item">
-                                <div class="small"><strong>@log.Action</strong> — <span class="text-muted">@log.CreatedAtUtc.ToLocalTime().ToString("g")</span></div>
-                                <div class="mt-1">@(!string.IsNullOrEmpty(log.Note) ? log.Note : "")</div>
-                                <div class="small text-muted mt-1">@(!string.IsNullOrEmpty(log.ActorName) ? log.ActorName : log.ActorId)</div>
-                            </li>
-                        }
-                    </ul>
-                }
-            </div>
-        </div>
     </div>
 
     <aside class="col-lg-4">
         <div class="card mb-3">
             <div class="card-body d-grid gap-2">
-                <button id="markPaidBtn" data-id="@Model.Id" class="btn btn-outline-primary">@L["Booking.MarkPaid"]</button>
+                @if (Model.Status != BookingStatus.Paid)
+                {
+                    <button id="markPaidBtn" data-id="@Model.Id" class="btn btn-outline-primary">@L["Booking.MarkPaid"]</button>
+                }
+                else
+                {
+                    <button class="btn btn-success" disabled>@L["Admin.Paid"]</button>
+                }
                 <a asp-action="Index" class="btn btn-light">@L["Button.Close"]</a>
             </div>
         </div>
     </aside>
+
 </div>
 
 @section Scripts {
     <script>
-        (function () {
+        (function ($) {
+            var texts = {
+                confirmMarkPaid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.ConfirmMarkPaid"].Value ?? "Mark this booking as paid?")),
+                promptAmount: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptAmount"].Value ?? "Optional: enter amount (leave empty to keep current)")),
+                promptPaymentRef: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptPaymentRef"].Value ?? "Optional: payment reference / note:")),
+                operationFailed: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.OperationFailed"].Value ?? "Operation failed")),
+                serverError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ServerError"].Value ?? "Server error, try again.")),
+                paidLabel: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.MarkedPaidLabel"].Value ?? "Paid")),
+                bookingStatusPaid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.Status.Paid"].Value ?? "Paid"))
+            };
+
             function getAntiForgeryToken() {
-                var f = document.getElementById('antiForgeryForm');
-                if (!f) return '';
-                var input = f.querySelector('input[name="__RequestVerificationToken"]');
-                return input ? input.value : '';
+                return $('#antiForgeryForm input[name="__RequestVerificationToken"]').val() || '';
             }
 
-            var markBtn = document.getElementById('markPaidBtn');
-            if (!markBtn) return;
+            $(function () {
+                var $markBtn = $('#markPaidBtn');
+                if (!$markBtn || !$markBtn.length) return;
 
-            markBtn.addEventListener('click', function (e) {
-                var id = this.getAttribute('data-id');
-                if (!id) return;
-                if (!confirm('@L["Booking.ConfirmMarkPaid"] ?? "Mark this booking as paid?"')) return;
+                $markBtn.on('click', function (e) {
+                    e.preventDefault();
+                    var id = parseInt($(this).data('id'), 10);
+                    if (!id) return;
 
-                var payload = { Id: parseInt(id, 10) };
+                    if (!confirm(texts.confirmMarkPaid)) return;
 
-                markBtn.disabled = true;
-                markBtn.classList.add('disabled');
-
-                fetch('@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': getAntiForgeryToken(),
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                }).then(function (res) {
-                    if (!res.ok) return res.json().then(function (j) { throw j; });
-                    return res.json();
-                }).then(function (data) {
-                    if (data && data.success) {
-                        // update badge and button
-                        var badge = document.querySelector('.booking-status-badge');
-                        if (badge) {
-                            badge.className = 'booking-status-badge badge bg-success';
-                            badge.innerText = '@L["Booking.Status.Paid"]';
+                    var amountRaw = prompt(texts.promptAmount + ":");
+                    var amount = null;
+                    if (amountRaw !== null && amountRaw.trim() !== '') {
+                        var parsed = parseFloat(amountRaw.replace(',', '.'));
+                        if (!isNaN(parsed)) amount = parsed;
+                        else {
+                            alert(texts.operationFailed);
                         }
-                        markBtn.classList.remove('btn-outline-primary');
-                        markBtn.classList.add('btn-success');
-                        markBtn.innerText = '@L["Booking.MarkedPaidLabel"] ?? "Paid"';
-                        markBtn.disabled = true;
-                    } else {
-                        alert(data?.error ?? '@L["Admin.OperationFailed"]');
-                        markBtn.disabled = false;
-                        markBtn.classList.remove('disabled');
                     }
-                }).catch(function (err) {
-                    console.error(err);
-                    alert('@L["Admin.ServerError"]');
-                    markBtn.disabled = false;
-                    markBtn.classList.remove('disabled');
+
+                    var paymentRef = prompt(texts.promptPaymentRef);
+
+                    var payload = { Id: id, Amount: amount, PaymentRef: paymentRef };
+
+                    $markBtn.prop('disabled', true).addClass('disabled');
+
+                    $.ajax({
+                        url: '@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })',
+                        type: 'POST',
+                        contentType: 'application/json; charset=utf-8',
+                        data: JSON.stringify(payload),
+                        headers: {
+                            'RequestVerificationToken': getAntiForgeryToken()
+                        }
+                    }).done(function (data) {
+                        if (data && data.success) {
+                            // update badge(s) on page
+                            var $badge = $('.booking-status-badge');
+                            if ($badge && $badge.length) {
+                                $badge.removeClass().addClass('booking-status-badge badge bg-success');
+                                $badge.text(texts.bookingStatusPaid);
+                            }
+
+                            // change button to success state
+                            $markBtn.removeClass('btn-outline-primary').addClass('btn-success').text(texts.paidLabel).prop('disabled', true);
+                        } else {
+                            alert(data && data.error ? data.error : texts.operationFailed);
+                            $markBtn.prop('disabled', false).removeClass('disabled');
+                        }
+                    }).fail(function () {
+                        alert(texts.serverError);
+                        $markBtn.prop('disabled', false).removeClass('disabled');
+                    });
                 });
             });
-        })();
+        })(jQuery);
     </script>
 }
+
 
 

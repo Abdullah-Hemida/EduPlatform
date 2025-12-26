@@ -1,4 +1,5 @@
-﻿using Edu.Application.IServices;
+﻿// Edu.Web.Areas.Identity.Pages.Account.CompleteStudentProfileModel.cs
+using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Storage;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Localization;
+using Microsoft.AspNetCore.Localization;
 
 namespace Edu.Web.Areas.Identity.Pages.Account
 {
@@ -44,9 +46,14 @@ namespace Edu.Web.Areas.Identity.Pages.Account
         {
             public string FullName { get; set; } = string.Empty;
             public string? PhoneNumber { get; set; }
+
+            // CORRECTED: PreferredLanguage as a property (default to Italian as your sample)
+            public string PreferredLanguage { get; set; } = "it";
+
+            public string GuardianPhoneNumber { get; set; } = string.Empty;
             public DateTime? DateOfBirth { get; set; }
 
-            // ⬅ This will hold the display URL (computed, not stored)
+            // display-only (computed)
             public string? PhotoDisplayUrl { get; set; }
         }
 
@@ -65,11 +72,19 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             Input.FullName = user.FullName;
             Input.PhoneNumber = await _userManager.GetPhoneNumberAsync(user);
             Input.DateOfBirth = user.DateOfBirth;
+            Input.GuardianPhoneNumber = (await _db.Students.FindAsync(user.Id))?.GuardianPhoneNumber ?? "";
+            // safe fallback to default
+            Input.PreferredLanguage = string.IsNullOrWhiteSpace(user.PreferredLanguage) ? "it" : user.PreferredLanguage;
 
             // NEW: generate display URL
-            Input.PhotoDisplayUrl = await _files.GetPublicUrlAsync(
-                user.PhotoStorageKey ?? user.PhotoUrl
-            );
+            try
+            {
+                Input.PhotoDisplayUrl = await _files.GetPublicUrlAsync(user.PhotoStorageKey ?? user.PhotoUrl);
+            }
+            catch
+            {
+                Input.PhotoDisplayUrl = user.PhotoUrl; // best-effort fallback
+            }
 
             return Page();
         }
@@ -105,7 +120,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account
                 // save new file via storage service
                 var newKey = await _files.SaveFileAsync(Photo, $"users/{user.Id}");
 
-                // defensive: make sure SaveFileAsync returned something meaningful
                 if (string.IsNullOrWhiteSpace(newKey))
                 {
                     _logger.LogError("SaveFileAsync returned empty key for user {UserId}", user.Id);
@@ -114,7 +128,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account
                     return Page();
                 }
 
-                // assign key — this must be the storage KEY (not the public URL).
                 user.PhotoStorageKey = newKey;
                 user.PhotoUrl = null;
             }
@@ -122,6 +135,16 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             // OTHER FIELDS
             user.FullName = Input.FullName;
             user.DateOfBirth = Input.DateOfBirth;
+
+            // SAVE preferred language (validate allowed values)
+            var chosen = string.IsNullOrWhiteSpace(Input.PreferredLanguage) ? "it" : Input.PreferredLanguage;
+            var allowed = new[] { "en", "it", "ar", "en-US", "it-IT", "ar-SA" };
+            if (!allowed.Contains(chosen))
+            {
+                // normalize by taking first two letters
+                chosen = chosen.Length >= 2 ? chosen.Substring(0, 2).ToLowerInvariant() : "it";
+            }
+            user.PreferredLanguage = chosen;
 
             // Prefer SetPhoneNumberAsync (if you want the built-in phone handling).
             var phoneRes = await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber ?? "");
@@ -143,15 +166,13 @@ namespace Edu.Web.Areas.Identity.Pages.Account
                 return Page();
             }
 
-            // IMPORTANT: reload user in the DbContext we injected to avoid stale-tracking overwrites
+            // reload entity into injected DbContext (best-effort)
             try
             {
-                // this will ensure the injected _db context has the latest values for this user
                 await _db.Entry(user).ReloadAsync();
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
-                // not fatal, but helpful for debugging if reload fails
                 _logger.LogWarning(ex, "Failed to reload user entity into injected DbContext after update for {UserId}", user.Id);
             }
 
@@ -160,8 +181,27 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             if (student == null)
             {
                 student = new Edu.Domain.Entities.Student { Id = user.Id };
+                student.GuardianPhoneNumber = Input.GuardianPhoneNumber;
                 _db.Students.Add(student);
                 await _db.SaveChangesAsync();
+            }
+
+            // Set the request-culture cookie so the user's language selection applies immediately
+            try
+            {
+                var requestCulture = new RequestCulture(user.PreferredLanguage);
+                var cookieValue = CookieRequestCultureProvider.MakeCookieValue(requestCulture);
+                Response.Cookies.Append(CookieRequestCultureProvider.DefaultCookieName, cookieValue, new CookieOptions
+                {
+                    Expires = DateTimeOffset.UtcNow.AddYears(1),
+                    HttpOnly = false,
+                    IsEssential = true,
+                    Secure = Request.IsHttps
+                });
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to set localization cookie for user {UserId} with culture {Culture}", user.Id, user.PreferredLanguage);
             }
 
             await _signInManager.RefreshSignInAsync(user);
@@ -170,5 +210,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account
         }
     }
 }
+
 
 

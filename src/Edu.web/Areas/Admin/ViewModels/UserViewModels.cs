@@ -32,20 +32,35 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public PaginatedList<UserRowViewModel>? Items { get; set; }
     }
 
+    public class CurriculumCheckboxVm
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string? LevelName { get; set; }
+    }
+
+
     public class UserDetailsViewModel
     {
         public string Id { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? Email { get; set; }
         public string? PhoneNumber { get; set; }
+        public string? GuardianPhoneNumber { get; set; }
         public DateTime? DateOfBirth { get; set; }
         public string? PhotoStorageKey { get; set; }
         public string? PhotoUrl { get; set; }
         public IList<string> Roles { get; set; } = new List<string>();
 
         // Fix: Ensure Teacher and Student are referenced as types, not namespaces.
-        public Edu.Domain.Entities.Teacher? Teacher { get; set; }
-        public Edu.Domain.Entities.Student? Student { get; set; }
+        public Domain.Entities.Teacher? Teacher { get; set; }
+        public Domain.Entities.Student? Student { get; set; }
         public bool? StudentIsAllowed { get; set; } // new
+
+        // New: all curricula (for the checkbox list)
+        public List<CurriculumCheckboxVm> Curricula { get; set; } = new List<CurriculumCheckboxVm>();
+
+        // New: the curriculum ids the student currently has access to
+        public List<int> SelectedCurriculumIds { get; set; } = new List<int>();
     }
 }

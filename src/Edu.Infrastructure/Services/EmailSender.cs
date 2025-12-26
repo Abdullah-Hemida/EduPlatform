@@ -3,7 +3,6 @@ using System.Net.Mail;
 using Microsoft.Extensions.Options;
 
 namespace Edu.Infrastructure.Services;
-
 public class SmtpOptions
 {
     public string Host { get; set; } = "";
@@ -48,7 +47,6 @@ public class SmtpEmailSender : IEmailSender
             IsBodyHtml = true
         };
         mail.To.Add(toEmail);
-
         // SmtpClient.SendMailAsync is available
         await client.SendMailAsync(mail, ct);
     }

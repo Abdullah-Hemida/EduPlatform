@@ -1,13 +1,17 @@
-﻿using Edu.Infrastructure.Data; // adjust
-using Edu.Domain.Entities; // adjust
-using Edu.Web.Areas.Admin.ViewModels; // adjust
+﻿
+using Edu.Application.IServices;
+using Edu.Domain.Entities;
+using Edu.Infrastructure.Data;
+using Edu.Infrastructure.Helpers;
+using Edu.Infrastructure.Services;
+using Edu.Web.Areas.Admin.ViewModels;
+using Edu.Web.Helpers;
+using Edu.Web.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using Edu.Infrastructure.Services;
-using Edu.Infrastructure.Helpers;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -18,21 +22,30 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<ReactiveEnrollmentsController> _logger;
-        private readonly IEmailSender _emailSender;
-        private readonly IStringLocalizer<ReactiveEnrollmentsController> _localizer;
+        private readonly IStringLocalizer<SharedResource> _localizer;
+        private readonly IUserCultureProvider _userCultureProvider;
+        private readonly INotificationService _notifier;
+        private readonly IWebHostEnvironment _env;
+        private readonly IFileStorageService _fileStorage;
 
         public ReactiveEnrollmentsController(
             ApplicationDbContext db,
             UserManager<ApplicationUser> userManager,
             ILogger<ReactiveEnrollmentsController> logger,
-            IEmailSender emailSender,
-            IStringLocalizer<ReactiveEnrollmentsController> localizer)
+            IStringLocalizer<SharedResource> localizer,
+            IUserCultureProvider userCultureProvider,
+            INotificationService notifier,
+            IWebHostEnvironment env,
+            IFileStorageService fileStorage)
         {
             _db = db;
             _userManager = userManager;
             _logger = logger;
-            _emailSender = emailSender;
             _localizer = localizer;
+            _userCultureProvider = userCultureProvider;
+            _notifier = notifier;
+            _env = env;
+            _fileStorage = fileStorage;
         }
 
         // GET: Admin/ReactiveEnrollments
@@ -43,7 +56,6 @@ namespace Edu.Web.Areas.Admin.Controllers
             if (page < 1) page = 1;
             if (pageSize <= 0) pageSize = 20;
 
-            // base query joining ReactiveEnrollment -> ReactiveCourse -> teacher (ApplicationUser)
             var baseQuery = _db.ReactiveEnrollments
                 .AsNoTracking()
                 .Include(e => e.ReactiveCourse)
@@ -52,11 +64,10 @@ namespace Edu.Web.Areas.Admin.Controllers
             if (!string.IsNullOrWhiteSpace(q))
             {
                 q = q.Trim();
-                // search across course title, student full name/email, teacher name
                 baseQuery = baseQuery.Where(e =>
-                    e.ReactiveCourse.Title.Contains(q) ||
-                    e.StudentId != null && _db.Users.Any(u => u.Id == e.StudentId && (u.FullName.Contains(q) || u.Email.Contains(q))) ||
-                    e.ReactiveCourse.TeacherId != null && _db.Users.Any(t => t.Id == e.ReactiveCourse.TeacherId && t.FullName.Contains(q))
+                    EF.Functions.Like(e.ReactiveCourse.Title, $"%{q}%") ||
+                    (e.StudentId != null && _db.Users.Any(u => u.Id == e.StudentId && (EF.Functions.Like(u.FullName, $"%{q}%") || EF.Functions.Like(u.Email, $"%{q}%")))) ||
+                    (e.ReactiveCourse.TeacherId != null && _db.Users.Any(t => t.Id == e.ReactiveCourse.TeacherId && EF.Functions.Like(t.FullName, $"%{q}%")))
                 );
             }
 
@@ -79,15 +90,78 @@ namespace Edu.Web.Areas.Admin.Controllers
                 })
                 .ToListAsync();
 
-            // gather user details for students & teachers in one go
-            var studentIds = items.Select(i => i.StudentId).Where(id => id != null).Distinct().ToList();
-            var teacherIds = items.Select(i => i.TeacherId).Where(id => id != null).Distinct().ToList();
+            var studentIds = items.Select(i => i.StudentId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+            var teacherIds = items.Select(i => i.TeacherId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
 
             var users = await _db.Users
                 .AsNoTracking()
-                .Where(u => (studentIds.Contains(u.Id)) || (teacherIds.Contains(u.Id)))
-                .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.PhotoUrl })
+                .Where(u => studentIds.Contains(u.Id) || teacherIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.PhotoStorageKey, u.PhotoUrl })
                 .ToListAsync();
+
+            var students = await _db.Students
+                .AsNoTracking()
+                .Where(s => studentIds.Contains(s.Id))
+                .Select(s => new { s.Id, s.GuardianPhoneNumber })
+                .ToListAsync();
+
+            // Build DTOs first, collect keys
+            var list = items.Select(i =>
+            {
+                var stu = users.FirstOrDefault(u => u.Id == i.StudentId);
+                var tch = users.FirstOrDefault(u => u.Id == i.TeacherId);
+                return new AdminEnrollmentListItemVm
+                {
+                    EnrollmentId = i.Id,
+                    CourseId = i.CourseId,
+                    CourseTitle = i.CourseTitle,
+                    StudentId = i.StudentId,
+                    StudentFullName = stu?.FullName ?? i.StudentId,
+                    StudentEmail = stu?.Email,
+                    StudentPhone = stu?.PhoneNumber,
+                    GuardianPhoneNumber = students.FirstOrDefault(s => s.Id == i.StudentId)?.GuardianPhoneNumber,
+                    PhotoStorageKey = stu?.PhotoStorageKey,
+                    PhotoFileUrlFallback = stu?.PhotoUrl,
+                    TeacherFullName = tch?.FullName,
+                    CreatedAtUtc = i.CreatedAtUtc,
+                    PaidMonthsCount = i.PaidCount,
+                    PendingMonthsCount = i.PendingCount
+                };
+            }).ToList();
+
+            // Resolve unique keys
+            var keys = list.Select(x => x.PhotoStorageKey).Where(k => !string.IsNullOrEmpty(k)).Distinct().ToList();
+            var keyToUrl = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+            if (keys.Any())
+            {
+                var tasks = keys.Select(async key =>
+                {
+                    try
+                    {
+                        var url = await _fileStorage.GetPublicUrlAsync(key!);
+                        keyToUrl[key!] = url;
+                    }
+                    catch
+                    {
+                        keyToUrl[key!] = null;
+                    }
+                });
+                await Task.WhenAll(tasks);
+            }
+
+            // Apply resolved urls
+            foreach (var it in list)
+            {
+                if (!string.IsNullOrEmpty(it.PhotoStorageKey) && keyToUrl.TryGetValue(it.PhotoStorageKey!, out var publicUrl))
+                {
+                    it.StudentPhotoUrl = publicUrl ?? it.PhotoFileUrlFallback ?? it.PhotoStorageKey;
+                }
+                else
+                {
+                    it.StudentPhotoUrl = it.PhotoFileUrlFallback;
+                }
+            }
 
             var vm = new AdminEnrollmentIndexVm
             {
@@ -95,27 +169,9 @@ namespace Edu.Web.Areas.Admin.Controllers
                 PageSize = pageSize,
                 TotalCount = totalCount,
                 Query = q ?? string.Empty,
-                Items = items.Select(i =>
-                {
-                    var stu = users.FirstOrDefault(u => u.Id == i.StudentId);
-                    var tch = users.FirstOrDefault(u => u.Id == i.TeacherId);
-                    return new AdminEnrollmentListItemVm
-                    {
-                        EnrollmentId = i.Id,
-                        CourseId = i.CourseId,
-                        CourseTitle = i.CourseTitle,
-                        StudentId = i.StudentId,
-                        StudentFullName = stu?.FullName ?? i.StudentId,
-                        StudentEmail = stu?.Email,
-                        StudentPhone = stu?.PhoneNumber,
-                        StudentPhotoUrl = stu?.PhotoUrl,
-                        TeacherFullName = tch?.FullName ?? null,
-                        CreatedAtUtc = i.CreatedAtUtc,
-                        PaidMonthsCount = i.PaidCount,
-                        PendingMonthsCount = i.PendingCount
-                    };
-                }).ToList()
+                Items = list
             };
+
             ViewData["ActivePage"] = "ReactiveEnrollments";
             return View(vm);
         }
@@ -124,73 +180,120 @@ namespace Edu.Web.Areas.Admin.Controllers
         [HttpGet]
         public async Task<IActionResult> Details(int id)
         {
+
             var enrollment = await _db.ReactiveEnrollments
                 .AsNoTracking()
                 .Include(e => e.ReactiveCourse)
                 .FirstOrDefaultAsync(e => e.Id == id);
 
-            if (enrollment == null) return NotFound();
+            if (enrollment == null)
+            {
+                _logger.LogWarning("ReactiveEnrollment {Id} not found", id);
+                return NotFound();
+            }
 
-            // load payments for this enrollment
+            // 1) load payments
             var payments = await _db.ReactiveEnrollmentMonthPayments
                 .AsNoTracking()
                 .Where(p => p.ReactiveEnrollmentId == id)
                 .ToListAsync();
-
-            // load months of course
+            // 2) load months (id + index)
             var months = await _db.ReactiveCourseMonths
                 .AsNoTracking()
                 .Where(m => m.ReactiveCourseId == enrollment.ReactiveCourseId)
                 .OrderBy(m => m.MonthIndex)
+                .Select(m => new { m.Id, m.MonthIndex })
                 .ToListAsync();
 
-            // load student and teacher full user rows
-            var studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId);
+            var monthIds = months.Select(m => m.Id).ToList();
+            // 3) compute lesson counts grouped by month id
+            Dictionary<int, int> lessonCounts = new();
+            if (monthIds.Any())
+            {
+                var grouped = await _db.ReactiveCourseLessons
+                    .AsNoTracking()
+                    .Where(l => monthIds.Contains(l.ReactiveCourseMonthId))
+                    .GroupBy(l => l.ReactiveCourseMonthId)
+                    .Select(g => new { MonthId = g.Key, Count = g.Count() })
+                    .ToListAsync();
+
+                lessonCounts = grouped.ToDictionary(x => x.MonthId, x => x.Count);
+            }
+            else
+            {
+                _logger.LogDebug("No months found for course {CourseId}", enrollment.ReactiveCourseId);
+            }
+
+            // 4) load student/user records
+            ApplicationUser? studentUser = null;
+            Domain.Entities.Student? student = null;
+            if (!string.IsNullOrEmpty(enrollment.StudentId))
+            {
+                studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId);
+                student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == enrollment.StudentId);
+            }
+
+            // 5) teacher
             ApplicationUser? teacherUser = null;
-            if (!string.IsNullOrEmpty(enrollment.ReactiveCourse.TeacherId))
+            if (!string.IsNullOrEmpty(enrollment.ReactiveCourse?.TeacherId))
             {
                 teacherUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.ReactiveCourse.TeacherId);
             }
 
+            // 6) build month VMs (explicitly set LessonsCount from the grouped dictionary)
             var monthsVm = months.Select(m => new AdminEnrollmentMonthVm
             {
                 MonthId = m.Id,
                 MonthIndex = m.MonthIndex,
-                LessonsCount = m.Lessons.Count,
-                Payments = payments.Where(p => p.ReactiveCourseMonthId == m.Id)
-                                   .OrderByDescending(p => p.CreatedAtUtc)
-                                   .Select(p => new AdminEnrollmentPaymentVm
-                                   {
-                                       PaymentId = p.Id,
-                                       MonthId = p.ReactiveCourseMonthId,
-                                       AmountLabel = p.Amount.ToEuro(),
-                                       Status = p.Status,
-                                       CreatedAtUtc = p.CreatedAtUtc,
-                                       PaidAtUtc = p.PaidAtUtc,
-                                       AdminNote = p.AdminNote,
-                                       StudentId = enrollment.StudentId
-                                   }).ToList()
+                LessonsCount = lessonCounts.TryGetValue(m.Id, out var c) ? c : 0,
+                Payments = payments
+                    .Where(p => p.ReactiveCourseMonthId == m.Id)
+                    .OrderByDescending(p => p.CreatedAtUtc)
+                    .Select(p => new AdminEnrollmentPaymentVm
+                    {
+                        PaymentId = p.Id,
+                        MonthId = p.ReactiveCourseMonthId,
+                        AmountLabel = p.Amount.ToEuro(),
+                        Status = p.Status,
+                        CreatedAtUtc = p.CreatedAtUtc,
+                        PaidAtUtc = p.PaidAtUtc,
+                        AdminNote = p.AdminNote,
+                        StudentId = enrollment.StudentId
+                    }).ToList()
             }).ToList();
 
+            // 8) resolve student photo URL (best-effort)
+            string? studentPhotoUrl = null;
+            if (studentUser != null && !string.IsNullOrEmpty(studentUser.PhotoStorageKey))
+            {
+                try { studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed resolving student photo storage key"); studentPhotoUrl = studentUser.PhotoUrl ?? studentUser.PhotoStorageKey; }
+            }
+            else studentPhotoUrl = studentUser?.PhotoUrl;
+
+            // 9) build VM
             var vm = new AdminEnrollmentDetailsVm
             {
                 EnrollmentId = enrollment.Id,
                 CourseId = enrollment.ReactiveCourseId,
-                CourseTitle = enrollment.ReactiveCourse.Title,
+                CourseTitle = enrollment.ReactiveCourse?.Title ?? string.Empty,
                 StudentId = enrollment.StudentId,
                 StudentName = studentUser?.FullName ?? enrollment.StudentId,
                 StudentEmail = studentUser?.Email,
                 StudentPhone = studentUser?.PhoneNumber,
-                StudentPhotoUrl = studentUser?.PhotoUrl,
+                GuardianPhoneNumber = student?.GuardianPhoneNumber,
+                PhotoStorageKey = studentUser?.PhotoStorageKey,
+                StudentPhotoUrl = studentPhotoUrl,
                 TeacherFullName = teacherUser?.FullName,
                 CreatedAtUtc = enrollment.CreatedAtUtc,
                 Months = monthsVm
             };
+
             ViewData["ActivePage"] = "ReactiveEnrollments";
             return View(vm);
         }
 
-        // POST: Admin/ReactiveEnrollments/MarkPaymentPaid
+        // POST: Admin/ReactiveEnrollments/MarkPaymentPaid 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MarkPaymentPaid([FromForm] int paymentId)
@@ -208,7 +311,6 @@ namespace Edu.Web.Areas.Admin.Controllers
             p.PaidAtUtc = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
-            // log
             _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
             {
                 ReactiveCourseId = p.ReactiveEnrollment.ReactiveCourseId,
@@ -221,18 +323,24 @@ namespace Edu.Web.Areas.Admin.Controllers
             });
             await _db.SaveChangesAsync();
 
-            // notify student (best-effort)
             try
             {
                 var studentId = p.ReactiveEnrollment.StudentId;
                 if (!string.IsNullOrEmpty(studentId))
                 {
-                    var subj = _localizer["Notify.PaymentMarkedPaid.Subject"].Value;
-                    var body = string.Format(_localizer["Notify.PaymentMarkedPaid.Body"].Value, p.Amount.ToString("C"), p.ReactiveCourseMonthId);
                     var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId);
                     if (user?.Email != null)
                     {
-                        await _emailSender.SendEmailAsync(user.Email, subj, body);
+                        // placeholders: {0}=amount, {1}=monthIndex
+                        await NotifyFireAndForgetAsync(async () =>
+                            await _notifier.SendLocalizedEmailAsync(
+                                user,
+                                "Notify.PaymentMarkedPaid.Subject",
+                                "Notify.PaymentMarkedPaid.Body",
+                                p.Amount.ToString("C"),
+                                (object)(await TryGetMonthIndexLabelAsync(p.ReactiveCourseMonthId) ?? p.ReactiveCourseMonthId.ToString())
+                            )
+                        );
                     }
                 }
             }
@@ -262,7 +370,6 @@ namespace Edu.Web.Areas.Admin.Controllers
             p.AdminNote = adminNote;
             await _db.SaveChangesAsync();
 
-            // log
             _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
             {
                 ReactiveCourseId = p.ReactiveEnrollment.ReactiveCourseId,
@@ -275,18 +382,24 @@ namespace Edu.Web.Areas.Admin.Controllers
             });
             await _db.SaveChangesAsync();
 
-            // notify student (best-effort)
             try
             {
                 var studentId = p.ReactiveEnrollment.StudentId;
                 if (!string.IsNullOrEmpty(studentId))
                 {
-                    var subj = _localizer["Notify.PaymentRejected.Subject"].Value;
-                    var body = string.Format(_localizer["Notify.PaymentRejected.Body"].Value, p.Amount.ToString("C"), adminNote ?? string.Empty);
                     var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId);
                     if (user?.Email != null)
                     {
-                        await _emailSender.SendEmailAsync(user.Email, subj, body);
+                        // placeholders: {0}=amount, {1}=adminNote
+                        await NotifyFireAndForgetAsync(async () =>
+                            await _notifier.SendLocalizedEmailAsync(
+                                user,
+                                "Notify.PaymentRejected.Subject",
+                                "Notify.PaymentRejected.Body",
+                                p.Amount.ToString("C"),
+                                adminNote ?? string.Empty
+                            )
+                        );
                     }
                 }
             }
@@ -311,16 +424,20 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             try
             {
-                // optional: notify student that admin deleted enrollment
+                // optionally notify student
                 try
                 {
                     var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == enr.StudentId);
-                    if (user != null)
+                    if (user != null && !string.IsNullOrEmpty(user.Email))
                     {
-                        var subj = _localizer["Notify.EnrollmentDeleted.Subject"].Value;
-                        var body = string.Format(_localizer["Notify.EnrollmentDeleted.Body"].Value, enr.ReactiveCourse?.Title ?? "");
-                        if (!string.IsNullOrEmpty(user.Email))
-                            await _emailSender.SendEmailAsync(user.Email, subj, body);
+                        await NotifyFireAndForgetAsync(async () =>
+                            await _notifier.SendLocalizedEmailAsync(
+                                user,
+                                "Notify.EnrollmentDeleted.Subject",
+                                "Notify.EnrollmentDeleted.Body",
+                                enr.ReactiveCourse?.Title ?? ""
+                            )
+                        );
                     }
                 }
                 catch (Exception ex) { _logger.LogWarning(ex, "Notification when deleting enrollment failed"); }
@@ -363,8 +480,47 @@ namespace Edu.Web.Areas.Admin.Controllers
                 return StatusCode(500, new { success = false, message = _localizer["Admin.DeleteError"].Value });
             }
         }
+
+        // attempt to get MonthIndex for a given monthId (returns string or null)
+        private async Task<string?> TryGetMonthIndexLabelAsync(int reactiveCourseMonthId)
+        {
+            try
+            {
+                var month = await _db.ReactiveCourseMonths.AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.Id == reactiveCourseMonthId);
+                if (month != null) return month.MonthIndex.ToString();
+            }
+            catch
+            {
+                // ignore
+            }
+            return null;
+        }
+
+        // run notifications awaited in Development or fire-and-forget in other envs
+        private async Task NotifyFireAndForgetAsync(Func<Task> work)
+        {
+            if (work == null) return;
+            try
+            {
+                if (_env?.IsDevelopment() == true)
+                {
+                    await work();
+                }
+                else
+                {
+                    _ = Task.Run(work);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NotifyFireAndForgetAsync failed executing notification work");
+            }
+        }
     }
 }
+
+
 
 
 

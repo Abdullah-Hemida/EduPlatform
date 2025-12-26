@@ -11,6 +11,7 @@ namespace Edu.Domain.Entities
         public string? PhotoUrl { get; set; } 
         public string? PhotoStorageKey { get; set; }
         public DateTime? DateOfBirth { get; set; }
+        public string PreferredLanguage { get; set; } = "it";
 
         // Soft-delete flag
         public bool IsDeleted { get; set; } = false;
@@ -38,6 +39,9 @@ namespace Edu.Domain.Entities
 
             builder.Property(u => u.IsDeleted)
                    .HasDefaultValue(false);
+            builder.Property(u => u.PreferredLanguage)
+            .HasMaxLength(10)
+            .HasDefaultValue("it");
 
             // If you want index for fast search by FullName / Email / PhoneNumber:
             builder.HasIndex(u => u.FullName);

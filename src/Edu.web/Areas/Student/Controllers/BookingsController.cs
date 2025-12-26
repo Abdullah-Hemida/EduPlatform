@@ -4,6 +4,7 @@ using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
 using Edu.Infrastructure.Services;
 using Edu.Web.Areas.Shared.ViewModels;
+using Edu.Web.Helpers;
 using Edu.Web.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -20,73 +21,42 @@ namespace Edu.Web.Areas.Student.Controllers
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IStringLocalizer<SharedResource> _L;
-        private readonly IEmailSender _emailSender;
+        private readonly INotificationService _notifier;
+        private readonly IWebHostEnvironment _env;
+        private readonly ILogger<BookingsController> _logger;
 
-        public BookingsController(
-            ApplicationDbContext db,
-            UserManager<ApplicationUser> userManager,
-            IStringLocalizer<SharedResource> localizer,
-            IEmailSender emailSender)
+        public BookingsController(ApplicationDbContext db, UserManager<ApplicationUser> userManager, IStringLocalizer<SharedResource> localizer, INotificationService notifier, IWebHostEnvironment env, ILogger<BookingsController> logger)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
             _L = localizer ?? throw new ArgumentNullException(nameof(localizer));
-            _emailSender = emailSender; // may be null; SafeSendEmailAsync guards this
+            _notifier = notifier;
+            _env = env;
+            _logger = logger;
         }
 
-        // POST: Student/Bookings/Create (form submit)
-        // Note: there is NO Create(GET) anymore. Quick-book forms should POST here.
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(CreateBookingVm vm)
         {
-            if (vm == null || vm.SlotId <= 0)
-            {
-                TempData["Error"] = _L["Admin.OperationFailed"].Value;
-                return RedirectToAction("Index", "Slots");
-            }
+            if (vm == null || vm.SlotId <= 0) { TempData["Error"] = _L["Admin.OperationFailed"].Value; return RedirectToAction("Index", "Slots"); }
 
-            var slot = await _db.Slots
-                .Include(s => s.Bookings)
-                .FirstOrDefaultAsync(s => s.Id == vm.SlotId);
-
-            if (slot == null)
-            {
-                TempData["Error"] = _L["Slot.NotFound"].Value;
-                return RedirectToAction("Index", "Slots");
-            }
+            var slot = await _db.Slots.Include(s => s.Bookings).FirstOrDefaultAsync(s => s.Id == vm.SlotId);
+            if (slot == null) { TempData["Error"] = _L["Slot.NotFound"].Value; return RedirectToAction("Index", "Slots"); }
 
             var occupied = slot.Bookings.Count(b => b.Status == BookingStatus.Pending || b.Status == BookingStatus.Paid);
             var available = slot.Capacity - occupied;
-            if (available <= 0)
-            {
-                TempData["Error"] = _L["Slot.AlreadyBooked"].Value;
-                return RedirectToAction("Index", "Slots");
-            }
+            if (available <= 0) { TempData["Error"] = _L["Slot.AlreadyBooked"].Value; return RedirectToAction("Index", "Slots"); }
 
             var studentId = _userManager.GetUserId(User);
-            if (string.IsNullOrEmpty(studentId))
-            {
-                return Challenge();
-            }
+            if (string.IsNullOrEmpty(studentId)) return Challenge();
 
-            var booking = new Booking
-            {
-                SlotId = vm.SlotId,
-                StudentId = studentId,
-                TeacherId = slot.TeacherId,
-                MeetUrl = slot.LocationUrl,
-                RequestedDateUtc = DateTime.UtcNow,
-                Notes = vm.Notes,
-                Status = BookingStatus.Pending,
-                Price = slot.Price
-            };
+            var booking = new Booking { SlotId = vm.SlotId, StudentId = studentId, TeacherId = slot.TeacherId, MeetUrl = slot.LocationUrl, RequestedDateUtc = DateTime.UtcNow, Notes = vm.Notes, Status = BookingStatus.Pending, Price = slot.Price };
 
             try
             {
                 _db.Bookings.Add(booking);
-                await _db.SaveChangesAsync(); // persist to get booking.Id
+                await _db.SaveChangesAsync();
 
-                // record moderation log and notify teacher (centralized)
                 await CreateBookingLogAndNotifyAsync(booking, "Requested", vm.Notes ?? "Student requested booking");
 
                 TempData["Success"] = _L["Booking.Requested"].Value;
@@ -194,34 +164,20 @@ namespace Edu.Web.Areas.Student.Controllers
             return View(vm);
         }
 
-        // POST: Student/Bookings/Cancel/5 (form)
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Cancel(int id)
         {
             var studentId = _userManager.GetUserId(User);
             if (string.IsNullOrEmpty(studentId)) return Challenge();
 
-            var booking = await _db.Bookings
-                .Include(b => b.Teacher).ThenInclude(t => t.User)
-                .FirstOrDefaultAsync(b => b.Id == id && b.StudentId == studentId);
-
+            var booking = await _db.Bookings.Include(b => b.Teacher).ThenInclude(t => t.User).FirstOrDefaultAsync(b => b.Id == id && b.StudentId == studentId);
             if (booking == null) return NotFound();
-
-            if (booking.Status != BookingStatus.Pending)
-            {
-                TempData["Error"] = _L["Booking.InvalidStatus"].Value;
-                return RedirectToAction(nameof(MyBookings));
-            }
+            if (booking.Status != BookingStatus.Pending) { TempData["Error"] = _L["Booking.InvalidStatus"].Value; return RedirectToAction(nameof(MyBookings)); }
 
             try
             {
-                // log + notify via helper (helper will add the moderation log and notify teacher)
                 await CreateBookingLogAndNotifyAsync(booking, "CancelledByStudent", null);
-
-                // then remove booking
-                _db.Bookings.Remove(booking);
-                await _db.SaveChangesAsync();
-
+                _db.Bookings.Remove(booking); await _db.SaveChangesAsync();
                 TempData["Success"] = _L["Booking.Cancelled"].Value;
             }
             catch
@@ -232,31 +188,13 @@ namespace Edu.Web.Areas.Student.Controllers
             return RedirectToAction(nameof(MyBookings));
         }
 
-        #region Helpers
-
-        /// <summary>
-        /// centralized helper: writes a moderation log and notifies the teacher (best-effort).
-        /// It saves the moderation log and performs the notification.
-        /// </summary>
         private async Task CreateBookingLogAndNotifyAsync(Booking booking, string action, string? note)
         {
             if (booking == null) throw new ArgumentNullException(nameof(booking));
 
-            // Add moderation log
-            _db.BookingModerationLogs.Add(new BookingModerationLog
-            {
-                BookingId = booking.Id,
-                ActorId = booking.StudentId ?? _userManager.GetUserId(User),
-                ActorName = User.Identity?.Name,
-                Action = action,
-                Note = note,
-                CreatedAtUtc = DateTime.UtcNow
-            });
-
-            // Save the new log (so it is persisted)
+            _db.BookingModerationLogs.Add(new BookingModerationLog { BookingId = booking.Id, ActorId = booking.StudentId ?? _userManager.GetUserId(User), ActorName = User.Identity?.Name, Action = action, Note = note, CreatedAtUtc = DateTime.UtcNow });
             await _db.SaveChangesAsync();
 
-            // Notify teacher (best-effort)
             if (!string.IsNullOrEmpty(booking.TeacherId))
             {
                 try
@@ -264,56 +202,25 @@ namespace Edu.Web.Areas.Student.Controllers
                     var teacherUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == booking.TeacherId);
                     if (!string.IsNullOrEmpty(teacherUser?.Email))
                     {
-                        string subject;
-                        string body;
+                        string subjKey, bodyKey; object[] args;
+                        if (action == "Requested") { subjKey = "Email.Booking.Requested.Subject"; bodyKey = "Email.Booking.Requested.Body"; args = new object[] { booking.Id, User.Identity?.Name ?? "" }; }
+                        else if (action == "CancelledByStudent") { subjKey = "Email.Booking.Cancelled.Subject"; bodyKey = "Email.Booking.Cancelled.Body"; args = new object[] { booking.Id, User.Identity?.Name ?? "" }; }
+                        else { subjKey = "Email.Booking.Updated.Subject"; bodyKey = "Email.Booking.Updated.Body"; args = new object[] { booking.Id, action, note ?? "" }; }
 
-                        if (action == "Requested")
-                        {
-                            subject = _L["Email.Booking.Requested.Subject"];
-                            body = string.Format(_L["Email.Booking.Requested.Body"], booking.Id, User.Identity?.Name);
-                        }
-                        else if (action == "CancelledByStudent")
-                        {
-                            subject = string.Format(_L["Email.Booking.Cancelled.Subject"], booking.Id);
-                            body = string.Format(_L["Email.Booking.Cancelled.Body"], booking.Id, User.Identity?.Name);
-                        }
-                        else if (action == "MarkPaid")
-                        {
-                            subject = string.Format(_L["Email.Booking.Paid.Subject"], booking.Id);
-                            body = string.Format(_L["Email.Booking.Paid.Body"], booking.Id);
-                        }
-                        else
-                        {
-                            subject = _L["Email.Booking.Updated.Subject"];
-                            body = string.Format(_L["Email.Booking.Updated.Body"], booking.Id, action, note ?? "");
-                        }
-
-                        await SafeSendEmailAsync(teacherUser.Email, subject, body);
+                        await NotifyFireAndForgetAsync(async () => await _notifier.SendLocalizedEmailAsync(teacherUser, subjKey, bodyKey, args));
                     }
                 }
-                catch
-                {
-                    // swallow; notification is best-effort
-                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Booking notify teacher failed"); }
             }
         }
 
-        private async Task SafeSendEmailAsync(string to, string subject, string htmlBody)
+        private async Task NotifyFireAndForgetAsync(Func<Task> work)
         {
-            try
-            {
-                if (_emailSender != null)
-                    await _emailSender.SendEmailAsync(to, subject, htmlBody);
-            }
-            catch
-            {
-                // swallow to avoid interfering with user flow
-            }
+            if (work == null) return; try { if (_env?.IsDevelopment() == true) await work(); else _ = Task.Run(work); } catch (Exception ex) { _logger.LogError(ex, "NotifyFireAndForget failed"); }
         }
-
-        #endregion
     }
 }
+
 
 
 

@@ -19,21 +19,34 @@
                         <partial name="_ValidationScriptsPartial" />
 
                         <div class="mb-3">
-                            <label asp-for="Input.FullName" class="form-label">@L["Profile.DisplayNameLabel"]</label>
+                            <label asp-for="Input.FullName" class="form-label">@L["Profile.DisplayNameLabel"] </label>
                             <input asp-for="Input.FullName" class="form-control" />
                             <span asp-validation-for="Input.FullName" class="text-danger"></span>
                         </div>
 
                         <div class="mb-3">
-                            <label asp-for="Input.PhoneNumber" class="form-label">@L["Profile.PhoneLabel"]</label>
+                            <label asp-for="Input.PhoneNumber" class="form-label">@L["Profile.PhoneLabel"] <i class="fa-brands fa-whatsapp"></i></label>
                             <input asp-for="Input.PhoneNumber" class="form-control" />
                             <span asp-validation-for="Input.PhoneNumber" class="text-danger"></span>
                         </div>
-
+                        <div class="mb-3">
+                            <label asp-for="Input.GuardianPhoneNumber" class="form-label">@L["Profile.PhoneGuardianLabel"] <i class="fa-brands fa-whatsapp"></i></label>
+                            <input asp-for="Input.GuardianPhoneNumber" class="form-control" />
+                            <span asp-validation-for="Input.GuardianPhoneNumber" class="text-danger"></span>
+                        </div>
                         <div class="mb-3">
                             <label asp-for="Input.DateOfBirth" class="form-label">@L["Profile.DateOfBirth"]</label>
                             <input asp-for="Input.DateOfBirth" class="form-control" type="date" />
                             <span asp-validation-for="Input.DateOfBirth" class="text-danger"></span>
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Input.PreferredLanguage" class="form-label">@L["Profile.PreferredLanguage"]</label>
+                            <select asp-for="Input.PreferredLanguage" class="form-control">
+                                <option value="en">English</option>
+                                <option value="it">Italiano</option>
+                                <option value="ar">العربية</option>
+                            </select>
+                            <span asp-validation-for="Input.PreferredLanguage" class="text-danger"></span>
                         </div>
 
                         <div class="mb-3">

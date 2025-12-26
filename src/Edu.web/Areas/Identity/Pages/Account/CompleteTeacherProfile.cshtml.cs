@@ -6,6 +6,7 @@ using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
 using Edu.Infrastructure.Storage;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Localization;
@@ -52,6 +53,7 @@ public class InputModel
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public DateTime? DateOfBirth { get; set; }
+    public string PreferredLanguage { get; set; } = "it";
 
     // Display-only URLs
     public string? PhotoDisplayUrl { get; set; }
@@ -79,7 +81,7 @@ public class InputModel
             Input.FullName = user.FullName;
             Input.PhoneNumber = await _userManager.GetPhoneNumberAsync(user);
             Input.DateOfBirth = user.DateOfBirth;
-
+            Input.PreferredLanguage = string.IsNullOrWhiteSpace(user.PreferredLanguage) ? "it" : user.PreferredLanguage;
             // Photo (new key or old url fallback)
             var photoKey = user.PhotoStorageKey ?? user.PhotoUrl;
             Input.PhotoDisplayUrl = await _files.GetPublicUrlAsync(photoKey);
@@ -176,7 +178,15 @@ public class InputModel
             --------------------------- */
             user.FullName = Input.FullName;
             user.DateOfBirth = Input.DateOfBirth;
-
+            // SAVE preferred language (validate allowed values)
+            var chosen = string.IsNullOrWhiteSpace(Input.PreferredLanguage) ? "it" : Input.PreferredLanguage;
+            var allowed = new[] { "en", "it", "ar", "en-US", "it-IT", "ar-SA" };
+            if (!allowed.Contains(chosen))
+            {
+                // normalize by taking first two letters
+                chosen = chosen.Length >= 2 ? chosen.Substring(0, 2).ToLowerInvariant() : "it";
+            }
+            user.PreferredLanguage = chosen;
             await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber ?? "");
             await _userManager.UpdateAsync(user);
 
@@ -200,7 +210,23 @@ public class InputModel
 
                 teacher.IntroVideoUrl = YouTubeHelper.ExtractYouTubeId(Input.IntroVideoUrl ?? "");
             }
-
+            // Set the request-culture cookie so the user's language selection applies immediately
+            try
+            {
+                var requestCulture = new RequestCulture(user.PreferredLanguage);
+                var cookieValue = CookieRequestCultureProvider.MakeCookieValue(requestCulture);
+                Response.Cookies.Append(CookieRequestCultureProvider.DefaultCookieName, cookieValue, new CookieOptions
+                {
+                    Expires = DateTimeOffset.UtcNow.AddYears(1),
+                    HttpOnly = false,
+                    IsEssential = true,
+                    Secure = Request.IsHttps
+                });
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to set localization cookie for user {UserId} with culture {Culture}", user.Id, user.PreferredLanguage);
+            }
             await _db.SaveChangesAsync();
             await _signInManager.RefreshSignInAsync(user);
 

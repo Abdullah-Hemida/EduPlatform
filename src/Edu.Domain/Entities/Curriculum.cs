@@ -20,6 +20,8 @@ namespace Edu.Domain.Entities
 
         // Lessons directly under Curriculum (no module)
         public ICollection<SchoolLesson> SchoolLessons { get; set; } = new List<SchoolLesson>();
+        public ICollection<StudentCurriculum> StudentCurricula { get; set; } = new List<StudentCurriculum>();
+
     }
 
     public class CurriculumConfiguration : IEntityTypeConfiguration<Curriculum>

@@ -1,84 +1,132 @@
 ﻿@model Edu.Web.Areas.Shared.ViewModels.BookingDetailsVm
 @using Edu.Domain.Entities
+@using System.Globalization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
     ViewData["Title"] = L["Booking.Details"] ?? "Booking details";
-    var csrfToken = Context.Request.Headers["RequestVerificationToken"].ToString();
+    var isRtl = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string fallbackAvatar = Url.Content("~/images/default-avatar.png");
 }
 
-<div class="row">
-    <div class="col-md-8">
+<div class="row g-3">
+    <!-- MAIN COLUMN -->
+    <div class="col-lg-8">
         <div class="card mb-3">
             <div class="card-body">
-                <h4>@L["Booking.Details"]</h4>
+                <!-- header -->
+                <div class="d-flex flex-column flex-sm-row align-items-start justify-content-between gap-2 mb-3">
+                    <div>
+                        <h4 class="mb-0">@L["Booking.Details"]</h4>
+                    </div>
 
-                <dl class="row">
-                    <dt class="col-sm-3">@L["Slots.Times"]</dt>
-                    <dd class="col-sm-9">@Model.SlotTimes</dd>
+                    <div>
+                        <a asp-action="Index" class="btn btn-light btn-sm">
+                             @L["Common.Back"]
+                        </a>
+                    </div>
+                </div>
 
-                    <dt class="col-sm-3">@L["Booking.Student"]</dt>
-                    <dd class="col-sm-9">@Model.StudentName (@Model.StudentEmail)</dd>
-                    <dd class="col-sm-9">@Model.StudentPhoneNumber</dd>
+                <!-- cover + info: wrap on small screens, order flipped by Bootstrap order-md-* -->
+                <div class="d-flex flex-column flex-md-row flex-wrap gap-3">
+                    <!-- info -->
+                    <div class="flex-grow-1 min-vw-0 @(isRtl ? "order-md-1" : "order-md-2")">
 
-                    <dt class="col-sm-3">@L["Booking.Status"]</dt>
-                    <dd class="col-sm-9">
-                        <span id="booking-status" class="badge @(Model.Status == BookingStatus.Paid ? "bg-success" : Model.Status == BookingStatus.Pending ? "bg-warning text-dark" : "bg-secondary")">
-                            @Model.Status
-                        </span>
-                    </dd>
+                        <div class="row g-2 mb-3">
+                            <div class="col-12 col-sm-6">
+                                <div class="small text-muted">@L["Slots.Times"]</div>
+                                <div class="fw-semibold text-truncate">@Model.SlotTimes</div>
+                            </div>
 
-                    <dt class="col-sm-3">@L["Booking.Meet"]</dt>
-                    <dd class="col-sm-9" id="meet-section">
-                        @if (!string.IsNullOrEmpty(Model.MeetUrl))
-                        {
-                            <a id="meet-link" href="@Model.MeetUrl" class="btn btn-sm btn-primary" target="_blank">@L["Booking.OpenMeet"]</a>
-                        }
-                        else
-                        {
-                            <span class="text-muted">@L["Booking.NoMeetUrl"]</span>
-                        }
-                    </dd>
+                            <div class="col-12 col-sm-6">
+                                <div class="small text-muted">@L["Booking.Status"]</div>
+                                <div>
+                                    <span class="badge @(Model.Status == BookingStatus.Paid ? "bg-success" : Model.Status == BookingStatus.Pending ? "bg-warning text-dark" : "bg-secondary")">
+                                        @(L[$"Booking.Status.{Model.Status}"] ?? Model.Status.ToString())
+                                    </span>
+                                </div>
+                            </div>
 
-                    <dt class="col-sm-3">@L["Booking.Notes"]</dt>
-                    <dd class="col-sm-9">@Model.Notes</dd>
-                </dl>
+                            <div class="col-12 col-sm-6">
+                                <div class="small text-muted">@L["Booking.Price"]</div>
+                                <div class="fw-semibold text-truncate">@Model.PriceLabel</div>
+                            </div>
 
-                <div class="mt-3 d-flex gap-2">
-                    <a asp-action="Index" class="btn btn-light">
-                        <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
-                        <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>@L["Common.Back"]
-                    </a>
+                            <div class="col-12 col-sm-6">
+                                <div class="small text-muted">@L["Booking.RequestedAt"]</div>
+                                <div class="small text-muted">@Model.RequestedDateUtc.ToLocalTime().ToString("g")</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-2" />
+
+                        <!-- student info: avatar + details -->
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <img src="@(string.IsNullOrWhiteSpace(Model.StudentImageUrl) ? fallbackAvatar : Model.StudentImageUrl)"
+                                 alt="@Model.StudentName"
+                                 class="rounded-circle"
+                                 style="width:56px;height:56px;object-fit:cover;"
+                                 loading="lazy"
+                                 onerror="this.onerror=null;this.src='@fallbackAvatar'" />
+
+                            <div class="min-vw-0">
+                                <div class="fw-semibold text-truncate">@(Model.StudentName ?? "-")</div>
+                                <div class="small text-muted text-truncate">@Model.StudentEmail</div>
+                                <div class="small text-muted text-truncate">@Model.StudentPhoneNumber</div>
+                                <div>@L["GuardianPhoneNumber"] : @Model.GuardianPhoneNumber</div>
+                            </div>
+                        </div>
+
+                        <!-- meet and notes in responsive grid
+                             align labels to right on md+ when RTL using conditional classes -->
+                        <div class="row g-2">
+                            <div class="col-12 col-sm-4 @(isRtl ? "text-md-end" : "") text-muted">@L["Booking.Meet"]</div>
+                            <div class="col-12 col-sm-8">
+                                @if (!string.IsNullOrEmpty(Model.MeetUrl))
+                                {
+                                    <a href="@Model.MeetUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary w-100 w-sm-auto">
+                                        @L["Booking.OpenMeet"]
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">@L["Booking.NoMeetUrl"]</span>
+                                }
+                            </div>
+
+                            <div class="col-12 col-sm-4 @(isRtl ? "text-md-end" : "") text-muted">@L["Booking.Notes"]</div>
+                            <div class="col-12 col-sm-8">
+                                <div class="small">@(!string.IsNullOrWhiteSpace(Model.Notes) ? Model.Notes : "-")</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <h5>@L["Admin.Notes"]</h5>
-        <ul class="list-group mb-3" id="moderation-logs">
-            @foreach (var log in Model.ModerationLogs)
+        <!-- moderation logs -->
+        <h5 class="mb-2">@L["Admin.Notes"]</h5>
+        <ul class="list-group mb-3">
+            @if (Model.ModerationLogs == null || !Model.ModerationLogs.Any())
             {
-                <li class="list-group-item">
-                    <div class="small text-muted">@log.CreatedAtUtc.ToLocalTime():g — @log.ActorName</div>
-                    <div><strong>@log.Action</strong> — @log.Note</div>
-                </li>
+                <li class="list-group-item text-muted">@L["Admin.NoRecords"]</li>
+            }
+            else
+            {
+                @foreach (var log in Model.ModerationLogs)
+                {
+                    <li class="list-group-item">
+                        <div class="d-flex flex-column justify-content-center align-items-center">
+                            <div class="small text-muted">@log.CreatedAtUtc.ToLocalTime()</div>
+                            <div class="small text-muted">@log.ActorName</div>
+                        </div>
+                        <div class="mt-1"><strong>@log.Action</strong></div>
+                        <div class="small text-muted">@log.Note</div>
+                    </li>
+                }
             }
         </ul>
     </div>
-
-    <div class="col-md-4">
-        <div class="card sticky-top">
-            <div class="card-body">
-                <h6>@L["Booking.UpdateMeet"]</h6>
-                <form id="updateMeetForm" asp-action="UpdateMeetUrl" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="BookingId" value="@Model.Id" />
-                    <div class="mb-2">
-                        <label class="form-label">@L["Booking.MeetUrl"]</label>
-                        <input name="MeetUrl" value="@Model.MeetUrl" class="form-control" />
-                    </div>
-                    <button type="submit" class="btn btn-primary">@L["Booking.UpdateMeet"]</button>
-                </form>
-            </div>
-        </div>
-    </div>
 </div>
+
+
