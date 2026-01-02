@@ -13,6 +13,8 @@
   "Nav.TeacherDashboard": "Statistics dashboard",
   "Nav.StudentDashboard": "Statistics dashboard",
   "Nav.ControlPannel": "Control panel",
+  "Home.Counts": "Counts",
+  "Home.CountsSubtitle": "General counts",
 
   "Nav.ReactiveCourses": "Reactive courses",
   "Nav.ReactiveEnrollments": "Enrollments",

@@ -23,8 +23,6 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly INotificationService _notifier;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<BookingsController> _logger;
-
-
         public BookingsController(ApplicationDbContext db, IStringLocalizer<SharedResource> L, INotificationService notifier, IWebHostEnvironment env, ILogger<BookingsController> logger)
         {
             _db = db;

@@ -294,7 +294,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             static string GetLevelDisplayName(Level? level, CultureInfo culture)
             {
                 if (level == null) return string.Empty;
-                var two = (culture?.TwoLetterISOLanguageName ?? "en").ToLowerInvariant();
+                var two = (culture?.TwoLetterISOLanguageName ?? "it").ToLowerInvariant();
                 return two switch
                 {
                     "ar" => string.IsNullOrWhiteSpace(level.NameAr) ? (level.NameEn ?? level.NameIt ?? "") : level.NameAr,

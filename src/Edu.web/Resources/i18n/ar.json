@@ -12,6 +12,8 @@
   "Nav.TeacherDashboard": "لوحة الإحصائيات",
   "Nav.StudentDashboard": "لوحة الإحصائيات",
   "Nav.ControlPannel": "لوحة التحكم",
+  "Home.Counts": "إحصاءات",
+  "Home.CountsSubtitle": "الإحصاءات الرئيسية",
 
   "Nav.MyPrivateCourses": "دوراتي المسجلة",
   "Nav.ReactiveCourses": "الدورات التفاعلية",

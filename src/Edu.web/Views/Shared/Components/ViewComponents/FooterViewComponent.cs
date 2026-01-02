@@ -1,8 +1,11 @@
 ﻿using Edu.Infrastructure.Data;
 using Edu.Web.Resources;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
+using System.Globalization;
 
 namespace Edu.Web.Views.Shared.Components.ViewComponents
 {
@@ -10,32 +13,68 @@ namespace Edu.Web.Views.Shared.Components.ViewComponents
     {
         private readonly ApplicationDbContext _db;
         private readonly IStringLocalizer<SharedResource> _localizer;
-        public FooterViewComponent(ApplicationDbContext db, IStringLocalizer<SharedResource> localizer)
+        private readonly ILogger<FooterViewComponent> _logger;
+
+        public FooterViewComponent(
+            ApplicationDbContext db,
+            IStringLocalizer<SharedResource> localizer,
+            ILogger<FooterViewComponent> logger)
         {
             _db = db;
             _localizer = localizer;
+            _logger = logger;
         }
 
         public async Task<IViewComponentResult> InvokeAsync()
         {
-            var culture = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName ?? "en";
+            // Prefer request-localization UI culture if available
+            var requestCultureFeature = HttpContext.Features.Get<IRequestCultureFeature>();
+            var uiCulture = requestCultureFeature?.RequestCulture?.UICulture ?? CultureInfo.CurrentUICulture;
+            var culture = (uiCulture?.TwoLetterISOLanguageName ?? "ar").ToLowerInvariant();
 
+            _logger.LogInformation("FooterViewComponent invoked. Request UI culture: {Culture}", uiCulture?.Name ?? "unknown");
+
+            // 1) try requested culture
             var contacts = await _db.FooterContacts
                 .AsNoTracking()
-                .Where(c => c.Culture == culture)
+                .Where(c => c.Culture != null && c.Culture.ToLower() == culture)
                 .OrderBy(c => c.Order)
                 .ToListAsync();
 
-            // fallback: if no contacts for current culture, try "en"
-            if (!contacts.Any() && culture != "en")
+            // 2) try english explicitly (useful if your app expects en fallback)
+            if (!contacts.Any() && !string.Equals(culture, "ar", StringComparison.OrdinalIgnoreCase))
             {
                 contacts = await _db.FooterContacts
                     .AsNoTracking()
-                    .Where(c => c.Culture == "en")
+                    .Where(c => c.Culture != null && c.Culture.ToLower() == "ar")
                     .OrderBy(c => c.Order)
                     .ToListAsync();
             }
 
+            // 3) FINAL fallback: if still none, return *any* available contacts (DB contains only one language)
+            if (!contacts.Any())
+            {
+                contacts = await _db.FooterContacts
+                    .AsNoTracking()
+                    .OrderBy(c => c.Order)
+                    .ToListAsync();
+
+                if (contacts.Any())
+                {
+                    var dbCultures = string.Join(", ", contacts.Select(c => c.Culture).Distinct());
+                    _logger.LogWarning("No footer contacts for {Requested}. Falling back to available DB cultures: {DbCultures}", culture, dbCultures);
+                }
+                else
+                {
+                    _logger.LogWarning("No footer contacts found at all in DB.");
+                }
+            }
+            else
+            {
+                _logger.LogInformation("Loaded {N} footer contact(s) for culture '{Culture}'", contacts.Count, culture);
+            }
+
+            // social links are global in your current model; keep as-is
             var social = await _db.SocialLinks
                 .AsNoTracking()
                 .Where(s => s.IsVisible)
@@ -53,8 +92,6 @@ namespace Edu.Web.Views.Shared.Components.ViewComponents
                 SocialLinks = social,
                 Copyright = copyright
             };
-
-
             return View(vm);
         }
     }
@@ -67,4 +104,5 @@ namespace Edu.Web.Views.Shared.Components.ViewComponents
         public string? Copyright { get; set; }
     }
 }
+
 
