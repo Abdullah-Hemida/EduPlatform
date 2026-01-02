@@ -1,6 +1,5 @@
 ﻿{
   "Site.Title": "Scuola Generazioni Future",
-  "Site.Title2": "Edu Platform",
 
   "Nav.Home": "Home",
   "Nav.Courses": "Corsi",
@@ -42,22 +41,6 @@
   "Common.Details": "Dettagli",
   "Common.Back": "Indietro",
   "Search.Placeholder": "Cerca per nome, email, username o corso...",
-
-  "Home.ActivitiesTitle": "Attività Generali",
-  "Home.ActivitiesSubTitle": "Scopri i nostri vivaci programmi educativi e culturali",
-  "Home.Activities": "Lezioni settimanali di arabo e studi islamici.||Laboratori artistici, teatro e gite scolastiche.||Eventi per le occasioni islamiche: Ramadan, Eid e il compleanno del Profeta.||Attività familiari che rafforzano la comunicazione tra scuola e genitori.",
-  "Home.Counts": "Statistiche chiave",
-  "Home.CountsSubTitle": "La nostra comunità educativa in crescita",
-
-  "Home.Title": "Scuola delle Generazioni Future",
-  "Home.AboutTitle": "Informazioni sulla Scuola",
-  "Home.AboutText": "La Scuola delle Generazioni Future, fondata nel 2012, è un'istituzione educativa senza scopo di lucro che mira a insegnare la lingua araba e l'educazione islamica a bambini e giovani provenienti da contesti diversi, concentrandosi sulla costruzione di una personalità equilibrata che unisca identità islamica e apertura positiva alla società europea.",
-  "Home.ObjectivesTitle": "Obiettivi della Scuola",
-  "Home.Objectives": "Insegnare la lingua araba con metodi moderni e semplificati.||Instillare i principi della religione islamica in modo compassionevole e educativo.||Coltivare valori di tolleranza, rispetto, cooperazione e disciplina negli studenti.||Sostenere la diversità culturale e promuovere la comprensione reciproca.||Rafforzare il legame del bambino con la famiglia e la comunità attraverso attività educative congiunte.",
-  "Home.AchievementsTitle": "Principali Risultati",
-  "Home.Achievements": "Sviluppo di curricula specializzati adatti all'ambiente dei bambini europei.||Organizzazione regolare di attività culturali, religiose e sportive.||Collaborazioni con associazioni e istituzioni educative locali.",
-  "Home.CurriculaTitle": "Programmi di studio",
-  "Home.Curricula": "Arabo: lettura, scrittura ed espressione orale.||Educazione islamica: biografia del Profeta, giurisprudenza, credo e valori.||Sacro Corano: memorizzazione, recitazione e interpretazione semplificata.",
 
   "School.FilterByLevel": "Filtra per livello",
   "School.FilterHelp": "Mostra i programmi per un livello specifico",
@@ -166,13 +149,6 @@
   "Teacher.Approved": "Il tuo account insegnante è stato approvato.",
   "Teacher.Rejected": "La tua richiesta insegnante è stata rifiutata.",
   "Teacher.Document.Added": "Documento caricato con successo",
-
-  "Landing.Hero.Title": "Impara dai migliori istruttori",
-  "Landing.Hero.Subtitle": "Crea o unisciti ai corsi e amplia le tue conoscenze",
-  "Landing.CallToAction": "Sfoglia i corsi",
-  "Hero.Title": "Imparare oggi,<br>Guidare domani",
-  "Hero.Description": "Siamo un team di insegnanti di talento che educano la gioventù del futuro",
-  "Hero.Button": "Inizia",
 
   "Admin.Title": "Titolo",
   "Admin.SiteTitle": "Pannello di amministrazione Edu",

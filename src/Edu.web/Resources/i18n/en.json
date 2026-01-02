@@ -42,22 +42,6 @@
   "Search.Placeholder": "Search by name, email, username or course...",
   "Search.Categories": "Categories",
 
-  "Home.ActivitiesTitle": "General Activities",
-  "Home.ActivitiesSubTitle": "Discover our vibrant educational and cultural programs",
-  "Home.Activities": "Weekly lessons in Arabic and Islamic studies.||Arts workshops, theater, and school trips.||Events for Islamic occasions: Ramadan, Eid, and the Prophet's Birthday.||Family activities that enhance the school's communication with parents.",
-  "Home.Counts": "Statistiche chiave",
-  "Home.CountsSubTitle": "Our growing educational community",
-
-  "Home.Title": "Future Generations School",
-  "Home.AboutTitle": "About the School",
-  "Home.AboutText": "Future Generations School, founded in 2012, is a non-profit educational institution that aims to teach the Arabic language and Islamic education to children and young people from diverse backgrounds, focusing on building a balanced personality that combines Islamic identity with positive openness to European society.",
-  "Home.ObjectivesTitle": "School Objectives",
-  "Home.Objectives": "Teaching the Arabic language using modern and simplified methods.||Instilling the principles of the Islamic religion in a compassionate and educational manner.||Cultivating values of tolerance, respect for others, cooperation, and discipline in students.||Supporting cultural diversity and promoting understanding of others.||Strengthening the child's relationship with their family and community through joint educational activities.",
-  "Home.AchievementsTitle": "Key Achievements",
-  "Home.Achievements": "Developing specialized curricula suitable for the European child's environment.||Organizing regular activities: cultural, religious, and sports.||Partnerships and collaborations with local associations and educational institutions.",
-  "Home.CurriculaTitle": "Curricula",
-  "Home.Curricula": "Arabic: Reading, writing, and oral expression.||Islamic Education: Biography of the Prophet, jurisprudence, creed, and values.||Holy Quran: Memorization, recitation, and simplified interpretation.",
-
   "School.FilterByLevel": "Filter by level",
   "School.FilterHelp": "Show curricula for a particular level",
   "School.Curricula.One": "1 curriculum",
@@ -167,13 +151,6 @@
   "Teacher.Rejected": "Your teacher application was rejected.",
   "Teacher.Document.Added": "Document uploaded successfully",
 
-  "Landing.Hero.Title": "Learn from the best instructors",
-  "Landing.Hero.Subtitle": "Create or join courses & grow your knowledge",
-  "Landing.CallToAction": "Browse Courses",
-  "Hero.Title": "Learning Today,<br>Leading Tomorrow",
-  "Hero.Description": "We are a team of talented teachers educating the youth of the future",
-  "Hero.Button": "Get Started",
-
   "Admin.Title": "Title",
   "Admin.SiteTitle": "Edu Admin Panel",
   "Admin.SiteTitleShort": "EduAdmin",
@@ -201,7 +178,6 @@
   "Admin.StudentCurriculaHint": "Select which curricula this student should have access to.",
   "Admin.NoCurricula": "No curricula available.",
   "Admin.StudentAllowed": "Student's permissibility status",
-
 
   "Admin.Search": "Search",
   "Admin.SearchPlaceholder": "Search by name, email, username...",
