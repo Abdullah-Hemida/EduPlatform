@@ -14,7 +14,6 @@ using Edu.Web.Areas.Student.ViewModels;
 namespace Edu.Web.Areas.Student.Controllers
 {
     [Area("Student")]
-    [Authorize(Roles = "Student,Admin,Teacher")]
     public class OnlineSchoolEnrollmentsController : Controller
     {
         private readonly ApplicationDbContext _db;
@@ -45,6 +44,7 @@ namespace Edu.Web.Areas.Student.Controllers
 
         // GET: Student/OnlineSchool/Details/5
         [HttpGet("Student/OnlineSchool/Details/{id:int}")]
+        [AllowAnonymous]
         public async Task<IActionResult> Details(int id)
         {
             // 1) load lightweight course + months (lessons count only)
@@ -92,8 +92,12 @@ namespace Edu.Web.Areas.Student.Controllers
                 }
             }
 
-            // 3) Current student id (null if not authenticated as student)
-            var studentId = _userManager.GetUserId(User);
+            // 3) Only treat the current user as a student if they are in Student role
+            string? studentId = null;
+            if (User?.Identity?.IsAuthenticated == true && User.IsInRole("Student"))
+            {
+                studentId = _userManager.GetUserId(User);
+            }
 
             // Build base months list (no payment state yet)
             var monthsBase = course.Months.Select(m => new OnlineStudentCourseMonthVm
@@ -106,7 +110,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 LessonsCount = m.LessonsCount
             }).OrderBy(m => m.MonthIndex).ToList();
 
-            // Public view when not authenticated
+            // Public view when not authenticated as Student
             if (string.IsNullOrEmpty(studentId))
             {
                 var publicVm = new OnlineStudentCourseDetailsVm
@@ -143,19 +147,18 @@ namespace Edu.Web.Areas.Student.Controllers
             }
 
             // 6) Build months VMs with per-student payment state + permissions
-            // gating logic (same style as your sample)
-            const int allowRequestDayOfMonth = 15;
-            var utcNow = DateTime.UtcNow;
-            var dayOfMonth = utcNow.Day;
-
             foreach (var m in monthsBase)
             {
                 var payment = paymentList.FirstOrDefault(p => p.OnlineCourseMonthId == m.Id);
                 m.PaymentId = payment?.Id;
                 m.MyPaymentStatus = payment?.Status;
 
-                // **SIMPLE RULE:** allow request if admin marked the month ready and student hasn't requested
-                m.CanRequestPayment = m.IsReadyForPayment && (payment == null);
+                // mark explicit boolean for convenience (Paid means student already paid for this month)
+                m.HasPaidPayment = (payment != null && payment.Status == OnlineEnrollmentMonthPaymentStatus.Paid);
+
+                // Allow request only when admin marked ready AND the student doesn't already have a paid payment for that month.
+                // (If a Pending or Rejected payment exists, request button will be controlled by CanRequestPayment logic - here we only block when Paid)
+                m.CanRequestPayment = m.IsReadyForPayment && !m.HasPaidPayment && (payment == null);
 
                 m.CanCancelPayment = (payment != null && payment.Status == OnlineEnrollmentMonthPaymentStatus.Pending);
                 m.CanViewLessons = (payment != null && payment.Status == OnlineEnrollmentMonthPaymentStatus.Paid);
@@ -212,8 +215,6 @@ namespace Edu.Web.Areas.Student.Controllers
                         {
                             if (string.IsNullOrEmpty(f.PublicUrl))
                             {
-                                // storage key present in DB fields? Re-query the file resource to get storage key.
-                                // Best-effort: attempt to fetch by file id
                                 try
                                 {
                                     var fr = _db.FileResources.AsNoTracking().FirstOrDefault(x => x.Id == f.Id);
@@ -268,6 +269,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // POST: Student/OnlineSchoolEnrollments/Enroll
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> Enroll([FromForm] int courseId)
         {
             var studentId = _userManager.GetUserId(User);
@@ -329,6 +331,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // POST: Student/OnlineSchoolEnrollments/CancelEnroll
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> CancelEnroll([FromForm] int courseId)
         {
             var studentId = _userManager.GetUserId(User);
@@ -383,6 +386,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // POST: Student/OnlineSchoolEnrollments/RequestMonthPayment
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> RequestMonthPayment([FromForm] int courseId, [FromForm] int monthId)
         {
             var studentId = _userManager.GetUserId(User);
@@ -477,6 +481,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // POST: Student/OnlineSchoolEnrollments/CancelMonthPayment
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> CancelMonthPayment([FromForm] int paymentId)
         {
             var studentId = _userManager.GetUserId(User);
@@ -513,6 +518,7 @@ namespace Edu.Web.Areas.Student.Controllers
         }
 
         // GET: Student/OnlineSchoolEnrollments/MyEnrollments
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> MyEnrollments()
         {
             var studentId = _userManager.GetUserId(User);

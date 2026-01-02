@@ -189,6 +189,7 @@
   "Admin.FullName": "Nome completo",
   "Admin.Email": "Email",
   "Admin.Phone": "Telefono",
+  "Admin.StudentPhone": "Numero di telefono dello studente",
   "Admin.Roles": "Ruoli",
   "Admin.TeacherStatus": "Stato insegnante",
   "Admin.Actions": "Azioni",
@@ -479,6 +480,11 @@
   "ProfileComplete.SaveButton": "Salva e continua",
   "ProfileComplete.Student.Title": "Completa profilo studente",
   "ProfileSaved": "Profilo salvato con successo.",
+  "Validation.InvalidPhone": "Numero di telefono non valido. Includere il prefisso internazionale, es. +39 345 123 4567.",
+  "Profile.PhoneHelp": "Includere il prefisso internazionale, es. +39 345 123 4567.",
+  "Profile.PhoneHelpOptional": "Opzionale — includere il prefisso internazionale se disponibile.",
+  "Profile.UpdatePhoneFailed": "Impossibile aggiornare il numero di telefono.",
+  "Profile.UpdateFailed": "Impossibile aggiornare il profilo.",
   "Manage.TeacherProfile": "Profilo insegnante",
   "Manage.Security": "Cambiare la password",
   "Manage.OldPassword": "Vecchia password",
@@ -500,6 +506,7 @@
   "Profile.CVLabel": "CV",
   "Profile.NoCV": "Nessun CV caricato",
   "Profile.DateOfBirthLabel": "Data di nascita",
+  "Profile.DateOfBirth": "Data di nascita",
   "Profile.IntroVideoTitle": "Video introduttivo dell’insegnante",
   "Profile.NoIntroVideo": "Nessun video introduttivo fornito",
   "Profile.IntroVideoInvalid": "URL video introduttivo non valido",
@@ -514,6 +521,7 @@
   "Admin.DeletedShort": "Eliminati",
   "Admin.Curricula": "Scuola Curricula",
   "Admin.NumOfRecordedCourses": "Numero di corsi pre-preparati",
+  "Admin.Recent": "Pagamenti recenti",
 
   "Admin.EditCurriculum": "Modifica curriculum",
 
@@ -863,7 +871,8 @@
   "OnlineCourse.Published": "Il corso è stato pubblicato?",
   "ReactiveCourse.Live": "Lezione dal vivo",
   "OnlineSchool.NoCourses": "Non ci sono corsi",
-  "GuardianPhoneNumber": "Guardian Phone Number"
+  "GuardianPhoneNumber": "Guardian Phone Number",
+  "Footer.ContactNotPhoneWarning": "Il contatto fornito non sembra un numero di telefono; verrà comunque salvato."
 }
 
 

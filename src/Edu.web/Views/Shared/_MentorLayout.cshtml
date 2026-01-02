@@ -103,8 +103,7 @@
 
     <!-- Bootstrap core CSS (from lib) -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-
-    <!-- Font Awesome (Icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.min.css" />
     <link rel="stylesheet" href="~/lib/fontawesome/css/all.min.css" />
     <!-- Localization (RTL/LTR support) -->
     @if (ViewData["Direction"]?.ToString() == "rtl")
@@ -202,11 +201,6 @@
                 <!-- Right side items -->
                 <ul class="navbar-nav  align-items-lg-center gap-1 ms-3">
 
-                    <!-- Language Selector -->
-                    <li class="nav-item me-lg-2">
-                        @await Component.InvokeAsync("LanguageSelector", new { returnUrl = Context.Request.Path + Context.Request.QueryString })
-                    </li>
-
                     @if (!userIsAuthenticated)
                     {
                         <!-- Login link (becomes full-width inside collapsed menu) -->
@@ -264,6 +258,10 @@
                             </ul>
                         </li>
                     }
+                    <!-- Language Selector -->
+                    <li class="nav-item me-lg-2">
+                        @await Component.InvokeAsync("LanguageSelector", new { returnUrl = Context.Request.Path + Context.Request.QueryString })
+                    </li>
                 </ul>
             </div>
         </div>
@@ -305,19 +303,27 @@
        role="button" aria-label="Scroll to top" tabindex="0">
         <i class="fas fa-arrow-up" aria-hidden="true"></i>
     </a>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+<!-- load jQuery first (local copy you already have) -->
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
 
-    <!-- Bootstrap bundle (only one copy — keep this one) -->
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Bootstrap bundle (depends on Popper, but not on jQuery in v5) -->
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Mentor theme JS (after bootstrap) -->
-    <script src="~/vendor/mentor/js/mentor.js"></script>
+<!-- intl-tel-input (CDN) - remove integrity while testing; ensure it loads before your inline init -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js"></script>
+<!-- utils (optional but recommended for formatting/validation) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.min.js"></script>
 
-    <!-- jQuery Validation (after jQuery) -->
-    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
-    <script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js"></script>
+<!-- jQuery Validation (must come AFTER jQuery) -->
+<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js"></script>
 
-    @RenderSection("Scripts", required: false)
+<!-- Mentor theme JS (after core libs) -->
+<script src="~/vendor/mentor/js/mentor.js"></script>
+
+<!-- then your page scripts / inline scripts (these should run after the libs above) -->
+@RenderSection("Scripts", required: false)
+
 
     <script>
         // Smooth navbar scroll effect

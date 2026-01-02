@@ -2,7 +2,6 @@
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
-using Edu.Infrastructure.Services;
 using Edu.Web.Areas.Shared.ViewModels;
 using Edu.Web.Helpers;
 using Edu.Web.Resources;
@@ -11,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using System.Globalization;
 
 namespace Edu.Web.Areas.Teacher.Controllers
 {
@@ -198,6 +198,23 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     studentImageUrl = null;
                 }
             }
+            // determine default region code (two-letter ISO, e.g. "IT")
+            string defaultRegion = "IT";
+            try
+            {
+                // derive from current culture (e.g. "it-IT" -> RegionInfo -> "IT")
+                var regionInfo = new RegionInfo(CultureInfo.CurrentCulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                {
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+                }
+            }
+            catch
+            {
+                // ignore and keep fallback "IT"
+            }
+            var studentPhone = booking.Student?.User?.PhoneNumber;
+            var guardianPhone = booking.Student?.GuardianPhoneNumber;
 
             var vm = new BookingDetailsVm
             {
@@ -207,8 +224,10 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 StudentId = booking.StudentId,
                 StudentName = booking.Student?.User?.FullName,
                 StudentEmail = booking.Student?.User?.Email,
-                StudentPhoneNumber = booking.Student?.User?.PhoneNumber,
-                GuardianPhoneNumber = booking.Student.GuardianPhoneNumber,
+                StudentPhoneNumber = studentPhone,
+                StudentWhatsapp = PhoneHelpers.ToWhatsappDigits(studentPhone, defaultRegion),
+                GuardianPhoneNumber = guardianPhone,
+                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(guardianPhone, defaultRegion),
                 StudentImageUrl = string.IsNullOrEmpty(studentImageUrl) ? fallback : studentImageUrl, // new
                 TeacherId = booking.TeacherId,
                 TeacherName = User.Identity?.Name,

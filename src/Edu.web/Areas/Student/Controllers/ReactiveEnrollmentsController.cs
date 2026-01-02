@@ -14,7 +14,6 @@ using Microsoft.Extensions.Localization;
 namespace Edu.Web.Areas.Student.Controllers
 {
     [Area("Student")]
-    [Authorize(Roles = "Student,Admin,Teacher")]
     public class ReactiveEnrollmentsController : Controller
     {
         private readonly ApplicationDbContext _db;
@@ -44,6 +43,7 @@ namespace Edu.Web.Areas.Student.Controllers
 
         // GET: /Student/ReactiveCourses/Details/5
         [HttpGet("Student/ReactiveCourses/Details/{id:int}")]
+        [AllowAnonymous] // public; Admin/Teacher/Student may access but only Student role treated as 'student'
         public async Task<IActionResult> Details(int id)
         {
             var course = await _db.ReactiveCourses
@@ -76,7 +76,7 @@ namespace Edu.Web.Areas.Student.Controllers
 
             if (course == null) return NotFound();
 
-            // Resolve cover URL
+            // Resolve cover URL (best-effort)
             string? coverPublicUrl = null;
             if (!string.IsNullOrEmpty(course.CoverImageKey))
             {
@@ -84,7 +84,13 @@ namespace Edu.Web.Areas.Student.Controllers
                 catch { coverPublicUrl = course.CoverImageKey; }
             }
 
-            var studentId = _userManager.GetUserId(User);
+            // Only treat the current user as a student when they are in the Student role.
+            // This prevents Admins/Teachers from being mistaken for students in the UI.
+            string? studentId = null;
+            if (User?.Identity?.IsAuthenticated == true && User.IsInRole("Student"))
+            {
+                studentId = _userManager.GetUserId(User);
+            }
 
             var monthsBase = course.Months.Select(m => new StudentCourseMonthVm
             {
@@ -96,6 +102,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 LessonsCount = m.LessonsCount
             }).OrderBy(m => m.MonthIndex).ToList();
 
+            // If not a student (anonymous or admin/teacher) return public VM (no payment/enrollment info)
             if (string.IsNullOrEmpty(studentId))
             {
                 var publicVm = new StudentReactiveCourseDetailsVm
@@ -141,8 +148,12 @@ namespace Edu.Web.Areas.Student.Controllers
                 m.PaymentId = payment?.Id;
                 m.MyPaymentStatus = payment?.Status;
 
-                // SIMPLE rule: allow request only if admin marked month ready and student hasn't requested
-                m.CanRequestPayment = m.IsReadyForPayment && (payment == null);
+                // mark explicit boolean for convenience (Paid means student already paid for this month)
+                m.HasPaidPayment = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Paid);
+
+                // SIMPLE rule: allow request only if admin marked month ready AND student doesn't already have a paid payment for that month.
+                // keep previous behavior of using payment == null for initial request prevention.
+                m.CanRequestPayment = m.IsReadyForPayment && !m.HasPaidPayment && (payment == null);
 
                 m.CanCancelPayment = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Pending);
                 m.CanViewLessons = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Paid);
@@ -244,9 +255,11 @@ namespace Edu.Web.Areas.Student.Controllers
             return View(vm);
         }
 
+
         // POST: Student/ReactiveEnrollments/Enroll
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> Enroll([FromForm] int courseId)
         {
             var studentId = _userManager.GetUserId(User);
@@ -336,6 +349,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // POST: Student/ReactiveEnrollments/CancelEnroll
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> CancelEnroll([FromForm] int courseId)
         {
             var studentId = _userManager.GetUserId(User);
@@ -405,6 +419,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // POST: Student/ReactiveEnrollments/RequestMonthPayment
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> RequestMonthPayment([FromForm] int courseId, [FromForm] int monthId)
         {
             var studentId = _userManager.GetUserId(User);
@@ -525,6 +540,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // POST: Student/ReactiveEnrollments/CancelMonthPayment
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> CancelMonthPayment([FromForm] int paymentId)
         {
             var studentId = _userManager.GetUserId(User);

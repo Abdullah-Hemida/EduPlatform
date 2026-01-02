@@ -2,10 +2,13 @@
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
+using Edu.Web.Areas.Admin.ViewModels;
 using Edu.Web.Areas.Teacher.ViewModels;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace Edu.Web.Areas.Teacher.Controllers
@@ -40,6 +43,18 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 .AsNoTracking()
                 .Where(e => e.ReactiveCourse.TeacherId == teacherId)
                 .CountAsync();
+            // compute default region from admin UI culture (fallback to IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
 
             // Project only required columns (avoids loading whole entities / using Include)
             var query = _db.ReactiveEnrollments
@@ -52,6 +67,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     Id = e.Id,
                     StudentName = e.Student!.User!.FullName ?? e.Student!.User!.UserName ?? string.Empty,
                     StudentPhone = e.Student!.User!.PhoneNumber,
+                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(e.Student!.User!.PhoneNumber, defaultRegion),
                     StudentImageKey = e.Student!.User!.PhotoStorageKey,
                     CourseTitle = e.ReactiveCourse!.Title ?? string.Empty,
                     CreatedAtUtc = e.CreatedAtUtc,
@@ -105,12 +121,12 @@ namespace Edu.Web.Areas.Teacher.Controllers
         public async Task<IActionResult> Details(int id)
         {
             var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (teacherId == null) return Unauthorized();
+            if (string.IsNullOrEmpty(teacherId)) return Unauthorized();
 
-            // query ensures teacher owns the course (single DB round-trip)
+            // 1) load enrollment and verify the course belongs to this teacher (single DB op)
             var enrollment = await _db.ReactiveEnrollments
                 .AsNoTracking()
-                .Where(e => e.Id == id && e.ReactiveCourse.TeacherId == teacherId)
+                .Where(e => e.Id == id && e.ReactiveCourse != null && e.ReactiveCourse.TeacherId == teacherId)
                 .Select(e => new
                 {
                     e.Id,
@@ -118,81 +134,140 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     CourseTitle = e.ReactiveCourse!.Title,
                     CourseCoverKey = e.ReactiveCourse!.CoverImageKey,
                     StudentId = e.StudentId,
-                    StudentName = e.Student!.User!.FullName ?? e.Student!.User!.UserName,
-                    StudentEmail = e.Student!.User!.Email,
-                    StudentPhoneNumber = e.Student!.User!.PhoneNumber,
-                    GuardianPhoneNumber = e.Student.GuardianPhoneNumber,
-                    e.CreatedAtUtc,
+                    StudentIdFallback = e.StudentId, // fallback
+                    StudentUserId = e.StudentId,
+                    CreatedAtUtc = e.CreatedAtUtc,
                     e.IsApproved,
-                    e.IsPaid,
-                    MonthPayments = e.MonthPayments.Select(mp => new
-                    {
-                        mp.Id,
-                        mp.ReactiveCourseMonthId,
-                        MonthIndex = mp.ReactiveCourseMonth != null ? mp.ReactiveCourseMonth.MonthIndex : 0,
-                        mp.Amount,
-                        mp.Status,
-                        mp.AdminNote,
-                        mp.PaymentReference,
-                        mp.CreatedAtUtc,
-                        mp.PaidAtUtc
-                    }).ToList()
+                    e.IsPaid
                 })
                 .FirstOrDefaultAsync();
 
-            if (enrollment == null) return NotFound(); // either not found or not belonging to this teacher
+            if (enrollment == null) return NotFound();
 
-            // resolve cover URL (if exists)
-            string? coverUrl = null;
-            if (!string.IsNullOrWhiteSpace(enrollment.CourseCoverKey))
+            // 2) load payments for this enrollment
+            var payments = await _db.ReactiveEnrollmentMonthPayments
+                .AsNoTracking()
+                .Where(p => p.ReactiveEnrollmentId == id)
+                .ToListAsync();
+
+            // 3) load months for course
+            var months = await _db.ReactiveCourseMonths
+                .AsNoTracking()
+                .Where(m => m.ReactiveCourseId == enrollment.ReactiveCourseId)
+                .OrderBy(m => m.MonthIndex)
+                .Select(m => new { m.Id, m.MonthIndex })
+                .ToListAsync();
+
+            var monthIds = months.Select(m => m.Id).ToList();
+
+            // 4) compute lesson counts grouped by month id
+            Dictionary<int, int> lessonCounts = new();
+            if (monthIds.Any())
+            {
+                var grouped = await _db.ReactiveCourseLessons
+                    .AsNoTracking()
+                    .Where(l => monthIds.Contains(l.ReactiveCourseMonthId))
+                    .GroupBy(l => l.ReactiveCourseMonthId)
+                    .Select(g => new { MonthId = g.Key, Count = g.Count() })
+                    .ToListAsync();
+
+                lessonCounts = grouped.ToDictionary(x => x.MonthId, x => x.Count);
+            }
+
+            // 5) load student user and student entity
+            ApplicationUser? studentUser = null;
+            Domain.Entities.Student? student = null;
+            if (!string.IsNullOrEmpty(enrollment.StudentId))
+            {
+                studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId);
+                student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == enrollment.StudentId);
+            }
+
+            // 6) resolve student photo URL (best-effort)
+            string? studentPhotoUrl = null;
+            if (studentUser != null && !string.IsNullOrEmpty(studentUser.PhotoStorageKey))
             {
                 try
                 {
-                    coverUrl = await _fileStorage.GetPublicUrlAsync(enrollment.CourseCoverKey);
+                    studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey);
                 }
                 catch
                 {
-                    coverUrl = null;
+                    studentPhotoUrl = studentUser.PhotoUrl ?? studentUser.PhotoStorageKey;
                 }
             }
+            else studentPhotoUrl = studentUser?.PhotoUrl;
 
-            var payments = enrollment.MonthPayments
-                .OrderBy(mp => mp.MonthIndex)
-                .Select(mp => new MonthPaymentVm
-                {
-                    Id = mp.Id,
-                    ReactiveCourseMonthId = mp.ReactiveCourseMonthId,
-                    MonthIndex = mp.MonthIndex,
-                    Amount = mp.Amount,
-                    AmountLabel = mp.Amount.ToEuro(),
-                    Status = mp.Status,
-                    AdminNote = mp.AdminNote,
-                    PaymentReference = mp.PaymentReference,
-                    CreatedAtUtc = mp.CreatedAtUtc,
-                    PaidAtUtc = mp.PaidAtUtc
-                }).ToList();
-
-            var vm = new ReactiveEnrollmentDetailsVm
+            // resolve course cover url (best-effort)
+            string? courseCoverUrl = null;
+            if (!string.IsNullOrEmpty(enrollment.CourseCoverKey))
             {
-                Id = enrollment.Id,
-                ReactiveCourseId = enrollment.ReactiveCourseId,
+                try { courseCoverUrl = await _fileStorage.GetPublicUrlAsync(enrollment.CourseCoverKey); }
+                catch { courseCoverUrl = null; }
+            }
+
+            // compute default region for PhoneHelpers conversion (fallback IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch { defaultRegion = "IT"; }
+
+            // 7) build months view models (group payments by month)
+            var monthsVm = months.Select(m => new AdminEnrollmentMonthVm
+            {
+                MonthId = m.Id,
+                MonthIndex = m.MonthIndex,
+                LessonsCount = lessonCounts.TryGetValue(m.Id, out var c) ? c : 0,
+                Payments = payments
+                    .Where(p => p.ReactiveCourseMonthId == m.Id)
+                    .OrderByDescending(p => p.CreatedAtUtc)
+                    .Select(p => new AdminEnrollmentPaymentVm
+                    {
+                        PaymentId = p.Id,
+                        MonthId = p.ReactiveCourseMonthId,
+                        AmountLabel = p.Amount.ToEuro(),
+                        Amount = p.Amount,
+                        Status = p.Status,
+                        CreatedAtUtc = p.CreatedAtUtc,
+                        PaidAtUtc = p.PaidAtUtc,
+                        AdminNote = p.AdminNote,
+                        StudentId = enrollment.StudentId
+                    }).ToList()
+            })
+            .ToList();
+
+            // 8) compute whatsapp digits
+            var phone = studentUser?.PhoneNumber;
+            var guardianPhone = student?.GuardianPhoneNumber;
+            var phoneWhatsapp = PhoneHelpers.ToWhatsappDigits(phone, defaultRegion);
+            var guardianWhatsapp = PhoneHelpers.ToWhatsappDigits(guardianPhone, defaultRegion);
+
+            // 9) build final VM (reuse Admin vm type so view markup can be similar)
+            var vm = new AdminEnrollmentDetailsVm
+            {
+                EnrollmentId = enrollment.Id,
+                CourseId = enrollment.ReactiveCourseId,
                 CourseTitle = enrollment.CourseTitle,
-                CourseCoverUrl = coverUrl,
                 StudentId = enrollment.StudentId,
-                StudentName = enrollment.StudentName,
-                StudentEmail = enrollment.StudentEmail,
-                StudentPhoneNumber = enrollment.StudentPhoneNumber,
-                GuardianPhoneNumber = enrollment.GuardianPhoneNumber,
+                StudentName = studentUser?.FullName ?? enrollment.StudentId,
+                StudentEmail = studentUser?.Email,
+                StudentPhone = studentUser?.PhoneNumber,
+                PhoneWhatsapp = phoneWhatsapp,
+                GuardianPhoneNumber = student?.GuardianPhoneNumber,
+                GuardianWhatsapp = guardianWhatsapp,
+                PhotoStorageKey = studentUser?.PhotoStorageKey,
+                StudentPhotoUrl = studentPhotoUrl,
+                TeacherFullName = User.Identity?.Name, // current teacher's display name
                 CreatedAtUtc = enrollment.CreatedAtUtc,
-                IsApproved = enrollment.IsApproved,
-                IsPaid = enrollment.IsPaid,
-                MonthPayments = payments,
-                TotalPaid = payments.Where(p => p.Status == EnrollmentMonthPaymentStatus.Paid).Sum(p => p.Amount)
+                Months = monthsVm
             };
 
-            vm.TotalPaidLabel = vm.TotalPaid.ToEuro();
-
             ViewData["ActivePage"] = "ReactiveEnrollments";
+
             return View(vm);
         }
     }

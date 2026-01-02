@@ -1,0 +1,28 @@
+﻿@* Views/Shared/_WhatsAppChatButton.cshtml *@
+@model string?
+
+@{
+    // defensive: turn the model into digits-only (wa.me expects digits only, no plus)
+    string? digits = null;
+    if (!string.IsNullOrWhiteSpace(Model))
+    {
+        digits = System.Text.RegularExpressions.Regex.Replace(Model.Trim(), @"\D", "");
+        if (string.IsNullOrWhiteSpace(digits)) digits = null;
+    }
+
+    var label = (ViewBag.WhatsAppLabel as string) ?? "WhatsApp";
+}
+
+@if (!string.IsNullOrWhiteSpace(digits))
+{
+    var waUrl = $"https://wa.me/{digits}";
+    <a href="@waUrl"
+       class="btn btn-sm btn-outline-success d-inline-flex align-items-center whatsapp-chat-btn"
+       target="_blank"
+       rel="noopener noreferrer"
+       aria-label="@Html.Encode(label)">
+        <i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>
+        <span class="d-none d-md-inline">@label</span>
+    </a>
+}
+

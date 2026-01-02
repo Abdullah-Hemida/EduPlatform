@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace Edu.Domain.Entities
 {
     public enum EnrollmentMonthPaymentStatus { Pending, Paid, Rejected, Cancelled }
-
     public class ReactiveEnrollmentMonthPayment
     {
         public int Id { get; set; }

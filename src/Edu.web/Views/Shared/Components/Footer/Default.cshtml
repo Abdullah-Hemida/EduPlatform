@@ -1,4 +1,4 @@
-﻿@* inside E:\Education\src\Edu.Web\Views\Shared\Components\Footer\Default.cshtml *@ 
+﻿@* Views/Shared/Components/Footer/Default.cshtml (excerpt with updated Contacts rendering) *@
 @model Edu.Web.Views.Shared.Components.ViewComponents.FooterVm
 @using System.Globalization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
@@ -7,6 +7,22 @@
     var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     var dir = lang == "ar" ? "rtl" : "ltr";
     var textAlign = lang == "ar" ? "right" : "left";
+
+    // compute default region (two-letter ISO) for phone parsing (fallback to IT)
+    string defaultRegion = "IT";
+    try
+    {
+        var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+        if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+            defaultRegion = regionInfo.TwoLetterISORegionName;
+    }
+    catch
+    {
+        // keep default
+    }
+
+    // localized WhatsApp label for partial
+    ViewBag.WhatsAppLabel = L["WhatsApp"] ?? "WhatsApp";
 }
 
 <footer class="site-footer text-light pt-5 pb-4 mt-5" dir="@dir" style="text-align:@textAlign">
@@ -14,6 +30,7 @@
         <div class="row gy-4">
             <div class="col-md-6">
                 <h5 class="footer-title">@L["Footer.ContactUs"]</h5>
+
                 @if (Model.Contacts?.Any() != true)
                 {
                     <p class="text-secondary small">@L["Footer.NoContacts"]</p>
@@ -23,25 +40,29 @@
                     <ul class="list-unstyled">
                         @foreach (var c in Model.Contacts)
                         {
-                            <li class="mb-3 d-flex justify-content-start gap-2">
-                                <div>
-                                    <strong class="d-block">@c.PersonName</strong>
-                                    <small class="text-light">@c.Position</small><br />
+                            // compute whatsapp digits for this contact (defensive)
+                            var waDigits = PhoneHelpers.ToWhatsappDigits(c.Contact, defaultRegion);
+
+                            <li class="mb-3 d-flex align-items-center justify-content-between gap-2">
+                                <div class="me-3" style="min-width:0">
+                                    <strong class="d-block text-light text-truncate">@c.PersonName</strong>
+                                    <small class="text-light">@c.Position</small>
                                 </div>
-                                <span class="text-light opacity-75">@c.Contact</span>
+
+                                <div class="text-light opacity-75 d-flex align-items-center gap-2">
+                                    @* Keep phone LTR so + remains at the left on RTL pages *@
+                                    <span dir="ltr" class="ltr-phone text-truncate">@c.Contact</span>
+
+                                    @* Render WA button if digits found *@
+                                    <span dir="ltr">
+                                        @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", waDigits)
+                                    </span>
+                                </div>
                             </li>
                         }
                     </ul>
                 }
             </div>
-
-@*             <div class="col-md-4">
-                <h5 class="footer-title">@L["Footer.Resources"]</h5>
-                <ul class="list-unstyled">
-                    <li><a href="/Privacy" class="footer-link">@L["Footer.Privacy"]</a></li>
-                    <li><a href="/About" class="footer-link">@L["About"]</a></li>
-                </ul>
-            </div> *@
 
             <div class="col-md-6 text-md-end">
                 <h5 class="footer-title">@L["Footer.FollowUs"]</h5>
@@ -54,6 +75,7 @@
                     {
                         @foreach (var s in Model.SocialLinks)
                         {
+                            // determine icon class
                             var iconClass = s.Provider?.ToLowerInvariant() switch
                             {
                                 "facebook" => "fab fa-facebook-f",
@@ -66,8 +88,29 @@
                                 _ => "fas fa-link"
                             };
 
-                            <a class="footer-social" href="@s.Url" target="_blank" rel="noopener">
-                                <i class="@iconClass fa-lg"></i>
+                            // render whatsapp special-case: if the url is digits or tel:... convert to wa.me
+                            string renderUrl = s.Url ?? "#";
+                            if (!string.IsNullOrWhiteSpace(s.Provider) && s.Provider.Equals("whatsapp", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // sanitize
+                                var maybeDigits = PhoneHelpers.ToWhatsappDigits(s.Url, defaultRegion);
+                                if (!string.IsNullOrWhiteSpace(maybeDigits))
+                                {
+                                    renderUrl = $"https://wa.me/{maybeDigits}";
+                                }
+                                else if (!renderUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // leave as-is if admin provided full URL; otherwise try tel: fallback
+                                    if (renderUrl.StartsWith("tel:", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        var telDigits = PhoneHelpers.ToWhatsappDigits(renderUrl.Substring(4), defaultRegion);
+                                        if (!string.IsNullOrWhiteSpace(telDigits)) renderUrl = $"https://wa.me/{telDigits}";
+                                    }
+                                }
+                            }
+
+                            <a class="footer-social" href="@renderUrl" target="_blank" rel="noopener">
+                                <i class="@iconClass fa-lg" aria-hidden="true"></i>
                             </a>
                         }
                     }
@@ -80,7 +123,6 @@
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-center small text-secondary">
             <div>
                 @string.Format(L["Footer.Copyright"].Value, DateTime.UtcNow.Year)
-
             </div>
             <div>
                 @L["Footer.PoweredBy"]
@@ -89,9 +131,6 @@
     </div>
 </footer>
 
-<style>
-
-</style>
 
 
 

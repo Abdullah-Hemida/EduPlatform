@@ -1,5 +1,4 @@
-﻿// File: Areas/Identity/Pages/Account/CompleteTeacherProfile.cshtml.cs
-// ------------------------------------------------------------
+﻿// Areas/Identity/Pages/Account/CompleteTeacherProfile.cshtml.cs
 using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
@@ -10,7 +9,8 @@ using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Localization;
-using Microsoft.Extensions.Logging;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Edu.Web.Areas.Identity.Pages.Account
 {
@@ -48,59 +48,81 @@ namespace Edu.Web.Areas.Identity.Pages.Account
         [BindProperty]
         public IFormFile? CVFile { get; set; }
 
-public class InputModel
-{
-    public string FullName { get; set; } = string.Empty;
-    public string? PhoneNumber { get; set; }
-    public DateTime? DateOfBirth { get; set; }
-    public string PreferredLanguage { get; set; } = "it";
+        public class InputModel
+        {
+            public string FullName { get; set; } = string.Empty;
+            public string? PhoneNumber { get; set; }
+            public DateTime? DateOfBirth { get; set; }
+            public string PreferredLanguage { get; set; } = "it";
+            // teacher-specific
+            public string? JobTitle { get; set; }
+            public string? ShortBio { get; set; }
+            public string? IntroVideoUrl { get; set; }
 
-    // Display-only URLs
-    public string? PhotoDisplayUrl { get; set; }
-    public string? CVDisplayUrl { get; set; }
-
-    // Teacher specific
-    public string? JobTitle { get; set; }
-    public string? ShortBio { get; set; }
-    public string? IntroVideoUrl { get; set; }
-}
-
+            // display-only
+            public string? PhotoDisplayUrl { get; set; }
+            public string? CVDisplayUrl { get; set; }
+        }
 
         public async Task<IActionResult> OnGetAsync()
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
             {
-                return RedirectToPage("/Account/Login", new
-                {
-                    area = "Identity",
-                    returnUrl = Url.Page("/Account/CompleteTeacherProfile")
-                });
+                return RedirectToPage("/Account/Login", new { area = "Identity" });
             }
+
+            // Load teacher if exists
+            var teacher = await _db.Teachers.FindAsync(user.Id);
 
             Input.FullName = user.FullName;
             Input.PhoneNumber = await _userManager.GetPhoneNumberAsync(user);
             Input.DateOfBirth = user.DateOfBirth;
             Input.PreferredLanguage = string.IsNullOrWhiteSpace(user.PreferredLanguage) ? "it" : user.PreferredLanguage;
-            // Photo (new key or old url fallback)
-            var photoKey = user.PhotoStorageKey ?? user.PhotoUrl;
-            Input.PhotoDisplayUrl = await _files.GetPublicUrlAsync(photoKey);
 
-            if (await _userManager.IsInRoleAsync(user, "Teacher"))
+            if (teacher != null)
             {
-                var teacher = await _db.Teachers.FindAsync(user.Id);
-                if (teacher != null)
-                {
-                    Input.JobTitle = teacher.JobTitle;
-                    Input.ShortBio = teacher.ShortBio;
-                    Input.IntroVideoUrl = teacher.IntroVideoUrl;
-
-                    // CV (new key or old url fallback)
-                    var cvKey = teacher.CVStorageKey ?? teacher.CVUrl;
-                    Input.CVDisplayUrl = await _files.GetPublicUrlAsync(cvKey);
-                }
+                Input.JobTitle = teacher.JobTitle;
+                Input.ShortBio = teacher.ShortBio;
+                Input.IntroVideoUrl = teacher.IntroVideoUrl;
             }
 
+            // Resolve photo/cv public URLs (best-effort)
+            try
+            {
+                Input.PhotoDisplayUrl = await _files.GetPublicUrlAsync(user.PhotoStorageKey ?? user.PhotoUrl);
+            }
+            catch
+            {
+                Input.PhotoDisplayUrl = user.PhotoUrl;
+            }
+
+            try
+            {
+                if (teacher != null)
+                {
+                    Input.CVDisplayUrl = await _files.GetPublicUrlAsync(teacher.CVStorageKey ?? teacher.CVUrl);
+                }
+            }
+            catch
+            {
+                // ignore - CVDisplayUrl remains null
+            }
+
+            // Set default region for intl-tel-input; derive from current culture if possible
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentCulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
+
+            ViewData["DefaultRegion"] = defaultRegion;
             return Page();
         }
 
@@ -116,6 +138,19 @@ public class InputModel
                 return Page();
             }
 
+            // Determine default region for phone parsing (fallback to IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentCulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
+
             /* ---------------------------
                PHOTO UPLOAD
             --------------------------- */
@@ -128,16 +163,24 @@ public class InputModel
                     return Page();
                 }
 
-                // Delete old file safely
+                // delete old file safely
                 if (!string.IsNullOrWhiteSpace(user.PhotoStorageKey))
                     await _files.DeleteFileAsync(user.PhotoStorageKey);
                 else if (!string.IsNullOrWhiteSpace(user.PhotoUrl))
                     await _files.DeleteFileAsync(user.PhotoUrl);
 
-                // Save new file
+                // save new file
                 var newPhotoKey = await _files.SaveFileAsync(Photo, $"users/{user.Id}");
+                if (string.IsNullOrWhiteSpace(newPhotoKey))
+                {
+                    _logger.LogError("SaveFileAsync returned empty key for user {UserId}", user.Id);
+                    ModelState.AddModelError("Photo", _localizer["FileSaveFailed"] ?? "Failed to save file");
+                    await OnGetAsync();
+                    return Page();
+                }
+
                 user.PhotoStorageKey = newPhotoKey;
-                user.PhotoUrl = null; // migrate away from old system
+                user.PhotoUrl = null;
             }
 
             /* ---------------------------
@@ -154,7 +197,7 @@ public class InputModel
                     return Page();
                 }
 
-                // Delete old files
+                // delete old CV if any
                 if (teacher != null)
                 {
                     if (!string.IsNullOrWhiteSpace(teacher.CVStorageKey))
@@ -163,9 +206,8 @@ public class InputModel
                         await _files.DeleteFileAsync(teacher.CVUrl);
                 }
 
-                // Save new CV
+                // save new CV
                 var newCvKey = await _files.SaveFileAsync(CVFile, $"users/{user.Id}/cv");
-
                 if (teacher != null)
                 {
                     teacher.CVStorageKey = newCvKey;
@@ -174,42 +216,82 @@ public class InputModel
             }
 
             /* ---------------------------
+               PHONE VALIDATION & NORMALIZATION
+            --------------------------- */
+            string? normalizedPhone = null;
+            if (!string.IsNullOrWhiteSpace(Input.PhoneNumber))
+            {
+                var raw = Input.PhoneNumber.Trim();
+                normalizedPhone = PhoneHelpers.ToE164(raw, defaultRegion);
+
+                // fallback: accept raw E.164-ish digits string (e.g. +39123456789 or 39123456789)
+                if (normalizedPhone == null)
+                {
+                    if (Regex.IsMatch(raw, @"^\+?\d{6,15}$"))
+                    {
+                        normalizedPhone = raw.StartsWith("+") ? raw : "+" + raw;
+                    }
+                }
+
+                _logger.LogDebug("Teacher phone raw='{Raw}', normalized='{Norm}'", raw, normalizedPhone);
+
+                if (normalizedPhone == null)
+                {
+                    ModelState.AddModelError(nameof(Input.PhoneNumber), _localizer["Validation.InvalidPhone"] ?? "Invalid phone number.");
+                    await OnGetAsync();
+                    return Page();
+                }
+            }
+
+            /* ---------------------------
                UPDATE BASIC USER FIELDS
             --------------------------- */
             user.FullName = Input.FullName;
             user.DateOfBirth = Input.DateOfBirth;
-            // SAVE preferred language (validate allowed values)
+
+            // validate/sanitize preferred language
             var chosen = string.IsNullOrWhiteSpace(Input.PreferredLanguage) ? "it" : Input.PreferredLanguage;
             var allowed = new[] { "en", "it", "ar", "en-US", "it-IT", "ar-SA" };
             if (!allowed.Contains(chosen))
-            {
-                // normalize by taking first two letters
                 chosen = chosen.Length >= 2 ? chosen.Substring(0, 2).ToLowerInvariant() : "it";
-            }
             user.PreferredLanguage = chosen;
-            await _userManager.SetPhoneNumberAsync(user, Input.PhoneNumber ?? "");
-            await _userManager.UpdateAsync(user);
 
-            /* ---------------------------
-               TEACHER PROFILE
-            --------------------------- */
-            if (await _userManager.IsInRoleAsync(user, "Teacher"))
+            // Set phone via Identity (use empty string to clear)
+            var phoneToSet = normalizedPhone ?? string.Empty;
+            var phoneRes = await _userManager.SetPhoneNumberAsync(user, phoneToSet);
+            if (!phoneRes.Succeeded)
             {
-                if (teacher == null)
-                {
-                    teacher = new Edu.Domain.Entities.Teacher
-                    {
-                        Id = user.Id,
-                        Status = TeacherStatus.Pending
-                    };
-                    _db.Teachers.Add(teacher);
-                }
-
-                teacher.JobTitle = Input.JobTitle ?? "";
-                teacher.ShortBio = Input.ShortBio;
-
-                teacher.IntroVideoUrl = YouTubeHelper.ExtractYouTubeId(Input.IntroVideoUrl ?? "");
+                _logger.LogWarning("Failed SetPhoneNumberAsync for user {UserId} : {Errors}", user.Id, string.Join(";", phoneRes.Errors.Select(e => e.Description)));
+                ModelState.AddModelError("", _localizer["Profile.UpdatePhoneFailed"] ?? "Failed to update phone number");
+                await OnGetAsync();
+                return Page();
             }
+
+            // persist other user updates
+            var updateRes = await _userManager.UpdateAsync(user);
+            if (!updateRes.Succeeded)
+            {
+                _logger.LogError("Failed to update user {UserId}: {Errors}", user.Id, string.Join(" | ", updateRes.Errors.Select(e => e.Description)));
+                ModelState.AddModelError("", _localizer["Profile.UpdateFailed"] ?? "Failed to update profile");
+                await OnGetAsync();
+                return Page();
+            }
+
+            // Ensure teacher entity exists and update teacher-specific fields
+            if (teacher == null)
+            {
+                teacher = new Edu.Domain.Entities.Teacher
+                {
+                    Id = user.Id,
+                    Status = TeacherStatus.Pending
+                };
+                _db.Teachers.Add(teacher);
+            }
+
+            teacher.JobTitle = Input.JobTitle ?? string.Empty;
+            teacher.ShortBio = Input.ShortBio;
+            teacher.IntroVideoUrl = YouTubeHelper.ExtractYouTubeId(Input.IntroVideoUrl ?? "");
+
             // Set the request-culture cookie so the user's language selection applies immediately
             try
             {
@@ -227,6 +309,7 @@ public class InputModel
             {
                 _logger.LogWarning(ex, "Failed to set localization cookie for user {UserId} with culture {Culture}", user.Id, user.PreferredLanguage);
             }
+
             await _db.SaveChangesAsync();
             await _signInManager.RefreshSignInAsync(user);
 
@@ -235,6 +318,7 @@ public class InputModel
         }
     }
 }
+
 
 
 

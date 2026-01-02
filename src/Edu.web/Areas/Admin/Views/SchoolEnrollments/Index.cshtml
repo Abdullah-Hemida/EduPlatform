@@ -5,7 +5,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
-    ViewData["Title"] = L["Admin.ReactiveEnrollments.Title"] ?? "Enrollments";
+    ViewData["Title"] = L["Admin.SchoolEnrollments.Title"] ?? "Enrollments";
 }
 
 <h1 class="mb-3">@ViewData["Title"]</h1>
@@ -82,7 +82,15 @@ else
                                 <div class="small">
                                     <div class="fw-semibold">@it.StudentFullName</div>
                                     <div class="text-muted">@it.StudentEmail</div>
-                                    <div class="text-muted">@it.StudentPhone</div>
+                                    <div>
+                                        <span dir="ltr" class="ltr-phone">@(it.StudentPhone ?? "—")</span>
+                                        <span dir="ltr">
+                                            @if (!string.IsNullOrWhiteSpace(it.PhoneWhatsapp))
+                                            {
+                                                @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", it.PhoneWhatsapp)
+                                            }
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </td>

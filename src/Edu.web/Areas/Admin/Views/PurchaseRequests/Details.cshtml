@@ -23,8 +23,26 @@
             <div class="col-md-6">
                 <h6 class="text-muted">@L["Purchase.Requester"]</h6>
                 <div class="fw-semibold">@(Model.StudentName ?? "—")</div>
-                <div class="small text-muted">@(Model.StudentPhone ?? "—")</div>
-                <div>@L["GuardianPhoneNumber"]: @(Model.GuardianPhoneNumber ?? "_")</div>
+                <div>
+                    <span class="small text-muted d-flex align-items-center gap-2">
+                        <span dir="ltr" class="ltr-phone">@(Model.StudentPhone ?? "—")</span>
+                        <span dir="ltr">
+                            @if (!string.IsNullOrEmpty(Model.PhoneWhatsapp)){
+                                @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", Model.PhoneWhatsapp)
+                            }
+                        </span>
+                    </span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <strong>@L["GuardianPhoneNumber"]:</strong>
+                    <span dir="ltr" class="ltr-phone">@(Model.GuardianPhoneNumber ?? "—")</span>
+                    <span dir="ltr">
+                        @if (!string.IsNullOrEmpty(Model.GuardianPhoneNumber))
+                        {
+                            @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", Model.GuardianWhatsapp)
+                        }
+                    </span>
+                </div>
             </div>
 
             <div class="col-md-6">

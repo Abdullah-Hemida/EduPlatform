@@ -53,7 +53,7 @@
                             </div>
 
                             <div class="col-12 col-sm-6">
-                                <div class="small text-muted">@L["Booking.RequestedAt"]</div>
+                                <div class="small text-muted">@L["Booking.RequestDate"]</div>
                                 <div class="small text-muted">@Model.RequestedDateUtc.ToLocalTime().ToString("g")</div>
                             </div>
                         </div>
@@ -72,8 +72,20 @@
                             <div class="min-vw-0">
                                 <div class="fw-semibold text-truncate">@(Model.StudentName ?? "-")</div>
                                 <div class="small text-muted text-truncate">@Model.StudentEmail</div>
-                                <div class="small text-muted text-truncate">@Model.StudentPhoneNumber</div>
-                                <div>@L["GuardianPhoneNumber"] : @Model.GuardianPhoneNumber</div>
+                                <div class="small text-muted d-flex align-items-center gap-2">
+                                    <span dir="ltr" class="ltr-phone">@(Model.StudentPhoneNumber ?? "—")</span>
+                                    <span dir="ltr">
+                                        @await Html.PartialAsync("_WhatsAppChatButton", Model.StudentWhatsapp)
+                                    </span>
+                                </div>
+
+                                <div class="mt-2 small text-muted d-flex align-items-center gap-2">
+                                    <strong>@L["GuardianPhoneNumber"]:</strong>
+                                    <span dir="ltr" class="ltr-phone">@((Model.GuardianPhoneNumber) ?? "—")</span>
+                                    <span dir="ltr">
+                                        @await Html.PartialAsync("_WhatsAppChatButton", Model.GuardianWhatsapp)
+                                    </span>
+                                </div>
                             </div>
                         </div>
 

@@ -92,6 +92,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                 StudentName = x.StudentFullName,
                 StudentEmail = x.StudentEmail,
                 StudentPhoneNumber = x.StudentPhoneNumber,
+                StudentWhatsapp = PhoneHelpers.ToWhatsappDigits(x.StudentPhoneNumber, "IT"),
                 TeacherName = x.TeacherFullName
             });
 
@@ -111,7 +112,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             return View(vm);
         }
 
-        // GET: Admin/Bookings/Details/5
+        // GET: Admin/Bookings/Details/5 
         public async Task<IActionResult> Details(int id)
         {
             var booking = await _db.Bookings
@@ -123,6 +124,25 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             if (booking == null) return NotFound();
 
+            // determine default region code (two-letter ISO, e.g. "IT")
+            string defaultRegion = "IT";
+            try
+            {
+                // derive from current culture (e.g. "it-IT" -> RegionInfo -> "IT")
+                var regionInfo = new RegionInfo(CultureInfo.CurrentCulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                {
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+                }
+            }
+            catch
+            {
+                // ignore and keep fallback "IT"
+            }
+
+            var studentPhone = booking.Student?.User?.PhoneNumber;
+            var guardianPhone = booking.Student?.GuardianPhoneNumber;
+
             var vm = new AdminBookingDetailsVm
             {
                 Id = booking.Id,
@@ -130,8 +150,10 @@ namespace Edu.Web.Areas.Admin.Controllers
                 SlotTimes = booking.Slot != null ? $"{booking.Slot.StartUtc.ToLocalTime():g} - {booking.Slot.EndUtc.ToLocalTime():g}" : null,
                 StudentName = booking.Student?.User?.FullName,
                 StudentEmail = booking.Student?.User?.Email,
-                StudentPhoneNumber = booking.Student?.User?.PhoneNumber,
-                GuardianPhoneNumber = booking.Student.GuardianPhoneNumber,
+                StudentPhoneNumber = studentPhone,
+                StudentWhatsapp = PhoneHelpers.ToWhatsappDigits(studentPhone, defaultRegion),
+                GuardianPhoneNumber = guardianPhone,
+                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(guardianPhone, defaultRegion),
                 TeacherName = booking.Teacher?.User?.FullName,
                 Status = booking.Status,
                 RequestedDateUtc = booking.RequestedDateUtc,

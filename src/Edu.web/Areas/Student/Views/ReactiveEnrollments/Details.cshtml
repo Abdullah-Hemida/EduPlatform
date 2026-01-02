@@ -129,42 +129,60 @@
 
                                 <div class="d-flex align-items-center justify-content-end gap-2">
                                     <div class="action-area">
-                                        @* status badge *@
+
+                                        @* ===== PAID: show badge only, nothing else ===== *@
                                         @if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Paid)
                                         {
                                             <span class="badge bg-success">@L["Status.Paid"]</span>
                                         }
+
+                                        @* ===== PENDING ===== *@
                                         else if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Pending)
                                         {
                                             <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+
+                                            @if (m.CanCancelPayment)
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment"
+                                                        data-payment-id="@(m.PaymentId ?? 0)">
+                                                    @L["ReactiveCourse.CancelPayment"]
+                                                </button>
+                                            }
                                         }
+
+                                        @* ===== REJECTED ===== *@
                                         else if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Rejected)
                                         {
                                             <span class="badge bg-danger">@L["Status.Rejected"]</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-secondary">@L["Admin.NotRequested"]</span>
+
+                                            @if (m.IsReadyForPayment && m.CanRequestPayment)
+                                            {
+                                                <button class="btn btn-sm btn-primary ms-2 btnPayMonth"
+                                                        data-month-id="@m.Id"
+                                                        data-course-id="@Model.CourseId">
+                                                    @L["ReactiveCourse.RequestPayment"]
+                                                </button>
+                                            }
                                         }
 
-                                        @* ACTION (mutually exclusive) *@
-                                        @if (m.MyPaymentStatus == EnrollmentMonthPaymentStatus.Pending && m.CanCancelPayment)
-                                        {
-                                            <button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="@(m.PaymentId ?? 0)">@L["ReactiveCourse.CancelPayment"]</button>
-                                        }
-                                        else if (m.IsReadyForPayment)
-                                        {
-                                            <button class="btn btn-sm btn-primary ms-2 btnPayMonth"
-                                                    data-month-id="@m.Id"
-                                                    data-course-id="@Model.CourseId"
-                                                    @(Model.IsEnrolled ? "" : "disabled")>
-                                                @L["ReactiveCourse.RequestPayment"]
-                                            </button>
-                                        }
+                                        @* ===== NOT REQUESTED YET ===== *@
                                         else
                                         {
-                                            <span class="badge bg-secondary ms-2">@localizedStrings["MonthNotReady"]</span>
+                                            if (m.IsReadyForPayment && m.CanRequestPayment)
+                                            {
+                                                <button class="btn btn-sm btn-primary btnPayMonth"
+                                                        data-month-id="@m.Id"
+                                                        data-course-id="@Model.CourseId"
+                                                        @(Model.IsEnrolled ? "" : "disabled")>
+                                                    @L["ReactiveCourse.RequestPayment"]
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">@localizedStrings["MonthNotReady"]</span>
+                                            }
                                         }
+
                                     </div>
                                 </div>
                             </div>

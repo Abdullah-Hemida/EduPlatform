@@ -43,7 +43,15 @@
                 <div class="d-flex align-items-start justify-content-between gap-2">
                     <div class="min-w-0">
                         <div class="h6 mb-1 text-truncate">@e.StudentName</div>
-                        <div class="small text-muted text-truncate break-anywhere">@e.StudentPhone</div>
+                                                            <div>
+                                        <span dir="ltr" class="ltr-phone">@(e.StudentPhone ?? "—")</span>
+                                        <span dir="ltr">
+                                            @if (!string.IsNullOrWhiteSpace(e.PhoneWhatsapp))
+                                            {
+                                                @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", e.PhoneWhatsapp)
+                                            }
+                                        </span>
+                                    </div>
                         <div class="small text-muted text-truncate break-anywhere mt-1">@e.CourseTitle</div>
                     </div>
 
@@ -138,7 +146,17 @@
                                 </td>
 
                                 <td class="min-w-0 align-middle">@e.StudentName</td>
-                                <td class="text-nowrap align-middle">@e.StudentPhone</td>
+                                <td> 
+                                    <div>
+                                        <span dir="ltr" class="ltr-phone">@(e.StudentPhone ?? "—")</span>
+                                        <span dir="ltr">
+                                            @if (!string.IsNullOrWhiteSpace(e.PhoneWhatsapp))
+                                            {
+                                                @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", e.PhoneWhatsapp)
+                                            }
+                                        </span>
+                                    </div>
+                                 </td>
                                 <td class="min-w-0 align-middle">@e.CourseTitle</td>
                                 <td class="align-middle">
                                     @switch (e.PaymentStatus)

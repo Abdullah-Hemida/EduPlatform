@@ -8,6 +8,7 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? StudentName { get; set; }
         public string? StudentEmail { get; set; }
         public string? StudentPhoneNumber { get; set; }
+        public string? StudentWhatsapp { get; set; }
         public string? TeacherName { get; set; }
         public DateTime RequestedDateUtc { get; set; }
         public BookingStatus Status { get; set; }
@@ -45,7 +46,9 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? StudentName { get; set; }
         public string? StudentEmail { get; set; }
         public string? StudentPhoneNumber { get; set; }
+        public string? StudentWhatsapp { get; set; }
         public string GuardianPhoneNumber { get; set; } = string.Empty;
+        public string GuardianWhatsapp { get; set; } = string.Empty;
         public string? TeacherName { get; set; }
         public BookingStatus Status { get; set; }
         public DateTime RequestedDateUtc { get; set; }

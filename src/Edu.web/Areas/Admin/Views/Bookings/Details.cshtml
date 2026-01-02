@@ -30,10 +30,24 @@
                         <h6 class="text-muted">@L["Booking.Student"]</h6>
                         <div class="fw-semibold">@(Model.StudentName ?? "—")</div>
                         <div class="small text-muted">@(Model.StudentEmail ?? "—")</div>
-                        <div class="small text-muted">@(Model.StudentPhoneNumber ?? "—")</div>
 
-                        <div>@L["GuardianPhoneNumber"] - @(Model.GuardianPhoneNumber ?? "—")</div>
+                        <div class="small text-muted d-flex align-items-center gap-2">
+                            <span dir="ltr" class="ltr-phone">@(Model.StudentPhoneNumber ?? "—")</span>
+                            <span dir="ltr">
+                                @await Html.PartialAsync("_WhatsAppChatButton", Model.StudentWhatsapp)
+                            </span>
+                        </div>
+
+                        <div class="mt-2 small text-muted d-flex align-items-center gap-2">
+                            <strong>@L["GuardianPhoneNumber"]:</strong>
+                            <span dir="ltr" class="ltr-phone">@((Model.GuardianPhoneNumber) ?? "—")</span>
+                            <span dir="ltr">
+                                @await Html.PartialAsync("_WhatsAppChatButton", Model.GuardianWhatsapp)
+                            </span>
+                        </div>
                     </div>
+
+
                     <div class="col-md-6">
                         <h6 class="text-muted">@L["Booking.Teacher"]</h6>
                         <div class="fw-semibold">@(Model.TeacherName ?? "—")</div>

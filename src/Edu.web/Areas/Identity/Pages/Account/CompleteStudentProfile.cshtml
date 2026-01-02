@@ -14,31 +14,47 @@
                 <div class="card-body">
                     <h3 class="card-title">@L["ProfileComplete.Student.Title"]</h3>
 
-                    <form method="post" enctype="multipart/form-data">
+                    <form method="post" enctype="multipart/form-data" novalidate>
                         @Html.AntiForgeryToken()
-                        <partial name="_ValidationScriptsPartial" />
-
                         <div class="mb-3">
                             <label asp-for="Input.FullName" class="form-label">@L["Profile.DisplayNameLabel"] </label>
                             <input asp-for="Input.FullName" class="form-control" />
                             <span asp-validation-for="Input.FullName" class="text-danger"></span>
                         </div>
 
+                        <!-- student phone -->
                         <div class="mb-3">
-                            <label asp-for="Input.PhoneNumber" class="form-label">@L["Profile.PhoneLabel"] <i class="fa-brands fa-whatsapp"></i></label>
-                            <input asp-for="Input.PhoneNumber" class="form-control" />
-                            <span asp-validation-for="Input.PhoneNumber" class="text-danger"></span>
+                            <label asp-for="Input.PhoneNumber" class="form-label">
+                                @L["Profile.PhoneLabel"] <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+                            </label>
+
+                            <input asp-for="Input.PhoneNumber" id="phone" class="form-control" placeholder="+39 345 123 4567" dir="ltr" />
+
+                            <div class="form-text">@L["Profile.PhoneHelp"]</div>
+                            <span class="text-danger field-validation" data-val-for="Input.PhoneNumber" id="phoneError">
+                                @Html.Raw(ViewData.ModelState[nameof(Model.Input.PhoneNumber)]?.Errors.FirstOrDefault()?.ErrorMessage)
+                            </span>
+                            <span asp-validation-for="Input.PhoneNumber" class="text-danger visually-hidden"></span> @* unobtrusive slot *@
                         </div>
+
+                        <!-- guardian phone (optional) -->
                         <div class="mb-3">
-                            <label asp-for="Input.GuardianPhoneNumber" class="form-label">@L["Profile.PhoneGuardianLabel"] <i class="fa-brands fa-whatsapp"></i></label>
-                            <input asp-for="Input.GuardianPhoneNumber" class="form-control" />
-                            <span asp-validation-for="Input.GuardianPhoneNumber" class="text-danger"></span>
+                            <label asp-for="Input.GuardianPhoneNumber" class="form-label">@L["Profile.PhoneGuardianLabel"] <i class="fa-brands fa-whatsapp" aria-hidden="true"></i></label>
+                            <input asp-for="Input.GuardianPhoneNumber" id="guardianPhone" class="form-control" placeholder="+39 345 123 4567" dir="ltr" />
+
+                            <div class="form-text">@L["Profile.PhoneHelpOptional"]</div>
+                            <span class="text-danger field-validation" data-val-for="Input.GuardianPhoneNumber" id="guardianPhoneError">
+                                @Html.Raw(ViewData.ModelState[nameof(Model.Input.GuardianPhoneNumber)]?.Errors.FirstOrDefault()?.ErrorMessage)
+                            </span>
+                            <span asp-validation-for="Input.GuardianPhoneNumber" class="text-danger visually-hidden"></span>
                         </div>
+
                         <div class="mb-3">
                             <label asp-for="Input.DateOfBirth" class="form-label">@L["Profile.DateOfBirth"]</label>
                             <input asp-for="Input.DateOfBirth" class="form-control" type="date" />
                             <span asp-validation-for="Input.DateOfBirth" class="text-danger"></span>
                         </div>
+
                         <div class="mb-3">
                             <label asp-for="Input.PreferredLanguage" class="form-label">@L["Profile.PreferredLanguage"]</label>
                             <select asp-for="Input.PreferredLanguage" class="form-control">
@@ -63,7 +79,7 @@
                                      style="width:120px;height:120px;object-fit:cover" />
                             }
                         </div>
-                        
+
                         <div class="d-flex justify-content-between">
                             <a asp-page="/Account/Manage/Index" class="btn btn-outline-secondary">@L["Button.Cancel"]</a>
                             <button type="submit" class="btn btn-primary">@L["ProfileComplete.SaveButton"]</button>
@@ -79,6 +95,117 @@
         </div>
     </div>
 </div>
+
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            // localized strings injected into JS
+            const localized = {
+                defaultRegion: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewData["DefaultRegion"] ?? "IT")),
+                preferredCountries: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new[] { "it", "gb", "us" })),
+                errInvalidPhone: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Validation.InvalidPhone"].Value ?? "Please enter a valid phone number.")),
+                errInvalidGuardian: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Validation.InvalidPhone"].Value ?? "Please enter a valid guardian phone number."))
+            };
+
+            // show validation message (but don't override server-rendered errors)
+            function showFieldError(id, message) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = message || '';
+                el.style.display = message ? 'inline' : 'none';
+            }
+
+            // inputs
+            const phoneInput = document.getElementById('phone');
+            const guardianInput = document.getElementById('guardianPhone');
+
+            // intl-tel-input instances (kept on window for other scripts/debug)
+            window.itiPhone = null;
+            window.itiGuardian = null;
+
+            function createIti(el) {
+                if (!el || !window.intlTelInput) return null;
+                const inst = window.intlTelInput(el, {
+                    initialCountry: (localized.defaultRegion || "IT").toLowerCase(),
+                    preferredCountries: localized.preferredCountries,
+                    separateDialCode: false,
+                    utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.min.js"
+                });
+
+                // If server provided an E.164 value in the field, restore it
+                const currentVal = el.value;
+                if (currentVal && currentVal.trim().length > 0) {
+                    try { inst.setNumber(currentVal); } catch (ex) { /* ignore */ }
+                }
+
+                return inst;
+            }
+
+            // create and expose instances
+            window.itiPhone = createIti(phoneInput);
+            window.itiGuardian = createIti(guardianInput);
+            const itiPhone = window.itiPhone;
+            const itiGuardian = window.itiGuardian;
+
+            // detect server-side rendered ModelState errors so we don't duplicate messages
+            const serverHasPhoneError = !!(document.getElementById('phoneError') && document.getElementById('phoneError').textContent.trim().length > 0);
+            const serverHasGuardianError = !!(document.getElementById('guardianPhoneError') && document.getElementById('guardianPhoneError').textContent.trim().length > 0);
+
+            // robust extractor for E.164 (tries intl-tel-input first, falls back to sanitizing digits)
+            function getE164Safe(itiInstance, inputEl) {
+                if (!inputEl) return null;
+                // try preferred API
+                try {
+                    if (itiInstance && typeof itiInstance.getNumber === 'function') {
+                        const n = itiInstance.getNumber();
+                        if (n && n.trim().length > 0) return n;
+                    }
+                } catch (ex) { /* ignore */ }
+
+                // fallback: strip non-digits and prefix +
+                const raw = inputEl.value || '';
+                const digits = raw.replace(/\D/g, '');
+                if (digits.length >= 6 && digits.length <= 15) return '+' + digits;
+                return null;
+            }
+
+            // find the containing form
+            const form = phoneInput ? phoneInput.closest('form') : (guardianInput ? guardianInput.closest('form') : null);
+            if (!form) return;
+
+            form.addEventListener('submit', function (ev) {
+                // only clear client-side errors if server didn't already render one
+                if (!serverHasPhoneError) showFieldError('phoneError', '');
+                if (!serverHasGuardianError) showFieldError('guardianPhoneError', '');
+
+                // Student phone: validate/normalize if present
+                if (phoneInput && phoneInput.value && phoneInput.value.trim().length > 0) {
+                    const e164 = getE164Safe(itiPhone, phoneInput);
+                    if (!e164) {
+                        ev.preventDefault();
+                        if (!serverHasPhoneError) showFieldError('phoneError', localized.errInvalidPhone);
+                        phoneInput.focus();
+                        return false;
+                    }
+                    phoneInput.value = e164;
+                }
+
+                // Guardian phone: optional, validate/normalize only if provided
+                if (guardianInput && guardianInput.value && guardianInput.value.trim().length > 0) {
+                    const e164g = getE164Safe(itiGuardian, guardianInput);
+                    if (!e164g) {
+                        ev.preventDefault();
+                        if (!serverHasGuardianError) showFieldError('guardianPhoneError', localized.errInvalidGuardian);
+                        guardianInput.focus();
+                        return false;
+                    }
+                    guardianInput.value = e164g;
+                }
+
+                // allow submit; server will perform authoritative validation
+                return true;
+            });
+        })();
+    </script>
 }
+

@@ -236,6 +236,19 @@ namespace Edu.Web.Areas.Admin.Controllers
             var teacher = await _db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
             var student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
 
+            // compute default region from admin UI culture (fallback to IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
+
             var vm = new UserDetailsViewModel
             {
                 Id = user.Id,
@@ -259,6 +272,13 @@ namespace Edu.Web.Areas.Admin.Controllers
             {
                 vm.PhotoUrl = null;
             }
+
+            // WhatsApp digits (digits only, suitable for wa.me/<digits>)
+            vm.PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(vm.PhoneNumber, defaultRegion);
+            vm.GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(vm.GuardianPhoneNumber, defaultRegion);
+
+            // localized label for the WA button (used by the partial)
+            ViewBag.WhatsAppLabel = _localizer["WhatsApp"].Value ?? "WhatsApp";
 
             // --- load curricula and localized level names ---
             var curriculaEntities = await _db.Curricula

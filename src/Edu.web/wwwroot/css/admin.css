@@ -825,3 +825,37 @@ html[dir="rtl"] .booking-card .meta-right {
     .list-group-item .card-body {
         padding-top: .75rem;
     }
+
+.whatsapp-chat-btn {
+    border-color: #25D366;
+    color: #25D366;
+}
+
+    .whatsapp-chat-btn:hover {
+        background-color: #25D366;
+        color: #fff;
+    }
+
+    .whatsapp-chat-btn .fa-whatsapp {
+        font-size: 0.95rem;
+    }
+.ltr-phone {
+    direction: ltr;
+    unicode-bidi: embed;
+}
+.form-check-label {
+    min-width: 0; /* allow truncation inside flex */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Make a small margin between checkbox and label text that adapts to direction */
+.form-check-input {
+    flex: 0 0 auto;
+}
+/* Keep WA button content LTR so plus sign and digits remain visually correct in RTL pages */
+[dir="rtl"] .whatsapp-chat-btn,
+[dir="rtl"] .ltr-phone {
+    direction: ltr;
+}

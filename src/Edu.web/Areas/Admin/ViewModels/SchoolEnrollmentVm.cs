@@ -24,6 +24,7 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? StudentFullName { get; set; }
         public string? StudentEmail { get; set; }
         public string? StudentPhone { get; set; }
+        public string? PhoneWhatsapp { get; set; }
         public string? GuardianPhoneNumber { get; set; }
         public string? PhotoStorageKey { get; set; }
         public string? StudentPhotoUrl { get; set; }
@@ -44,6 +45,8 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? StudentEmail { get; set; }
         public string? StudentPhone { get; set; }
         public string? GuardianPhoneNumber { get; set; }
+        public string? PhoneWhatsapp { get; set; }
+        public string? GuardianWhatsapp { get; set; }
         public string? PhotoStorageKey { get; set; }
         public string? StudentPhotoUrl { get; set; }
         public string? TeacherFullName { get; set; }

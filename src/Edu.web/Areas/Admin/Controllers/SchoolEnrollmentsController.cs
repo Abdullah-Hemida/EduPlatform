@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using System.Globalization;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -98,7 +99,18 @@ namespace Edu.Web.Areas.Admin.Controllers
                 .Where(s => studentIds.Contains(s.Id))
                 .Select(s => new { s.Id, s.GuardianPhoneNumber })
                 .ToListAsync();
-
+            // compute default region from admin UI culture (fallback to IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
             var list = items.Select(i =>
             {
                 var stu = users.FirstOrDefault(u => u.Id == i.StudentId);
@@ -111,6 +123,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                     StudentFullName = stu?.FullName ?? i.StudentId,
                     StudentEmail = stu?.Email,
                     StudentPhone = stu?.PhoneNumber,
+                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(stu?.PhoneNumber, defaultRegion),
                     GuardianPhoneNumber = students.FirstOrDefault(s => s.Id == i.StudentId)?.GuardianPhoneNumber,
                     PhotoStorageKey = stu?.PhotoStorageKey,
                     TeacherFullName = i.TeacherName,
@@ -245,7 +258,18 @@ namespace Edu.Web.Areas.Admin.Controllers
                 catch { studentPhotoUrl = studentUser.PhotoUrl ?? studentUser.PhotoStorageKey; }
             }
             else studentPhotoUrl = studentUser?.PhotoUrl;
-
+            // compute default region from admin UI culture (fallback to IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
             var vm = new SchoolEnrollmentDetailsVm
             {
                 EnrollmentId = enrollment.Id,
@@ -255,7 +279,9 @@ namespace Edu.Web.Areas.Admin.Controllers
                 StudentName = studentUser?.FullName ?? enrollment.StudentId,
                 StudentEmail = studentUser?.Email,
                 StudentPhone = studentUser?.PhoneNumber,
+                PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(studentUser?.PhoneNumber, defaultRegion),
                 GuardianPhoneNumber = student?.GuardianPhoneNumber,
+                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(student?.GuardianPhoneNumber, defaultRegion),
                 PhotoStorageKey = studentUser?.PhotoStorageKey,
                 StudentPhotoUrl = studentPhotoUrl,
                 TeacherFullName = teacherFullName,

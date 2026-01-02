@@ -83,7 +83,15 @@ else
                                 <div class="small">
                                     <div class="fw-semibold">@it.StudentFullName</div>
                                     <div class="text-muted">@it.StudentEmail</div>
-                                    <div class="text-muted">@it.StudentPhone</div>
+                                    <div>
+                                        <span dir="ltr" class="ltr-phone">@(it.StudentPhone ?? "—")</span>
+                                        <span dir="ltr">
+                                            @if (!string.IsNullOrWhiteSpace(it.PhoneWhatsapp))
+                                            {
+                                                @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", it.PhoneWhatsapp)
+                                            }
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </td>
@@ -151,7 +159,15 @@ else
                                     <div class="small">
                                         <div class="fw-semibold">@it.StudentFullName</div>
                                         <div class="text-muted">@it.StudentEmail</div>
-                                        <div class="text-muted">@it.StudentPhone</div>
+                                        <div>
+                                            <span dir="ltr" class="ltr-phone">@(it.StudentPhone ?? "—")</span>
+                                            <span dir="ltr">
+                                                @if (!string.IsNullOrWhiteSpace(it.PhoneWhatsapp))
+                                                {
+                                                    @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", it.PhoneWhatsapp)
+                                                }
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

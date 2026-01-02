@@ -5,10 +5,9 @@
   "Nav.Home": "الرئيسية",
   "Nav.Courses": "دورات",
   "Nav.AssociationSchool": "مدرسة الجمعية",
-  "Nav.OnlineSchool": "المدرسة الأونلاين",
+  "Nav.OnlineSchool": "المدرسةأونلاين",
   "Nav.PublicSite": "الصفحة الرئيسية",
   "Nav.Profile": "الملف الشخصي",
-
   "Nav.AdminDashboard": "لوحة الإحصائيات",
   "Nav.TeacherDashboard": "لوحة الإحصائيات",
   "Nav.StudentDashboard": "لوحة الإحصائيات",
@@ -184,6 +183,7 @@
   "Admin.FullName": "الاسم الكامل",
   "Admin.Email": "البريد الإلكتروني",
   "Admin.Phone": "الهاتف",
+  "Admin.StudentPhone": "رقم هاتف الطالب",
   "Admin.Roles": "الأدوار",
   "Admin.TeacherStatus": "حالة المعلم",
   "Admin.Actions": "الإجراءات",
@@ -453,6 +453,11 @@
   "ProfileComplete.SaveButton": "حفظ والمتابعة",
   "ProfileComplete.Student.Title": "إكمال ملف الطالب",
   "ProfileSaved": "تم حفظ الملف الشخصي بنجاح.",
+  "Validation.InvalidPhone": "رقم هاتف غير صالح. الرجاء تضمين رمز الدولة، مثال: +39 345 123 4567.",
+  "Profile.PhoneHelp": "تضمين رمز البلد، مثال: +39 345 123 4567.",
+  "Profile.PhoneHelpOptional": "اختياري — ضف رمز البلد إذا كان متوفراً.",
+  "Profile.UpdatePhoneFailed": "فشل تحديث رقم الهاتف.",
+  "Profile.UpdateFailed": "فشل تحديث الملف الشخصي.",
   "Manage.TeacherProfile": "ملف المعلم",
   "Manage.Security": "تغيير الرقم السرى",
   "Manage.OldPassword": "كلمة المرور الحالية",
@@ -644,6 +649,7 @@
   "Admin.RequestedAt": "تاريخ طلب الشراء",
   "Admin.CannotRejectPaid": "لا يمكن رفض دفع مدفوع",
   "Admin.Other": "أخرى",
+  "Admin.Recent": "المدفوعات الأخيرة",
 
   "AdminLevel.NameAr": "إسم المستوى (عربى)",
   "AdminLevel.NameIt": "إسم المستوى (إيطالى)",
@@ -854,7 +860,8 @@
   "OnlineCourse.Published": "هل تم نشر الدوره",
   "ReactiveCourse.Live": "درس مباشر",
   "OnlineSchool.NoCourses": "لا توجد دورات",
-  "GuardianPhoneNumber": "رقم هاتف ولى أمر الطالب"
+  "GuardianPhoneNumber": "رقم هاتف ولى أمر الطالب",
+  "Footer.ContactNotPhoneWarning": "جهة الاتصال المقدمة لا تبدو كرقم هاتف؛ سيتم حفظها مع ذلك."
 }
 
 

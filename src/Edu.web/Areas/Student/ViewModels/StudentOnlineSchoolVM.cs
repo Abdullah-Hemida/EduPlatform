@@ -31,6 +31,7 @@ namespace Edu.Web.Areas.Student.ViewModels
         public int? PaymentId { get; set; }
         public OnlineEnrollmentMonthPaymentStatus? MyPaymentStatus { get; set; }
         public bool CanRequestPayment { get; set; }
+        public bool HasPaidPayment { get; set; } = false;
         public bool CanCancelPayment { get; set; }
         public bool CanViewLessons { get; set; }
         public List<OnlineStudentCourseLessonVm> Lessons { get; set; } = new();

@@ -189,6 +189,7 @@
   "Admin.FullName": "Full name",
   "Admin.Email": "Email",
   "Admin.Phone": "Phone",
+  "Admin.StudentPhone": "Student phone number",
   "Admin.Roles": "Roles",
   "Admin.TeacherStatus": "Teacher status",
   "Admin.Actions": "Actions",
@@ -465,6 +466,11 @@
   "ProfileComplete.Student.Title": "Complete Student Profile",
   "ProfileSaved": "Profile saved successfully.",
   "Manage.TeacherProfile": "Teacher Profile",
+  "Validation.InvalidPhone": "Invalid phone number. Include country code, e.g. +39 345 123 4567.",
+  "Profile.PhoneHelp": "Include country code, e.g. +39 345 123 4567.",
+  "Profile.PhoneHelpOptional": "Optional — include country code if available.",
+  "Profile.UpdatePhoneFailed": "Failed to update phone number.",
+  "Profile.UpdateFailed": "Failed to update profile.",
   "Manage.Security": "Change Password",
   "Manage.OldPassword": "Current Password",
   "Profile.CurrentIntroVideo": "Current introduction video",
@@ -655,6 +661,7 @@
   "Admin.CannotRejectPaid": "Cannot reject a paid payment",
   "Admin.RequestedAt": "Purchase requested date",
   "Admin.Other": "Other",
+  "Admin.Recent": "Recent payments",
   "AdminLevel.NameEn": "Level name (English)",
   "AdminLevel.NameIt": "Level name (Italian)",
   "AdminLevel.NameAr": "Level name (Arabic)",
@@ -869,7 +876,8 @@
   "OnlineCourse.Published": "Has the course been published?",
   "ReactiveCourse.Live": "Live lesson",
   "OnlineSchool.NoCourses": "there are no courses",
-  "GuardianPhoneNumber": "Guardian Phone Number"
+  "GuardianPhoneNumber": "Guardian Phone Number",
+  "Footer.ContactNotPhoneWarning": "The provided contact does not look like a phone number; it will still be saved."
 }
 
 

@@ -21,7 +21,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             _localizer = localizer;
         }
 
-        public async Task<IActionResult> Index(string culture = "en")
+        public async Task<IActionResult> Index(string culture = "it")
         {
             ViewData["ActivePage"] = "FooterContacts";
             ViewData["Culture"] = culture;
@@ -32,7 +32,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             return View(list);
         }
 
-        public IActionResult Create(string culture = "en")
+        public IActionResult Create(string culture = "it")
         {
             ViewData["ActivePage"] = "FooterContacts";
             var vm = new FooterContact { Culture = culture, Order = 0 };

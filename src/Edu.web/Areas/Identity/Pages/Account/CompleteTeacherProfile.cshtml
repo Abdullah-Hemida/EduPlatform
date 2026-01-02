@@ -14,9 +14,8 @@
                 <div class="card-body">
                     <h3 class="card-title mb-3">@L["ProfileComplete.Teacher.Title"]</h3>
 
-                    <form method="post" enctype="multipart/form-data">
+                    <form method="post" enctype="multipart/form-data" novalidate>
                         @Html.AntiForgeryToken()
-                        <partial name="_ValidationScriptsPartial" />
 
                         <div class="mb-3">
                             <label asp-for="Input.FullName" class="form-label">@L["Profile.DisplayNameLabel"]</label>
@@ -24,10 +23,24 @@
                             <span asp-validation-for="Input.FullName" class="text-danger"></span>
                         </div>
 
+                        <!-- teacher phone (intl-tel-input like student) -->
                         <div class="mb-3">
-                            <label asp-for="Input.PhoneNumber" class="form-label">@L["Profile.PhoneLabel"] <i class="fa-brands fa-whatsapp"></i></label>
-                            <input asp-for="Input.PhoneNumber" class="form-control" />
-                            <span asp-validation-for="Input.PhoneNumber" class="text-danger"></span>
+                            <label asp-for="Input.PhoneNumber" class="form-label">
+                                @L["Profile.PhoneLabel"] <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+                            </label>
+
+                            @* Phone input uses intl-tel-input; dir="ltr" keeps + on the left in RTL pages *@
+                            <input asp-for="Input.PhoneNumber" id="phone" class="form-control" placeholder="+39 345 123 4567" dir="ltr" />
+
+                            <div class="form-text">@L["Profile.PhoneHelp"]</div>
+
+                            @* Server-side ModelState message (rendered) *@
+                            <span id="phoneError" class="text-danger field-validation">
+                                @Html.Raw(ViewData.ModelState[nameof(Model.Input.PhoneNumber)]?.Errors.FirstOrDefault()?.ErrorMessage)
+                            </span>
+
+                            @* unobtrusive validation slot (kept for client validation wiring) *@
+                            <span asp-validation-for="Input.PhoneNumber" class="text-danger visually-hidden"></span>
                         </div>
 
                         <div class="mb-3">
@@ -35,6 +48,7 @@
                             <input asp-for="Input.DateOfBirth" class="form-control" type="date" />
                             <span asp-validation-for="Input.DateOfBirth" class="text-danger"></span>
                         </div>
+
                         <div class="mb-3">
                             <label asp-for="Input.PreferredLanguage" class="form-label">@L["Profile.PreferredLanguage"]</label>
                             <select asp-for="Input.PreferredLanguage" class="form-control">
@@ -44,6 +58,7 @@
                             </select>
                             <span asp-validation-for="Input.PreferredLanguage" class="text-danger"></span>
                         </div>
+
                         <div class="mb-3">
                             <label class="form-label">@L["Profile.UploadPhotoLabel"]</label>
                             <input type="file" asp-for="Photo" class="form-control" />
@@ -89,7 +104,7 @@
                                 <div class="mt-2"><a href="@Model.Input.CVDisplayUrl" target="_blank">@L["DownloadCV"]</a></div>
                             }
                         </div>
-                        
+
                         <div class="d-flex justify-content-between">
                             <a asp-page="/Account/Manage/Index" class="btn btn-outline-secondary">@L["Button.Cancel"]</a>
                             <button type="submit" class="btn btn-success">@L["ProfileComplete.SaveButton"]</button>
@@ -106,7 +121,86 @@
     </div>
 </div>
 
-
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            // localized values injected into JS
+            const localized = {
+                defaultRegion: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewData["DefaultRegion"] ?? "IT")),
+                preferredCountries: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new[] { "it", "gb", "us" })),
+                errInvalidPhone: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Validation.InvalidPhone"].Value ?? "Please enter a valid phone number."))
+            };
+
+            function showFieldError(id, message) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.textContent = message || '';
+                    el.style.display = message ? 'inline' : 'none';
+                }
+            }
+
+            const phoneInput = document.getElementById('phone');
+            window.itiPhone = null;
+
+            function createIti(el) {
+                if (!el || !window.intlTelInput) return null;
+                const instance = window.intlTelInput(el, {
+                    initialCountry: (localized.defaultRegion || "IT").toLowerCase(),
+                    preferredCountries: localized.preferredCountries,
+                    separateDialCode: false,
+                    utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.min.js"
+                });
+
+                const currentVal = el.value;
+                if (currentVal && currentVal.trim().length > 0) {
+                    try {
+                        instance.setNumber(currentVal);
+                    } catch (ex) { /* ignore */ }
+                }
+                return instance;
+            }
+
+            window.itiPhone = createIti(phoneInput);
+            const itiPhone = window.itiPhone;
+
+            const form = phoneInput ? phoneInput.closest('form') : null;
+            if (!form) return;
+
+            // robust extractor for E.164 (tries intl-tel-input first, falls back to sanitizing digits)
+            function getE164Safe(itiInstance, inputEl) {
+                if (!inputEl) return null;
+                try {
+                    if (itiInstance && typeof itiInstance.getNumber === 'function') {
+                        const n = itiInstance.getNumber();
+                        if (n && n.trim().length > 0) return n;
+                    }
+                } catch (ex) { /* ignore */ }
+
+                const raw = inputEl.value || '';
+                const digits = raw.replace(/\D/g, '');
+                if (digits.length >= 6 && digits.length <= 15) return '+' + digits;
+                return null;
+            }
+
+            form.addEventListener('submit', function (ev) {
+                showFieldError('phoneError', '');
+
+                if (phoneInput && phoneInput.value && phoneInput.value.trim().length > 0) {
+                    const e164 = getE164Safe(itiPhone, phoneInput);
+                    if (!e164) {
+                        ev.preventDefault();
+                        showFieldError('phoneError', localized.errInvalidPhone);
+                        phoneInput.focus();
+                        return false;
+                    } else {
+                        phoneInput.value = e164;
+                    }
+                }
+
+                return true;
+            });
+        })();
+    </script>
 }
+
+

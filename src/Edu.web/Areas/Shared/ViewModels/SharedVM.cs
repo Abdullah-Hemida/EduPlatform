@@ -62,7 +62,9 @@ namespace Edu.Web.Areas.Shared.ViewModels
         public string? StudentId { get; set; }
         public string? StudentName { get; set; }
         public string? StudentPhoneNumber { get; set; }
-        public string? GuardianPhoneNumber { get; set; }
+        public string? StudentWhatsapp { get; set; }
+        public string GuardianPhoneNumber { get; set; } = string.Empty;
+        public string GuardianWhatsapp { get; set; } = string.Empty;
         public string? StudentEmail { get; set; }
         public string? TeacherId { get; set; }
         public string? TeacherName { get; set; }

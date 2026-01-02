@@ -94,7 +94,17 @@
                                 <td class="small text-muted">@idx</td>
                                 <td>
                                     <div class="fw-semibold">@r.StudentName</div>
-                                    <div class="small text-muted">@r.StudentPhone</div>
+                                    <div>
+                                        <span class="small text-muted d-flex align-items-center gap-2">
+                                            <span dir="ltr" class="ltr-phone">@(r.StudentPhone ?? "—")</span>
+                                            <span dir="ltr">
+                                                @if (!string.IsNullOrWhiteSpace(r.PhoneWhatsapp))
+                                                {
+                                                    @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", r.PhoneWhatsapp)
+                                                }
+                                        </span>
+                                        </span>
+                                    </div>
                                 </td>
                                 <td>
                                     <div class="fw-semibold">@r.CourseTitle</div>
@@ -178,7 +188,15 @@
                                     <div class="mb-2">
                                         <div class="small text-muted">@L["Purchase.Requester"]</div>
                                         <div class="fw-semibold">@r.StudentName</div>
-                                        <div class="small text-muted">@r.StudentPhone</div>
+                                        <div>
+                                            <span dir="ltr" class="ltr-phone">@(r.StudentPhone ?? "—")</span>
+                                            <span dir="ltr">
+                                                @if (!string.IsNullOrWhiteSpace(r.PhoneWhatsapp))
+                                                {
+                                                    @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", r.PhoneWhatsapp)
+                                                }
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div class="mb-2">

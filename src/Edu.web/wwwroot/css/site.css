@@ -905,3 +905,21 @@ hr {
 [dir="rtl"] .filter-card {
     text-align: right;
 }
+/* keep WA button LTR inside RTL pages */
+[dir="rtl"] .whatsapp-chat-btn {
+    direction: ltr;
+}
+
+/* small spacing / vertical centering */
+.whatsapp-chat-btn i {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.ltr-phone {
+    white-space: nowrap;
+    max-width: 12rem; /* adjust as needed */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}

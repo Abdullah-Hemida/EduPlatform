@@ -70,7 +70,11 @@ else
                                      class="avatar-sm flex-shrink-0" />
                                 <div class="min-w-0">
                                     <div class="fw-semibold text-truncate-ellipsis">@(b.StudentName ?? "-")</div>
-                                    <div class="small text-muted text-truncate-ellipsis">@(b.StudentPhoneNumber ?? "")</div>
+                                    <div>
+                                        <span class="small text-muted d-flex align-items-center gap-2">
+                                            <span dir="ltr" class="ltr-phone">@(b.StudentPhoneNumber ?? "—")</span>
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -128,7 +132,9 @@ else
                                      class="avatar-sm flex-shrink-0" />
                                 <div class="min-w-0">
                                     <div class="fw-semibold text-truncate-ellipsis">@(b.StudentName ?? "-")</div>
-                                    <div class="small text-muted text-truncate-ellipsis">@(b.StudentPhoneNumber ?? "")</div>
+                                    <span class="small text-muted d-flex align-items-center gap-2">
+                                        <span dir="ltr" class="ltr-phone">@(b.StudentPhoneNumber ?? "—")</span>
+                                    </span>
                                 </div>
                             </div>
                         </td>

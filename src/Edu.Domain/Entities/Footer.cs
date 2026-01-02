@@ -11,7 +11,7 @@ namespace Edu.Domain.Entities
         public string Culture { get; set; } = "en";
         public string PersonName { get; set; } = "";
         public string Position { get; set; } = "";
-        public string Contact { get; set; } = ""; // phone/whatsapp/telegram url or text
+        public string Contact { get; set; } = "";
         public int Order { get; set; }
     }
 

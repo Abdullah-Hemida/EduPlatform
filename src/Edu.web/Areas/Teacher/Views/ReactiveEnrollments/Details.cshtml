@@ -1,4 +1,6 @@
-﻿@model Edu.Web.Areas.Teacher.ViewModels.ReactiveEnrollmentDetailsVm
+﻿@model Edu.Web.Areas.Admin.ViewModels.AdminEnrollmentDetailsVm
+@using System.Text.Json
+@using Edu.Infrastructure.Helpers;
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
@@ -25,18 +27,6 @@
         <!-- Summary card -->
         <div class="card mb-3">
             <div class="card-body d-flex flex-column flex-md-row gap-3 align-items-start">
-                <!-- cover -->
-                @{
-                    var imgSrc = !string.IsNullOrEmpty(Model.CourseCoverUrl) ? Model.CourseCoverUrl : defaultCover;
-                }
-                <div class="order-md-1">
-                    <img loading="lazy"
-                         src="@imgSrc"
-                         alt="@Model.CourseTitle"
-                         class="thumb-lg shadow-sm"
-                         onerror="this.onerror=null;this.src='@defaultCover';" />
-                </div>
-
                 <!-- info -->
                 <div class="flex-grow-1 min-w-0 order-md-2">
                     <h5 class="mb-1 text-truncate-ellipsis">@Model.CourseTitle</h5>
@@ -50,7 +40,7 @@
 
                         <div class="col-12 col-sm-6">
                             <div class="small text-muted">@L["ReactiveCourse.TotalPaid"]</div>
-                            <div class="fw-semibold">@Model.TotalPaidLabel</div>
+                            <div class="fw-semibold">@Model.Months.Sum(m => m.Payments.Where(p => p.Status == Edu.Domain.Entities.EnrollmentMonthPaymentStatus.Paid).Sum(p => p.Amount)).ToEuro()</div>
                         </div>
                     </div>
                 </div>
@@ -65,7 +55,7 @@
             </div>
 
             <div class="card-body p-0">
-                @if (!Model.MonthPayments.Any())
+                @if (Model.Months == null || !Model.Months.Any())
                 {
                     <div class="p-3 text-muted small">@L["Admin.NoRecords"]</div>
                 }
@@ -73,36 +63,47 @@
                 {
                     <!-- desktop/tablet: compact list -->
                     <div class="list-group list-group-flush d-none d-md-block">
-                        @foreach (var mp in Model.MonthPayments)
+                        @foreach (var m in Model.Months)
                         {
                             <div class="list-group-item d-flex align-items-center justify-content-between">
                                 <div class="lg-item-main min-w-0">
-                                    <div class="fw-semibold text-truncate">@L["ReactiveCourse.Month"] @mp.MonthIndex</div>
-                                    <div class="small text-muted">@mp.AmountLabel</div>
-                                    @if (!string.IsNullOrEmpty(mp.PaymentReference))
-                                    {
-                                        <div class="small text-muted">Ref: @mp.PaymentReference</div>
-                                    }
-                                    @if (!string.IsNullOrEmpty(mp.AdminNote))
-                                    {
-                                        <div class="small text-muted mt-1">Note: @mp.AdminNote</div>
-                                    }
+                                    <div class="fw-semibold text-truncate">@L["ReactiveCourse.Month"] @m.MonthIndex</div>
+                                    <div class="small text-muted">@m.LessonsCount @L["Admin.Lessons"]</div>
+                                    <div class="small text-muted mt-1">@L["Admin.Payments"] : @m.Payments.Count()</div>
                                 </div>
 
                                 <div class="text-end ms-3">
-                                    <div class="small text-muted">@mp.CreatedAtUtc.ToLocalTime().ToString("g")</div>
+                                    <div class="small text-muted">@L["Admin.Recent"]</div>
                                     <div class="mt-1">
-                                        @if (mp.Status == EnrollmentMonthPaymentStatus.Paid)
+                                        @if (!m.Payments.Any())
                                         {
-                                            <span class="badge bg-success">@(L["Status.Paid"] ?? "Paid")</span>
-                                        }
-                                        else if (mp.Status == EnrollmentMonthPaymentStatus.Pending)
-                                        {
-                                            <span class="badge bg-warning text-dark">@(L["ReactiveCourse.PendingPayments"] ?? "Pending")</span>
+                                            <small class="text-muted">-</small>
                                         }
                                         else
                                         {
-                                            <span class="badge bg-danger">@(L["Status.Rejected"] ?? "Rejected")</span>
+                                            foreach (var p in m.Payments)
+                                            {
+                                                <div class="mb-2">
+                                                    <div>
+                                                        <span class="fw-semibold">@p.AmountLabel</span>
+                                                        <div class="small text-muted">@p.CreatedAtUtc.ToLocalTime().ToString("g")</div>
+                                                    </div>
+                                                    <div class="mt-1">
+                                                        @if (p.Status == Edu.Domain.Entities.EnrollmentMonthPaymentStatus.Paid)
+                                                        {
+                                                            <span class="badge bg-success">@(L["Status.Paid"] ?? "Paid")</span>
+                                                        }
+                                                        else if (p.Status == Edu.Domain.Entities.EnrollmentMonthPaymentStatus.Pending)
+                                                        {
+                                                            <span class="badge bg-warning text-dark">@(L["Status.Pending"] ?? "Pending")</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-danger">@(L["Status.Rejected"] ?? "Rejected")</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
                                         }
                                     </div>
                                 </div>
@@ -113,41 +114,49 @@
                     <!-- mobile: cards for easier reading/tapping -->
                     <div class="d-md-none p-2">
                         <div class="row row-cols-1 g-2">
-                            @foreach (var mp in Model.MonthPayments)
+                            @foreach (var m in Model.Months)
                             {
                                 <div class="col">
                                     <div class="card h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-start justify-content-between gap-2">
                                                 <div class="min-w-0">
-                                                    <div class="fw-semibold text-truncate">@L["ReactiveCourse.Month"] @mp.MonthIndex</div>
-                                                    <div class="small text-muted">@mp.AmountLabel</div>
-                                                    @if (!string.IsNullOrEmpty(mp.PaymentReference))
-                                                    {
-                                                        <div class="small text-muted">Ref: @mp.PaymentReference</div>
-                                                    }
-                                                    @if (!string.IsNullOrEmpty(mp.AdminNote))
-                                                    {
-                                                        <div class="small text-muted mt-1">Note: @mp.AdminNote</div>
-                                                    }
+                                                    <div class="fw-semibold text-truncate">@L["ReactiveCourse.Month"] @m.MonthIndex</div>
+                                                    <div class="small text-muted">@m.LessonsCount @L["Admin.Lessons"]</div>
+                                                    <div class="small text-muted mt-1">@L["Admin.Payments"] : @m.Payments.Count()</div>
                                                 </div>
 
                                                 <div class="text-end">
-                                                    <div class="small text-muted">@mp.CreatedAtUtc.ToLocalTime().ToString("g")</div>
-                                                    <div class="mt-1">
-                                                        @if (mp.Status == EnrollmentMonthPaymentStatus.Paid)
+                                                    @if (!m.Payments.Any())
+                                                    {
+                                                        <small class="text-muted">-</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        foreach (var p in m.Payments)
                                                         {
-                                                            <span class="badge bg-success">@(L["Status.Paid"] ?? "Paid")</span>
+                                                            <div class="mb-2">
+                                                                <div class="small text-muted">@p.CreatedAtUtc.ToLocalTime().ToString("g")</div>
+                                                                <div>
+                                                                    <span class="fw-semibold">@p.AmountLabel</span>
+                                                                </div>
+                                                                <div class="mt-1">
+                                                                    @if (p.Status == Edu.Domain.Entities.EnrollmentMonthPaymentStatus.Paid)
+                                                                    {
+                                                                        <span class="badge bg-success">@(L["Status.Paid"] ?? "Paid")</span>
+                                                                    }
+                                                                    else if (p.Status == Edu.Domain.Entities.EnrollmentMonthPaymentStatus.Pending)
+                                                                    {
+                                                                        <span class="badge bg-warning text-dark">@(L["Status.Pending"] ?? "Pending")</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge bg-danger">@(L["Status.Rejected"] ?? "Rejected")</span>
+                                                                    }
+                                                                </div>
+                                                            </div>
                                                         }
-                                                        else if (mp.Status == EnrollmentMonthPaymentStatus.Pending)
-                                                        {
-                                                            <span class="badge bg-warning text-dark">@(L["ReactiveCourse.PendingPayments"] ?? "Pending")</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge bg-danger">@(L["Status.Rejected"] ?? "Rejected")</span>
-                                                        }
-                                                    </div>
+                                                    }
                                                 </div>
                                             </div>
                                         </div>
@@ -160,7 +169,57 @@
             </div>
         </div>
     </div>
+
+    <!-- Sidebar -->
+    <aside class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <h6>@L["Admin.StudentInfo"]</h6>
+                <div class="d-flex align-items-start gap-3">
+                    @if (!string.IsNullOrEmpty(Model.StudentPhotoUrl))
+                    {
+                        <img src="@Model.StudentPhotoUrl" class="rounded" style="width:72px;height:72px;object-fit:cover" />
+                    }
+                    <div class="min-w-0">
+                        <div class="fw-semibold text-truncate">@Model.StudentName</div>
+                        <div class="small text-muted">@Model.StudentEmail</div>
+
+                        <div class="small text-muted d-flex align-items-center gap-2 mt-2">
+                            <span dir="ltr" class="ltr-phone">@(Model.StudentPhone ?? "—")</span>
+                            @if (!string.IsNullOrEmpty(Model.PhoneWhatsapp))
+                            {
+                                <span dir="ltr">@await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", Model.PhoneWhatsapp)</span>
+                            }
+                        </div>
+
+                        <div class="mt-2 small text-muted">
+                            <strong>@L["GuardianPhoneNumber"]:</strong>
+                            <span dir="ltr" class="ltr-phone">@((Model.GuardianPhoneNumber) ?? "—")</span>
+                            @if (!string.IsNullOrEmpty(Model.GuardianWhatsapp))
+                            {
+                                <span class="ms-2" dir="ltr">@await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", Model.GuardianWhatsapp)</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <h6>@L["Course.Info"]</h6>
+                <dl class="row small">
+                    <dt class="col-6 text-muted">@L["Admin.Course"]</dt>
+                    <dd class="col-6 text-end">@Model.CourseTitle</dd>
+
+                    <dt class="col-6 text-muted">@L["ReactiveCourse.EnrolledAt"]</dt>
+                    <dd class="col-6 text-end">@Model.CreatedAtUtc.ToLocalTime().ToString("g")</dd>
+                </dl>
+            </div>
+        </div>
+    </aside>
 </div>
+
 
 
 

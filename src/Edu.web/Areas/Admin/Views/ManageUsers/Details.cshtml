@@ -16,7 +16,15 @@
                 <p class="text-muted mb-1">@string.Join(", ", Model.Roles)</p>
                 <p class="mb-0"><strong>@L["Admin.Email"]:</strong><br />@Model.Email</p>
                 <p><strong>@L["Profile.DateOfBirth"]</strong> @Model.DateOfBirth?.ToString("yyyy-MM-dd")</p>
-                <p class="mb-0"><strong>@L["Admin.Phone"]:</strong><br />@Model.PhoneNumber</p>
+                <p class="mb-0">
+                    <strong>@L["Admin.Phone"]:</strong><br />
+                    <span class="small text-muted d-flex align-items-center gap-2">
+                        <span dir="ltr" class="ltr-phone">@(Model.PhoneNumber ?? "—")</span>
+                        <span dir="ltr">
+                            @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", Model.PhoneWhatsapp)
+                        </span>
+                    </span>
+                </p>
             </div>
         </div>
 
@@ -104,7 +112,13 @@
                         <span class="badge bg-secondary ms-2">@L["Admin.NotAllowed"]</span>
                     }
                 </p>
-                <div>@L["GuardianPhoneNumber"] : @Model.GuardianPhoneNumber</div>
+                <div class="d-flex align-items-center gap-2">
+                    <strong>@L["GuardianPhoneNumber"]:</strong>
+                    <span dir="ltr" class="ltr-phone">@(Model.GuardianPhoneNumber ?? "—")</span>
+                    <span dir="ltr">
+                        @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", Model.GuardianWhatsapp)
+                    </span>
+                </div>
                 <form asp-action="AssignCurricula" method="post">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
@@ -120,13 +134,20 @@
                     }
                     else
                     {
-                        foreach (var c in Model.Curricula)
+                        @foreach (var c in Model.Curricula)
                         {
                             var isChecked = Model.SelectedCurriculumIds != null && Model.SelectedCurriculumIds.Contains(c.Id);
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox"
-                                       name="selectedCurriculumIds" value="@c.Id" id="cur_@c.Id" @(isChecked ? "checked" : "") />
-                                <label class="form-check-label" for="cur_@c.Id">
+                            <div class="d-flex align-items-center flex-nowrap mb-1 g-3" style="min-width:0;">
+                                @* checkbox first in DOM so it stays visually first in RTL/LTR *@
+                                <input type="checkbox"
+                                       id="cur_@c.Id"
+                                       name="selectedCurriculumIds"
+                                       value="@c.Id"
+                                       class="form-check-input border-black flex-shrink-0 me-2 ms-2"
+                                       @(isChecked ? "checked" : "") />
+
+                                @* label uses for="" to remain accessible; flex-fill + text-truncate prevents overlap *@
+                                <label for="cur_@c.Id" class="mb-0 flex-fill text-truncate" style="min-width:0;">
                                     @c.Title
                                     @if (!string.IsNullOrEmpty(c.LevelName))
                                     {
@@ -135,6 +156,8 @@
                                 </label>
                             </div>
                         }
+
+
                     }
 
                     <div class="mt-3">

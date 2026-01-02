@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 
 namespace Edu.Web.Areas.Identity.Pages.Account.Manage
 {
@@ -41,6 +42,9 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
         [BindProperty]
         public InputModel Input { get; set; } = new();
 
+        // new: flag to indicate whether current user has a Student record
+        public bool IsStudent { get; set; } = false;
+
         public class InputModel
         {
             public string FullName { get; set; } = string.Empty;
@@ -48,10 +52,13 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
             [Phone]
             public string? PhoneNumber { get; set; }
 
+            // optional guardian phone (for student accounts)
+            public string? GuardianPhoneNumber { get; set; }
+
             [DataType(DataType.Date)]
             public DateTime? DateOfBirth { get; set; }
 
-            // Storage keys
+            // Storage keys / computed urls
             public string? PhotoStorageKey { get; set; }
             public string? CVStorageKey { get; set; }
 
@@ -63,6 +70,10 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
             // Computed URLs for display
             public string? PhotoUrl { get; set; }
             public string? CVUrl { get; set; }
+
+            // computed for rendering WA buttons (digits only, no +)
+            public string? PhoneWhatsapp { get; set; }
+            public string? GuardianWhatsapp { get; set; }
         }
 
         // GET: Load profile
@@ -82,8 +93,21 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 DateOfBirth = user.DateOfBirth,
                 PhotoStorageKey = user.PhotoStorageKey,
             };
-            Input.PhotoUrl = await _files.GetPublicUrlAsync(user.PhotoStorageKey);
-            // Load teacher-specific data
+
+            // try to resolve photo url (best-effort)
+            try { Input.PhotoUrl = string.IsNullOrEmpty(user.PhotoStorageKey) ? user.PhotoUrl : await _files.GetPublicUrlAsync(user.PhotoStorageKey); }
+            catch { Input.PhotoUrl = user.PhotoUrl; }
+
+            // Load student (guardian phone) if present
+            var student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
+            IsStudent = student != null;
+
+            if (student != null)
+            {
+                Input.GuardianPhoneNumber = student.GuardianPhoneNumber;
+            }
+
+            // Load teacher-specific data if relevant
             if (await _userManager.IsInRoleAsync(user, "Teacher"))
             {
                 var teacher = await _db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == user.Id);
@@ -93,11 +117,30 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                     Input.ShortBio = teacher.ShortBio;
                     Input.IntroVideoUrl = teacher.IntroVideoUrl;
                     Input.CVStorageKey = teacher.CVStorageKey;
-                    Input.CVUrl = await _files.GetPublicUrlAsync(teacher.CVStorageKey);
-
+                    try { Input.CVUrl = string.IsNullOrEmpty(teacher.CVStorageKey) ? teacher.CVUrl : await _files.GetPublicUrlAsync(teacher.CVStorageKey); }
+                    catch { Input.CVUrl = teacher.CVUrl; }
                     ViewData["IntroVideoEmbedUrl"] = GetYouTubeEmbedUrl(teacher.IntroVideoUrl);
                 }
             }
+
+            // compute default region for phone helper from CurrentUICulture (fallback IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch { defaultRegion = "IT"; }
+
+            // compute whatsapp digits for UI buttons (digits-only, no +)
+            Input.PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(Input.PhoneNumber, defaultRegion);
+            Input.GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(Input.GuardianPhoneNumber, defaultRegion);
+
+            // Replace all instances of 'ViewBag' with 'ViewData' (which is available in Razor Pages)
+            ViewData["DefaultRegion"] = defaultRegion;
+            ViewData["WhatsAppLabel"] = _localizer["WhatsApp"].Value ?? "WhatsApp";
+
             return Page();
         }
 
@@ -129,6 +172,14 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 }
             }
 
+            // Save guardian phone for student if present
+            var student = await _db.Students.FirstOrDefaultAsync(s => s.Id == user.Id);
+            if (student != null)
+            {
+                student.GuardianPhoneNumber = Input.GuardianPhoneNumber;
+                // do not call SaveChanges here yet; will be committed later
+            }
+
             // Photo upload
             if (photo != null)
             {
@@ -142,10 +193,30 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 var key = await _files.SaveFileAsync(photo, $"users/{user.Id}");
                 user.PhotoStorageKey = key;
                 Input.PhotoStorageKey = key;
-                Input.PhotoUrl = await _files.GetPublicUrlAsync(key);
+                try { Input.PhotoUrl = await _files.GetPublicUrlAsync(key); } catch { Input.PhotoUrl = null; }
             }
 
-            await _userManager.UpdateAsync(user);
+            // Persist changes (user & student changes)
+            var updateUserResult = await _userManager.UpdateAsync(user);
+            if (!updateUserResult.Succeeded)
+            {
+                ModelState.AddModelError(string.Empty, _localizer["UnexpectedError"]);
+                await OnGetAsync();
+                return Page();
+            }
+
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // log as appropriate in your app (logger not injected here, but you already have elsewhere)
+                ModelState.AddModelError(string.Empty, _localizer["UnexpectedError"]);
+                await OnGetAsync();
+                return Page();
+            }
+
             await _signInManager.RefreshSignInAsync(user);
 
             StatusMessage = _localizer["ProfileUpdated"];
@@ -155,6 +226,7 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
         // POST: Update teacher profile (CV included)
         public async Task<IActionResult> OnPostTeacherAsync(IFormFile? cvFile)
         {
+            // unchanged from your version — keep existing logic
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return NotFound();
 
@@ -203,7 +275,7 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                 var key = await _files.SaveFileAsync(cvFile, $"users/{user.Id}/cv");
                 teacher.CVStorageKey = key;
                 Input.CVStorageKey = key;
-                Input.CVUrl = await _files.GetPublicUrlAsync(key);
+                try { Input.CVUrl = await _files.GetPublicUrlAsync(key); } catch { Input.CVUrl = null; }
             }
 
             await _db.SaveChangesAsync();
@@ -211,7 +283,7 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
             return RedirectToAction("Index", "Home", new { area = "" });
         }
 
-        // YouTube helper
+        // YouTube helper unchanged...
         private string? GetYouTubeEmbedUrl(string? url)
         {
             if (string.IsNullOrEmpty(url)) return null;

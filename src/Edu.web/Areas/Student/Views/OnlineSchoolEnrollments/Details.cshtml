@@ -88,23 +88,35 @@
                 <div class="mt-4">
                     <div class="d-flex align-items-center justify-content-between mt-2 mb-2">
                         <div class="small text-muted mb-2">@L["ReactiveCourse.Duration"] : @Model.DurationMonths @L["ReactiveCourse.Months"]</div>
+
                         <div id="enroll-area" data-enrolled="@Model.IsEnrolled.ToString().ToLower()" data-enrollment-id="@(Model.EnrollmentId ?? 0)">
-                            @if (!Model.IsEnrolled)
+                            @if (User.Identity?.IsAuthenticated == true && User.IsInRole("Student"))
                             {
-                                <button id="btnEnroll" class="btn btn-primary" data-course-id="@Model.CourseId">@L["ReactiveCourse.Enroll"]</button>
+                                if (!Model.IsEnrolled)
+                                {
+                                    <button id="btnEnroll" class="btn btn-primary" data-course-id="@Model.CourseId">@L["ReactiveCourse.Enroll"]</button>
+                                }
+                                else
+                                {
+                                    var cancelDisabled = Model.HasPendingEnrollment || Model.HasAnyPaidMonth;
+                                    <div>
+                                        <button id="btnCancelEnroll"
+                                                class="btn btn-outline-danger ms-2"
+                                                data-course-id="@Model.CourseId"
+                                                @(cancelDisabled ? "disabled" : "")>
+                                            @L["ReactiveCourse.CancelEnrollment"]
+                                        </button>
+                                        <span class="badge bg-success ms-2">@L["ReactiveCourse.Enrolled"]</span>
+                                    </div>
+                                }
                             }
                             else
                             {
-                                var cancelDisabled = Model.HasPendingEnrollment || Model.HasAnyPaidMonth;
-                                <div>
-                                    <button id="btnCancelEnroll"
-                                            class="btn btn-outline-danger ms-2"
-                                            data-course-id="@Model.CourseId"
-                                            @(cancelDisabled ? "disabled" : "")>
-                                        @L["ReactiveCourse.CancelEnrollment"]
-                                    </button>
+                                @* Optionally show nothing for non-students, or show a read-only badge. Example: *@
+                                @if (Model.IsEnrolled)
+                                {
                                     <span class="badge bg-success ms-2">@L["ReactiveCourse.Enrolled"]</span>
-                                </div>
+                                }
                             }
                         </div>
                     </div>
@@ -130,49 +142,63 @@
 
                                 <div class="d-flex align-items-center justify-content-end gap-2">
                                     <div class="action-area">
-                                        @* Status badge (always show; action button is separate and exclusive) *@
+
+                                        @* ===== PAID: show badge only, nothing else ===== *@
                                         @if (m.MyPaymentStatus == OnlineEnrollmentMonthPaymentStatus.Paid)
                                         {
                                             <span class="badge bg-success">@L["Status.Paid"]</span>
                                         }
+
+                                        @* ===== PENDING ===== *@
                                         else if (m.MyPaymentStatus == OnlineEnrollmentMonthPaymentStatus.Pending)
                                         {
                                             <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+
+                                            @if (m.CanCancelPayment)
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment"
+                                                        data-payment-id="@(m.PaymentId ?? 0)">
+                                                    @L["ReactiveCourse.CancelPayment"]
+                                                </button>
+                                            }
                                         }
+
+                                        @* ===== REJECTED ===== *@
                                         else if (m.MyPaymentStatus == OnlineEnrollmentMonthPaymentStatus.Rejected)
                                         {
                                             <span class="badge bg-danger">@L["Status.Rejected"]</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-secondary">@L["Admin.NotRequested"]</span>
+
+                                            @if (m.IsReadyForPayment && m.CanRequestPayment)
+                                            {
+                                                <button class="btn btn-sm btn-primary ms-2 btnPayMonth"
+                                                        data-month-id="@m.Id"
+                                                        data-course-id="@Model.CourseId">
+                                                    @L["ReactiveCourse.RequestPayment"]
+                                                </button>
+                                            }
                                         }
 
-                                        @* -- ACTION (mutually exclusive) -- *@
-                                        @* If pending -> show only Cancel button *@
-                                        @if (m.MyPaymentStatus == OnlineEnrollmentMonthPaymentStatus.Pending && m.CanCancelPayment)
-                                        {
-                                            <button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="@(m.PaymentId ?? 0)">
-                                                @L["ReactiveCourse.CancelPayment"]
-                                            </button>
-                                        }
-                                        @* Else if month ready -> show Pay button (may be disabled if not enrolled) *@
-                                        else if (m.IsReadyForPayment)
-                                        {
-                                            <button class="btn btn-sm btn-primary ms-2 btnPayMonth"
-                                                    data-month-id="@m.Id"
-                                                    data-course-id="@Model.CourseId"
-                                                    @( (Model.IsEnrolled && m.CanRequestPayment) ? "" : "disabled")>
-                                                @L["ReactiveCourse.RequestPayment"]
-                                            </button>
-                                        }
-                                        @* Else -> show localized "Month not ready" badge instead of a disabled pay button *@
+                                        @* ===== NOT REQUESTED YET ===== *@
                                         else
                                         {
-                                            <span class="badge bg-secondary ms-2">@localizedStrings["MonthNotReady"]</span>
+                                            if (m.IsReadyForPayment && m.CanRequestPayment)
+                                            {
+                                                <button class="btn btn-sm btn-primary btnPayMonth"
+                                                        data-month-id="@m.Id"
+                                                        data-course-id="@Model.CourseId"
+                                                        @(Model.IsEnrolled ? "" : "disabled")>
+                                                    @L["ReactiveCourse.RequestPayment"]
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">@localizedStrings["MonthNotReady"]</span>
+                                            }
                                         }
+
                                     </div>
                                 </div>
+
                             </div>
 
                             @* Lesson list that is visible only when CanViewLessons is true *@

@@ -48,6 +48,7 @@ namespace Edu.Web.Areas.Student.ViewModels
         public bool CanRequestPayment { get; set; }       // computed
         public bool CanCancelPayment { get; set; }        // only for pending
         public bool CanViewLessons { get; set; }          // only if paid (or free preview)
+        public bool HasPaidPayment { get; set; } = false;
         public List<StudentCourseLessonVm> Lessons { get; set; } = new();
 
         // optional helper for client

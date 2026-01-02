@@ -2,10 +2,13 @@
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
 using Edu.Web.Areas.Admin.ViewModels;
+using Edu.Web.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -16,11 +19,13 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly ApplicationDbContext _db;
         private readonly ILogger<PurchaseRequestsController> _logger;
         private const int PageSize = 10;
+        private readonly IStringLocalizer<SharedResource> _localizer;
 
-        public PurchaseRequestsController(ApplicationDbContext db, ILogger<PurchaseRequestsController> logger)
+        public PurchaseRequestsController(ApplicationDbContext db, ILogger<PurchaseRequestsController> logger, IStringLocalizer<SharedResource> localizer)
         {
             _db = db;
             _logger = logger;
+            _localizer = localizer;
         }
 
         // GET: Admin/PurchaseRequests
@@ -48,7 +53,18 @@ namespace Edu.Web.Areas.Admin.Controllers
             // ✅ Pagination calculation
             var totalCount = await query.CountAsync();
             var skip = (page - 1) * PageSize;
-
+            // compute default region from admin UI culture (fallback to IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
             // ✅ Main query with projection
             var items = await query
                 .Skip(skip)
@@ -59,7 +75,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                     StudentId = p.StudentId,
                     StudentName = p.Student.User.FullName,
                     StudentPhone = p.Student.User.PhoneNumber,
-                    GuardianPhoneNumber = p.Student.GuardianPhoneNumber,
+                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(p.Student.User.PhoneNumber, defaultRegion),
                     PrivateCourseId = p.PrivateCourseId,
                     CourseTitle = p.PrivateCourse.Title,
                     TeacherName = p.PrivateCourse.Teacher.User.FullName,
@@ -84,6 +100,8 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Status = status,
                 Search = search
             };
+            // localized label for the WA button (used by the partial)
+            ViewBag.WhatsAppLabel = _localizer["WhatsApp"].Value ?? "WhatsApp";
             ViewData["ActivePage"] = "PurchaseRequests";
             return View(model);
         }
@@ -128,14 +146,27 @@ namespace Edu.Web.Areas.Admin.Controllers
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (pr == null) return NotFound();
-
+            // compute default region from admin UI culture (fallback to IT)
+            string defaultRegion = "IT";
+            try
+            {
+                var regionInfo = new RegionInfo(CultureInfo.CurrentUICulture.Name);
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
+                    defaultRegion = regionInfo.TwoLetterISORegionName;
+            }
+            catch
+            {
+                defaultRegion = "IT";
+            }
             var vm = new PurchaseRequestListItemVm
             {
                 Id = pr.Id,
                 StudentId = pr.StudentId,
                 StudentName = pr.Student?.User?.FullName,
                 StudentPhone = pr.Student?.User?.PhoneNumber,
+                PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(pr.Student?.User?.PhoneNumber, defaultRegion),
                 GuardianPhoneNumber = pr.Student?.GuardianPhoneNumber,
+                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(pr.Student?.GuardianPhoneNumber, defaultRegion),
                 PrivateCourseId = pr.PrivateCourseId,
                 CourseTitle = pr.PrivateCourse?.Title,
                 TeacherName = pr.PrivateCourse?.Teacher?.User?.FullName,
@@ -144,6 +175,8 @@ namespace Edu.Web.Areas.Admin.Controllers
                 AmountLabel = pr.Amount.ToEuro(),
                 AdminNote = pr.AdminNote
             };
+            // localized label for the WA button (used by the partial)
+            ViewBag.WhatsAppLabel = _localizer["WhatsApp"].Value ?? "WhatsApp";
             ViewData["ActivePage"] = "PurchaseRequests";
             return View(vm);
         }

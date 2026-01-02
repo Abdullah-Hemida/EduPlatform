@@ -9,6 +9,7 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public int Id { get; set; }
         public string StudentName { get; set; } = string.Empty;
         public string? StudentPhone { get; set; }
+        public string? PhoneWhatsapp { get; set; }
         public string? StudentImageKey { get; set; }  // key stored in DB
         public string? StudentImageUrl { get; set; }  // resolved public URL
         public string CourseTitle { get; set; } = string.Empty;
@@ -30,6 +31,8 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public string? StudentEmail { get; set; }
         public string? StudentPhoneNumber { get; set; }
         public string? GuardianPhoneNumber { get; set; }
+        public string? PhoneWhatsapp { get; set; }
+        public string? GuardianWhatsapp { get; set; }
         public DateTime CreatedAtUtc { get; set; }
         public bool IsApproved { get; set; }
         public bool IsPaid { get; set; }
