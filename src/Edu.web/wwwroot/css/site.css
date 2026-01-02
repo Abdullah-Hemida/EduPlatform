@@ -40,9 +40,6 @@ body {
 }
 
 
-
-
-
 /* Proper flexbox layout for desktop */
 @media (min-width: 992px) {
     .navbar {
@@ -69,7 +66,7 @@ body {
         display: flex;
         justify-content: center;
         flex: 1;
-        max-width: 400px;       
+        max-width: 450px;       
     }
 
     .navbar-nav.ms-lg-auto {
