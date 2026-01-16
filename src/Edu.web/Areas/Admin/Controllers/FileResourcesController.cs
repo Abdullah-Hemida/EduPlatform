@@ -245,28 +245,27 @@ namespace Edu.Web.Areas.Admin.Controllers
             }
         }
 
-        // ---------------- Index (list) ----------------
-        public async Task<IActionResult> Index(int? privateLessonId, int? schoolLessonId, CancellationToken cancellationToken = default)
-        {
-            ViewData["ActivePage"] = "PrivateCourses";
-
-            var q = _db.FileResources
-                .AsNoTracking()
-                .Include(f => f.PrivateLesson)
-                .Include(f => f.SchoolLesson)
-                .Include(f => f.OnlineCourseLesson)
-                .Include(f => f.ReactiveCourseLesson)
-                .AsQueryable();
-
-            if (privateLessonId.HasValue) q = q.Where(f => f.PrivateLessonId == privateLessonId.Value);
-            if (schoolLessonId.HasValue) q = q.Where(f => f.SchoolLessonId == schoolLessonId.Value);
-
-            var list = await q.OrderByDescending(f => f.Id).ToListAsync(cancellationToken);
-            return View(list);
-        }
     }
 }
 
+// ---------------- Index (list) ----------------
+//public async Task<IActionResult> Index(int? privateLessonId, int? schoolLessonId, CancellationToken cancellationToken = default)
+//{
+//    ViewData["ActivePage"] = "PrivateCourses";
 
+//    var q = _db.FileResources
+//        .AsNoTracking()
+//        .Include(f => f.PrivateLesson)
+//        .Include(f => f.SchoolLesson)
+//        .Include(f => f.OnlineCourseLesson)
+//        .Include(f => f.ReactiveCourseLesson)
+//        .AsQueryable();
+
+//    if (privateLessonId.HasValue) q = q.Where(f => f.PrivateLessonId == privateLessonId.Value);
+//    if (schoolLessonId.HasValue) q = q.Where(f => f.SchoolLessonId == schoolLessonId.Value);
+
+//    var list = await q.OrderByDescending(f => f.Id).ToListAsync(cancellationToken);
+//    return View(list);
+//}
 
 

@@ -918,7 +918,14 @@
   "AdminCategory.NameAr": "Nome della categoria (arabo)",
   "Admin.PublishedShort": "Pubblicato",
   "Admin.RecentMonths": "Mesi recenti",
-  "Admin.AllMonths": "Tutti i mesi"
+  "Admin.AllMonths": "Tutti i mesi",
+
+  "Hero.Tooltip.RegisterButton": "Registrati per creare il tuo account",
+  "Hero.Tooltip.School": "Per lo studio della lingua araba e delle scienze islamiche per i nostri studenti iscritti che frequentano in presenza",
+  "Hero.Tooltip.OnlineSchool": "Aula online e corsi",
+  "Hero.Tooltip.Teachers": "Sfoglia i nostri insegnanti",
+  "Hero.Tooltip.RecordedCourses": "Libreria di corsi registrati",
+  "Hero.Tooltip.ReactiveCourses": "Corsi live/reactive e gruppi"
 }
 
 

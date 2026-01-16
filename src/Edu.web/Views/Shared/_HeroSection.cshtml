@@ -21,18 +21,25 @@
         <p data-aos="fade-up" data-aos-delay="200" class="lead">@desc</p>
 
         <div class="text-center my-4" data-aos="zoom-in">
-            <a asp-area="Identity" asp-page="/Account/Register" class="btn btn-primary btn-lg px-4 py-2 rounded-pill shadow-sm">
+            <a asp-area="Identity" asp-page="/Account/Register"
+               class="btn btn-primary btn-lg px-4 py-2 rounded-pill shadow-sm"
+               role="button"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               title="@L["Hero.Tooltip.RegisterButton"]"
+               aria-label="@L["Hero.Tooltip.RegisterButton"]">
                 <i class="fa-solid fa-user-plus me-2"></i> @L["Hero.Button"]
             </a>
         </div>
 
         <!-- Link Cards -->
-        <!-- note: row-cols adjusted so cards get more width on md/lg screens -->
         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3 mt-3 justify-content-center">
 
             <!-- School -->
             <div class="col">
-                <a asp-area="" asp-controller="School" asp-action="Index" class="text-decoration-none">
+                <a asp-area="" asp-controller="School" asp-action="Index" class="text-decoration-none"
+                   data-bs-toggle="tooltip" data-bs-placement="top"
+                   title="@L["Hero.Tooltip.School"]" aria-label="@L["Hero.Tooltip.School"]">
                     <div class="card h-100 text-center shadow-sm border-0 hover-card small-card">
                         <div class="card-body d-flex flex-column justify-content-center align-items-center">
                             <div class="text-primary icon-wrap mb-1"><i class="fa-solid fa-school"></i></div>
@@ -41,8 +48,12 @@
                     </div>
                 </a>
             </div>
+
+            <!-- Online School -->
             <div class="col">
-                <a asp-area="" asp-controller="OnlineSchool" asp-action="Index" class="text-decoration-none">
+                <a asp-area="" asp-controller="OnlineSchool" asp-action="Index" class="text-decoration-none"
+                   data-bs-toggle="tooltip" data-bs-placement="top"
+                   title="@L["Hero.Tooltip.OnlineSchool"]" aria-label="@L["Hero.Tooltip.OnlineSchool"]">
                     <div class="card h-100 text-center shadow-sm border-0 hover-card small-card">
                         <div class="card-body d-flex flex-column justify-content-center align-items-center">
                             <div class="text-primary icon-wrap mb-1">
@@ -53,9 +64,12 @@
                     </div>
                 </a>
             </div>
+
             <!-- Teachers -->
             <div class="col">
-                <a asp-area="" asp-controller="Teachers" asp-action="Index" class="text-decoration-none">
+                <a asp-area="" asp-controller="Teachers" asp-action="Index" class="text-decoration-none"
+                   data-bs-toggle="tooltip" data-bs-placement="top"
+                   title="@L["Hero.Tooltip.Teachers"]" aria-label="@L["Hero.Tooltip.Teachers"]">
                     <div class="card h-100 text-center shadow-sm border-0 hover-card small-card">
                         <div class="card-body d-flex flex-column justify-content-center align-items-center">
                             <div class="text-success icon-wrap mb-1"><i class="fa-solid fa-chalkboard-user"></i></div>
@@ -67,7 +81,9 @@
 
             <!-- Recorded Courses -->
             <div class="col">
-                <a asp-area="" asp-controller="PrivateCourses" asp-action="Index" class="text-decoration-none">
+                <a asp-area="" asp-controller="PrivateCourses" asp-action="Index" class="text-decoration-none"
+                   data-bs-toggle="tooltip" data-bs-placement="top"
+                   title="@L["Hero.Tooltip.RecordedCourses"]" aria-label="@L["Hero.Tooltip.RecordedCourses"]">
                     <div class="card h-100 text-center shadow-sm border-0 hover-card small-card">
                         <div class="card-body d-flex flex-column justify-content-center align-items-center">
                             <div class="text-danger icon-wrap mb-1"><i class="fa-solid fa-video"></i></div>
@@ -79,8 +95,10 @@
 
             <!-- Reactive Courses -->
             <div class="col">
-                <a asp-area="" asp-controller="ReactiveCourses" asp-action="Index" class="text-decoration-none">
-                    <div class="card h-100 text-center shadow-sm border-0 hover-card small-card">
+                <a asp-area="" asp-controller="ReactiveCourses" asp-action="Index" class="text-decoration-none"
+                   data-bs-toggle="tooltip" data-bs-placement="top"
+                   title="@L["Hero.Tooltip.ReactiveCourses"]" aria-label="@L["Hero.Tooltip.ReactiveCourses"]">
+                    <div class="card h-110 text-center shadow-sm border-0 hover-card small-card">
                         <div class="card-body d-flex flex-column justify-content-center align-items-center">
                             <div class="text-warning icon-wrap mb-1"><i class="fa-solid fa-people-group"></i></div>
                             <h6 class="card-title fw-semibold text-dark mb-0 card-title-truncate">@L["Nav.ReactiveCourses"]</h6>
@@ -88,6 +106,7 @@
                     </div>
                 </a>
             </div>
+
         </div>
     </div>
 </section>
@@ -113,7 +132,6 @@
         transform: scale(1.05);
     }
 
-    /* Card sizing: allow cards to grow on larger screens but keep tidy on mobile */
     .small-card {
         padding: 0.45rem 0.35rem;
         min-height: 96px;
@@ -122,7 +140,6 @@
         justify-content: center;
     }
 
-    /* Truncate long titles to a single line (ellipsis) */
     .card-title-truncate {
         display: block;
         width: 100%;
@@ -132,6 +149,32 @@
         font-size: 1.02rem;
     }
 </style>
+
+@section Scripts {
+    <script>
+        (function () {
+            // Initialize Bootstrap tooltips safely (no-op if bootstrap missing)
+            try {
+                const tooltipTriggerList = Array.prototype.slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.forEach(function (el) {
+                    // eslint-disable-next-line no-undef
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                        new bootstrap.Tooltip(el, {
+                            placement: el.getAttribute('data-bs-placement') || 'top',
+                            sanitize: true
+                        });
+                    } else {
+                        // fallback: ensure title attribute exists (screen readers / native browser tooltip)
+                        // nothing to do — browsers will show title on hover/focus
+                    }
+                });
+            } catch (ex) {
+                console && console.debug && console.debug('Tooltip init failed', ex);
+            }
+        })();
+    </script>
+}
+
 
 
 

@@ -914,7 +914,14 @@
   "AdminCategory.NameAr": "اسم القسم (العربية)",
   "Admin.PublishedShort": "منشور",
   "Admin.RecentMonths": "الأشهر الأخيرة",
-  "Admin.AllMonths": "جميع الأشهر"
+  "Admin.AllMonths": "جميع الأشهر",
+
+  "Hero.Tooltip.RegisterButton": "سجّل لإنشاء حسابك",
+  "Hero.Tooltip.School": "لدراسة اللغة العربيه والعلوم الإسلامية للتلاميذ المسجلين لديناوالمداومين حضوريا ",
+  "Hero.Tooltip.OnlineSchool": "الفصول والدورات عبر الإنترنت",
+  "Hero.Tooltip.Teachers": "استعرض المعلمين لدينا",
+  "Hero.Tooltip.RecordedCourses": "مكتبة الدورات المسجَّلة",
+  "Hero.Tooltip.ReactiveCourses": "الدورات التفاعلية والمجموعات"
 }
 
 

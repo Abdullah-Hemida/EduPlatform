@@ -925,7 +925,14 @@
 
   "Admin.PublishedShort": "Published",
   "Admin.RecentMonths": "Recent Months",
-  "Admin.AllMonths": "All Months"
+  "Admin.AllMonths": "All Months",
+
+  "Hero.Tooltip.RegisterButton": "Register to create your account",
+  "Hero.Tooltip.School": "For the study of Arabic language and Islamic sciences for our registered students who attend in person",
+  "Hero.Tooltip.OnlineSchool": "Online classroom and courses",
+  "Hero.Tooltip.Teachers": "Browse our teachers",
+  "Hero.Tooltip.RecordedCourses": "Recorded courses library",
+  "Hero.Tooltip.ReactiveCourses": "Live/reactive courses and groups"
 }
 
 
