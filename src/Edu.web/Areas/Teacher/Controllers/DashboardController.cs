@@ -1,4 +1,5 @@
 ﻿
+using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
@@ -19,14 +20,17 @@ namespace Edu.Web.Areas.Teacher.Controllers
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IStringLocalizer<SharedResource> _localizer;
+        private readonly IFileStorageService _fileStorage;
 
         public DashboardController(ApplicationDbContext db,
                                    UserManager<ApplicationUser> userManager,
-                                   IStringLocalizer<SharedResource> localizer)
+                                   IStringLocalizer<SharedResource> localizer,
+                                   IFileStorageService fileStorage)
         {
-            _db = db;
-            _userManager = userManager;
-            _localizer = localizer;
+            _db = db ?? throw new ArgumentNullException(nameof(db));
+            _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+            _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
+            _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
         }
 
         // GET: Teacher/Dashboard
@@ -35,211 +39,253 @@ namespace Edu.Web.Areas.Teacher.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            // basic teacher check (Teacher table stores additional info)
-            var teacher = await _db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == user.Id);
-            if (teacher == null) return Forbid();
+            // basic teacher check
+            var teacherExists = await _db.Teachers.AsNoTracking().AnyAsync(t => t.Id == user.Id);
+            if (!teacherExists) return Forbid();
 
             var vm = new TeacherDashboardVm();
 
-            //
-            // Private courses summary (existing)
-            //
-            var coursesQuery = _db.PrivateCourses
-                                  .AsNoTracking()
-                                  .Where(c => c.TeacherId == user.Id)
-                                  .Include(c => c.Category)
-                                  .Include(c => c.PrivateLessons);
-
-            var courses = await coursesQuery
-                            .OrderByDescending(c => c.Id)
-                            .Take(8)
-                            .ToListAsync();
-            int TotalPriveteCourses = await _db.PrivateCourses.CountAsync(c => c.TeacherId == user.Id);
-            int TotalReactiveCourses = await _db.ReactiveCourses.CountAsync(c => c.TeacherId == user.Id);
-            int PrivatePublishedCourses = await _db.PrivateCourses.CountAsync(c => c.TeacherId == user.Id && c.IsPublished);
-            vm.TotalCourses = TotalPriveteCourses + TotalReactiveCourses;
-            vm.PublishedCourses = PrivatePublishedCourses + TotalReactiveCourses;
-
-            vm.Courses = courses.Select(c => new CourseSummaryVm
-            {
-                Id = c.Id,
-                Title = c.Title,
-                CoverImageUrl = c.CoverImageUrl,
-                IsPublished = c.IsPublished,
-                Price = c.Price,
-                PriceLabel = c.Price.ToEuro(),
-                LessonCount = c.PrivateLessons?.Count ?? 0,
-                CategoryName = c.Category?.Name
-            }).ToList();
-
-            //
-            // Upcoming bookings (requested date in future or recent pending/accepted)
-            //
-            var now = DateTime.UtcNow;
-            var bookings = await _db.Bookings
-                                    .AsNoTracking()
-                                    .Where(b => b.TeacherId == user.Id &&
-                                                (b.Status == BookingStatus.Pending) &&
-                                                b.RequestedDateUtc >= now.AddDays(-7))
-                                    .Include(b => b.Student).ThenInclude(s => s.User)
-                                    .OrderBy(b => b.RequestedDateUtc)
-                                    .Take(6)
-                                    .ToListAsync();
-
-            vm.UpcomingBookingsCount = await _db.Bookings.CountAsync(b => b.TeacherId == user.Id &&
-                                                                           (b.Status == BookingStatus.Pending) &&
-                                                                           b.RequestedDateUtc >= now.AddDays(-7));
-
-            vm.UpcomingBookings = bookings.Select(b => new BookingSummaryVm
-            {
-                Id = b.Id,
-                RequestedDateUtc = b.RequestedDateUtc,
-                StudentName = b.Student?.User?.FullName ?? b.Student?.User?.UserName,
-                StudentEmail = b.Student?.User?.Email,
-                Status = b.Status.ToString(),
-                MeetUrl = b.MeetUrl,
-                Price = b.Price,
-                PriceLabel = b.Price.ToEuro()
-            }).ToList();
-
-            //
-            // Purchase requests
-            //
-            var prQuery = _db.PurchaseRequests
-                              .AsNoTracking()
-                              .Where(pr => _db.PrivateCourses.Where(c => c.TeacherId == user.Id).Select(c => c.Id).Contains(pr.PrivateCourseId))
-                              .Include(pr => pr.PrivateCourse)
-                              .Include(pr => pr.Student).ThenInclude(s => s.User);
-
-            vm.PendingPurchaseRequests = await prQuery.CountAsync(pr => pr.Status == PurchaseStatus.Pending);
-
-            var recentPr = await prQuery.OrderByDescending(pr => pr.RequestDateUtc).Take(6).ToListAsync();
-            vm.RecentPurchaseRequests = recentPr.Select(pr => new PurchaseRequestSummaryVm
-            {
-                Id = pr.Id,
-                PrivateCourseId = pr.PrivateCourseId,
-                CourseTitle = pr.PrivateCourse?.Title,
-                StudentName = pr.Student?.User?.FullName ?? pr.Student?.User?.UserName,
-                RequestDateUtc = pr.RequestDateUtc,
-                Status = pr.Status.ToString(),
-                Amount = pr.Amount,
-                AmountLabel = pr.Amount.ToEuro()
-            }).ToList();
-
-            //
-            // Reactive courses summary (teacher's reactive courses)
-            //
-            var reactiveQuery = _db.ReactiveCourses
-                                  .AsNoTracking()
-                                  .Where(rc => rc.TeacherId == user.Id)
-                                  .Include(rc => rc.Months).ThenInclude(m => m.MonthPayments)
-                                  .Include(rc => rc.Enrollments);
-
-            var reactiveCourses = await reactiveQuery
-                                    .OrderByDescending(rc => rc.Id)
-                                    .Take(8)
-                                    .ToListAsync();
-
-            vm.ReactiveCourses = reactiveCourses.Select(rc => new ReactiveCourseSummaryVm
-            {
-                Id = rc.Id,
-                Title = rc.Title,
-                CoverPublicUrl = string.IsNullOrEmpty(rc.CoverImageKey) ? null : rc.CoverImageKey,
-                DurationMonths = rc.DurationMonths,
-                PricePerMonth = rc.PricePerMonth,
-                PricePerMonthLabel = rc.PricePerMonth.ToEuro(),
-                EnrollmentsCount = rc.Enrollments?.Count ?? 0,
-                MonthsReadyCount = rc.Months?.Count(m => m.IsReadyForPayment) ?? 0
-            }).ToList();
-
-            //
-            // ------------------ COMBINED EARNINGS ------------------
-            // Sources:
-            //  - ReactiveEnrollmentMonthPayments (Status == Paid)
-            //  - Bookings (Status == Paid)
-            //  - PurchaseRequests (Status == Completed)
-            //
-
-            // reactive month payments (paid) for this teacher
-            var reactivePaidQuery = _db.ReactiveEnrollmentMonthPayments
+            // ---------------------------
+            // 1) top private courses (no parallel DB calls)
+            // ---------------------------
+            var topCoursesRaw = await _db.PrivateCourses
                 .AsNoTracking()
-                .Where(p => p.Status == EnrollmentMonthPaymentStatus.Paid &&
-                            p.ReactiveCourseMonth != null &&
-                            p.ReactiveCourseMonth.ReactiveCourse != null &&
-                            p.ReactiveCourseMonth.ReactiveCourse.TeacherId == user.Id)
-                .Include(p => p.ReactiveCourseMonth).ThenInclude(m => m.ReactiveCourse);
-
-            // bookings that were paid
-            var bookingsPaidQuery = _db.Bookings
-                .AsNoTracking()
-                .Where(b => b.TeacherId == user.Id && b.Status == BookingStatus.Paid)
-                .Select(b => new
+                .Where(c => c.TeacherId == user.Id)
+                .OrderByDescending(c => c.Id)
+                .Take(8)
+                .Select(c => new
                 {
-                    Amount = (decimal?)b.Price,
-                    Date = b.PaidAtUtc ?? (DateTime?)b.RequestedDateUtc
-                });
+                    c.Id,
+                    c.Title,
+                    c.CoverImageKey,
+                    c.IsPublished,
+                    c.Price,
+                    // lesson count via subquery
+                    LessonCount = _db.PrivateLessons.Count(l => l.PrivateCourseId == c.Id),
+                    CategoryNameEn = c.Category != null ? c.Category.NameEn : null,
+                    CategoryNameIt = c.Category != null ? c.Category.NameIt : null,
+                    CategoryNameAr = c.Category != null ? c.Category.NameAr : null
+                })
+                .ToListAsync();
 
-            // purchase requests completed for this teacher's private courses
+            // ---------------------------
+            // 2) simple scalar counts (sequential)
+            // ---------------------------
+            var totalPrivateCourses = await _db.PrivateCourses.AsNoTracking().CountAsync(c => c.TeacherId == user.Id);
+            var totalReactiveCourses = await _db.ReactiveCourses.AsNoTracking().CountAsync(c => c.TeacherId == user.Id);
+            var privatePublishedCourses = await _db.PrivateCourses.AsNoTracking().CountAsync(c => c.TeacherId == user.Id && c.IsPublished);
+
+            // ---------------------------
+            // 3) upcoming bookings (list + count)
+            // ---------------------------
+            var now = DateTime.UtcNow;
+            var bookingsQuery = _db.Bookings
+                .AsNoTracking()
+                .Where(b => b.TeacherId == user.Id && b.RequestedDateUtc >= now.AddDays(-7));
+
+            var upcomingBookings = await bookingsQuery
+                .OrderBy(b => b.RequestedDateUtc)
+                .Take(6)
+                .Select(b => new BookingSummaryVm
+                {
+                    Id = b.Id,
+                    RequestedDateUtc = b.RequestedDateUtc,
+                    StudentName = b.Student != null && b.Student.User != null ? b.Student.User.FullName : (b.StudentId ?? ""),
+                    StudentEmail = b.Student != null && b.Student.User != null ? b.Student.User.Email : null,
+                    Status = b.Status,
+                    MeetUrl = b.MeetUrl,
+                    Price = b.Price,
+                    PriceLabel = b.Price.ToEuro()
+                })
+                .ToListAsync();
+
+            var upcomingBookingsCount = await bookingsQuery.CountAsync();
+
+            // ---------------------------
+            // 4) purchase requests (based on teacher's private courses)
+            // ---------------------------
             var teacherCourseIds = await _db.PrivateCourses
                 .AsNoTracking()
                 .Where(c => c.TeacherId == user.Id)
                 .Select(c => c.Id)
                 .ToListAsync();
 
-            var purchasesCompletedQuery = _db.PurchaseRequests
+            var prBaseQuery = _db.PurchaseRequests
+                                 .AsNoTracking()
+                                 .Where(pr => teacherCourseIds.Contains(pr.PrivateCourseId));
+
+            var pendingPurchaseRequests = await prBaseQuery.CountAsync(pr => pr.Status == PurchaseStatus.Pending);
+
+            var recentPr = await prBaseQuery
+                .OrderByDescending(pr => pr.RequestDateUtc)
+                .Take(6)
+                .Select(pr => new PurchaseRequestSummaryVm
+                {
+                    Id = pr.Id,
+                    PrivateCourseId = pr.PrivateCourseId,
+                    CourseTitle = pr.PrivateCourse != null ? pr.PrivateCourse.Title : null,
+                    StudentName = pr.Student != null && pr.Student.User != null ? pr.Student.User.FullName : (pr.StudentId ?? ""),
+                    RequestDateUtc = pr.RequestDateUtc,
+                    Status = pr.Status,
+                    Amount = pr.Amount,
+                    AmountLabel = pr.Amount.ToEuro()
+                })
+                .ToListAsync();
+
+            // ---------------------------
+            // 5) reactive courses top summaries
+            // ---------------------------
+            var reactiveCoursesRaw = await _db.ReactiveCourses
+                .AsNoTracking()
+                .Where(rc => rc.TeacherId == user.Id)
+                .OrderByDescending(rc => rc.Id)
+                .Take(8)
+                .Select(rc => new
+                {
+                    rc.Id,
+                    rc.Title,
+                    rc.CoverImageKey,
+                    rc.DurationMonths,
+                    rc.PricePerMonth,
+                    EnrollmentsCount = _db.ReactiveEnrollments.Count(e => e.ReactiveCourseId == rc.Id),
+                    MonthsReadyCount = _db.ReactiveCourseMonths.Count(m => m.ReactiveCourseId == rc.Id && m.IsReadyForPayment)
+                })
+                .ToListAsync();
+
+            // ---------------------------
+            // 6) earnings sums (sequential)
+            // ---------------------------
+            var reactivePaidSum = await _db.ReactiveEnrollmentMonthPayments
+                .AsNoTracking()
+                .Where(p => p.Status == EnrollmentMonthPaymentStatus.Paid &&
+                            p.ReactiveCourseMonth != null &&
+                            p.ReactiveCourseMonth.ReactiveCourse != null &&
+                            p.ReactiveCourseMonth.ReactiveCourse.TeacherId == user.Id)
+                .SumAsync(p => (decimal?)p.Amount);
+
+            var bookingsPaidSum = await _db.Bookings
+                .AsNoTracking()
+                .Where(b => b.TeacherId == user.Id && b.Status == BookingStatus.Paid)
+                .Select(b => (decimal?)b.Price)
+                .SumAsync();
+
+            var purchasesCompletedSum = await _db.PurchaseRequests
                 .AsNoTracking()
                 .Where(pr => teacherCourseIds.Contains(pr.PrivateCourseId) && pr.Status == PurchaseStatus.Completed)
-                .Select(pr => new
+                .Select(pr => (decimal?)pr.Amount)
+                .SumAsync();
+
+            // ---------------------------
+            // Resolve cover images in parallel (file storage is safe to call concurrently)
+            // ---------------------------
+            var allKeys = topCoursesRaw.Select(t => t.CoverImageKey)
+                           .Concat(reactiveCoursesRaw.Select(r => r.CoverImageKey))
+                           .Where(k => !string.IsNullOrEmpty(k))
+                           .Distinct(StringComparer.OrdinalIgnoreCase)
+                           .ToList();
+
+            var resolved = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (allKeys.Any())
+            {
+                var tasks = allKeys.Select(async k =>
                 {
-                    Amount = (decimal?)pr.Amount,
-                    Date = (DateTime?)pr.RequestDateUtc
-                });
+                    try { return (Key: k, Url: await _fileStorage.GetPublicUrlAsync(k)); }
+                    catch { return (Key: k, Url: (string?)null); }
+                }).ToArray();
 
-            var reactiveTotal = await reactivePaidQuery.SumAsync(p => (decimal?)p.Amount) ?? 0m;
-            var bookingsTotal = await bookingsPaidQuery.SumAsync(x => x.Amount) ?? 0m;
-            var purchasesTotal = await purchasesCompletedQuery.SumAsync(x => x.Amount) ?? 0m;
+                var finished = await Task.WhenAll(tasks);
+                foreach (var f in finished) resolved[f.Key] = f.Url;
+            }
 
-            vm.TotalEarnings = reactiveTotal + bookingsTotal + purchasesTotal;
+            // ---------------------------
+            // map to VM objects
+            // ---------------------------
+            var topCourses = topCoursesRaw.Select(t =>
+            {
+                var category = new Category
+                {
+                    NameEn = t.CategoryNameEn ?? string.Empty,
+                    NameIt = t.CategoryNameIt ?? string.Empty,
+                    NameAr = t.CategoryNameAr ?? string.Empty
+                };
 
-            // monthly breakdown for last N months (including current month)
+                return new CourseSummaryVm
+                {
+                    Id = t.Id,
+                    Title = t.Title,
+                    CoverImageUrl = !string.IsNullOrEmpty(t.CoverImageKey) && resolved.TryGetValue(t.CoverImageKey, out var url) ? url : null,
+                    IsPublished = t.IsPublished,
+                    Price = t.Price,
+                    PriceLabel = t.Price.ToEuro(),
+                    LessonCount = t.LessonCount,
+                    CategoryName = LocalizationHelpers.GetLocalizedCategoryName(category)
+                };
+            }).ToList();
+
+            var reactiveCourses = reactiveCoursesRaw.Select(rc => new ReactiveCourseSummaryVm
+            {
+                Id = rc.Id,
+                Title = rc.Title,
+                CoverPublicUrl = !string.IsNullOrEmpty(rc.CoverImageKey) && resolved.TryGetValue(rc.CoverImageKey, out var url) ? url : null,
+                DurationMonths = rc.DurationMonths,
+                PricePerMonth = rc.PricePerMonth,
+                PricePerMonthLabel = rc.PricePerMonth.ToEuro(),
+                EnrollmentsCount = rc.EnrollmentsCount,
+                MonthsReadyCount = rc.MonthsReadyCount
+            }).ToList();
+
+            // ---------- populate VM ----------
+            vm.TotalCourses = totalPrivateCourses + totalReactiveCourses;
+            vm.PublishedCourses = privatePublishedCourses + totalReactiveCourses;
+
+            vm.Courses = topCourses;
+
+            vm.UpcomingBookingsCount = upcomingBookingsCount;
+            vm.UpcomingBookings = upcomingBookings;
+
+            vm.PendingPurchaseRequests = pendingPurchaseRequests;
+            vm.RecentPurchaseRequests = recentPr;
+
+            vm.ReactiveCourses = reactiveCourses;
+
+            // earnings totals
+            vm.TotalEarnings = (reactivePaidSum ?? 0m) + (bookingsPaidSum ?? 0m) + (purchasesCompletedSum ?? 0m);
+
+            // monthly breakdown last N months
             int monthsBack = 6;
             var nowUtc = DateTime.UtcNow;
             var periodStart = new DateTime(nowUtc.Year, nowUtc.Month, 1).AddMonths(-(monthsBack - 1));
 
-            // reactive payments in range
-            var reactiveInRange = await reactivePaidQuery
-                .Where(p => (p.PaidAtUtc ?? p.CreatedAtUtc) >= periodStart)
-                .Select(p => new { Amount = p.Amount, Date = (DateTime?)(p.PaidAtUtc ?? p.CreatedAtUtc) })
+            var reactiveInRange = await _db.ReactiveEnrollmentMonthPayments
+                .AsNoTracking()
+                .Where(p => p.Status == EnrollmentMonthPaymentStatus.Paid &&
+                            p.ReactiveCourseMonth != null &&
+                            p.ReactiveCourseMonth.ReactiveCourse != null &&
+                            p.ReactiveCourseMonth.ReactiveCourse.TeacherId == user.Id &&
+                            (p.PaidAtUtc ?? p.CreatedAtUtc) >= periodStart)
+                .Select(p => new { Amount = (decimal?)p.Amount, Date = (DateTime?)(p.PaidAtUtc ?? p.CreatedAtUtc) })
                 .ToListAsync();
 
-            // bookings in range
-            var bookingsInRange = await bookingsPaidQuery
-                .Where(b => b.Date >= periodStart)
+            var bookingsInRange = await _db.Bookings
+                .AsNoTracking()
+                .Where(b => b.TeacherId == user.Id && b.Status == BookingStatus.Paid)
+                .Select(b => new { Amount = (decimal?)b.Price, Date = (DateTime?)(b.PaidAtUtc ?? b.RequestedDateUtc) })
+                .Where(x => x.Date >= periodStart)
                 .ToListAsync();
 
-            // purchases in range
-            var purchasesInRange = await purchasesCompletedQuery
-                .Where(pr => pr.Date >= periodStart)
+            var purchasesInRange = await _db.PurchaseRequests
+                .AsNoTracking()
+                .Where(pr => teacherCourseIds.Contains(pr.PrivateCourseId) && pr.Status == PurchaseStatus.Completed && pr.RequestDateUtc >= periodStart)
+                .Select(pr => new { Amount = (decimal?)pr.Amount, Date = (DateTime?)pr.RequestDateUtc })
                 .ToListAsync();
 
-            // combine
             var combined = new List<(decimal Amount, DateTime Date)>();
+            combined.AddRange(reactiveInRange.Where(x => x.Date.HasValue).Select(x => (Amount: x.Amount ?? 0m, Date: x.Date!.Value)));
+            combined.AddRange(bookingsInRange.Where(x => x.Date.HasValue).Select(x => (Amount: x.Amount ?? 0m, Date: x.Date!.Value)));
+            combined.AddRange(purchasesInRange.Where(x => x.Date.HasValue).Select(x => (Amount: x.Amount ?? 0m, Date: x.Date!.Value)));
 
-            combined.AddRange(reactiveInRange
-                .Where(x => x.Date.HasValue)
-                .Select(x => (Amount: x.Amount, Date: x.Date!.Value)));
-
-            combined.AddRange(bookingsInRange
-                .Where(x => x.Date.HasValue)
-                .Select(x => (Amount: x.Amount ?? 0m, Date: x.Date!.Value)));
-
-            combined.AddRange(purchasesInRange
-                .Where(x => x.Date.HasValue)
-                .Select(x => (Amount: x.Amount ?? 0m, Date: x.Date!.Value)));
-
-            var grouped = combined
-                .GroupBy(x => (Year: x.Date.Year, Month: x.Date.Month))
-                .ToDictionary(g => (g.Key.Year, g.Key.Month), g => g.Sum(i => i.Amount));
+            var grouped = combined.GroupBy(x => (Year: x.Date.Year, Month: x.Date.Month))
+                                 .ToDictionary(g => (g.Key.Year, g.Key.Month), g => g.Sum(i => i.Amount));
 
             var monthlyList = new List<MonthEarningVm>();
             for (int i = monthsBack - 1; i >= 0; i--)
@@ -264,5 +310,8 @@ namespace Edu.Web.Areas.Teacher.Controllers
         }
     }
 }
+
+
+
 
 

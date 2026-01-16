@@ -82,7 +82,6 @@ public class JsonStringLocalizer : IStringLocalizer
         return dict;
     }
 
-
     public LocalizedString this[string name]
     {
         get

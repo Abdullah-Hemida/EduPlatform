@@ -22,6 +22,9 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public int Id { get; set; }
         public string? Title { get; set; }
         public int CategoryId { get; set; }
+        public string? CategoryNameEn { get; set; }
+        public string? CategoryNameIt { get; set; }
+        public string? CategoryNameAr { get; set; }
         public string? CategoryName { get; set; }
         public decimal Price { get; set; }
         public string? PriceLabel { get; set; }
@@ -36,7 +39,33 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public int ModuleCount { get; set; }
         public int LessonCount { get; set; }
     }
+    // Details VM
+    public class TeacherCourseDetailsVm
+    {
+        public int Id { get; set; }
+        public string? Title { get; set; }
+        public string? Description { get; set; }
 
+        // storage key and public url
+        public string? CoverImageKey { get; set; }
+        public string? PublicCoverUrl { get; set; }
+
+        public decimal Price { get; set; }
+        public string? PriceLabel { get; set; }
+        public bool IsPublished { get; set; }
+        public bool IsPublishRequested { get; set; }
+        public int CategoryId { get; set; }
+        public string? CategoryName { get; set; }
+        public string? CategoryNameEn { get; set; }
+        public string? CategoryNameIt { get; set; }
+        public string? CategoryNameAr { get; set; }
+        public string? TeacherId { get; set; }
+        public bool IsForChildren { get; set; }
+        public bool IsOwner { get; set; } = false;
+        public List<ModuleSummaryVm> Modules { get; set; } = new();
+        public List<PrivateLessonVm> Lessons { get; set; } = new();
+        public Dictionary<int, List<PrivateLessonVm>> LessonsByModule { get; set; } = new();
+    }
     // Create VM
     public class TeacherCourseCreateVm
     {
@@ -62,31 +91,7 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public string? ExistingCoverPublicUrl { get; set; }
     }
 
-    // Details VM
-    public class TeacherCourseDetailsVm
-    {
-        public int Id { get; set; }
-        public string? Title { get; set; }
-        public string? Description { get; set; }
 
-        // storage key and public url
-        public string? CoverImageKey { get; set; }
-        public string? PublicCoverUrl { get; set; }
-
-        public decimal Price { get; set; }
-        public string? PriceLabel { get; set; }
-        public bool IsPublished { get; set; }
-        public bool IsPublishRequested { get; set; }
-        public int CategoryId { get; set; }
-        public string? CategoryName { get; set; }
-        public string? TeacherId { get; set; }
-        public bool IsForChildren { get; set; }
-        public bool IsOwner { get; set; } = false;
-        public List<ModuleSummaryVm> Modules { get; set; } = new();
-        public List<PrivateLessonVm> Lessons { get; set; } = new();
-        public Dictionary<int, List<PrivateLessonVm>> LessonsByModule { get; set; } = new();
-        public List<CourseModerationLogVm>? ModerationLogs { get; set; }
-    }
 
 
     public class ModuleSummaryVm

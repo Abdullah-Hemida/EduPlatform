@@ -353,19 +353,35 @@
 @section Scripts {
     <script>
         $(function () {
+            // localized strings (already present server-side)
             const Localized = @Html.Raw(JsonSerializer.Serialize(localizedStrings));
-            const antiForgeryToken = $('#af input[name="__RequestVerificationToken"]').val();
+            const antiForgeryToken = $('#af input[name="__RequestVerificationToken"]').val() || '';
 
+            // action locks to prevent double-submits
             const actionLocks = {};
             function lock(k) { actionLocks[k] = true; }
             function unlock(k) { delete actionLocks[k]; }
             function isLocked(k) { return !!actionLocks[k]; }
 
+            // simple HTML-escape (used for any content that may come from server)
+            function escapeHtml(s) {
+                if (s === null || s === undefined) return '';
+                return String(s).replace(/[&<>"'`=\/]/g, function (c) {
+                    return {
+                        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
+                        "'": '&#39;', '/': '&#x2F;', '`': '&#x60;', '=': '&#x3D;'
+                    }[c];
+                });
+            }
+
+            // show toast safely (escape content)
             function showToast(message, type = "success") {
                 const $container = $('#toast-container');
-                const $toast = $(`<div class="toast text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                const safe = escapeHtml(message || '');
+                const $toast = $(`
+                    <div class="toast text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
                       <div class="d-flex">
-                        <div class="toast-body">${message}</div>
+                        <div class="toast-body">${safe}</div>
                         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
                       </div>
                     </div>`);
@@ -375,9 +391,11 @@
                 $toast.on('hidden.bs.toast', function () { $(this).remove(); });
             }
 
+            // show confirm modal (body rendered as escaped text by default — accept HTML only when you trust the source)
             function showConfirm(title, message, onConfirm) {
-                $('#confirmModalTitle').text(title);
-                $('#confirmModalBody').html(message);
+                $('#confirmModalTitle').text(title || '');
+                // Inject as text to avoid accidental HTML injection
+                $('#confirmModalBody').text(message || '');
                 const modalEl = $('#confirmModal')[0];
                 const bsModal = new bootstrap.Modal(modalEl);
                 bsModal.show();
@@ -388,15 +406,15 @@
                 });
             }
 
-            function isAttrTrue($el, attrName) {
-                const val = $el.attr('data-' + attrName);
-                return val === 'true' || val === 'True' || val === '1' || $el.data(attrName.replace(/-([a-z])/g, (m, c) => c.toUpperCase()) ) === true;
+            // helper: read boolean-like data-* attribute robustly
+            function dataFlag($el, name) {
+                const val = $el.attr('data-' + name);
+                if (val === undefined) return false;
+                return val === 'true' || val === '1' || val === 'True';
             }
 
             function enablePayButtonsIfAllowed() {
-                const enrolledAttr = $('#enroll-area').attr('data-enrolled');
-                const enrolled = enrolledAttr === 'true' || enrolledAttr === 'True' || enrolledAttr === '1' || $('#enroll-area').data('enrolled') === true;
-
+                const enrolled = dataFlag($('#enroll-area'), 'enrolled');
                 if (!enrolled) {
                     $('.btnPayMonth').prop('disabled', true).hide();
                     return;
@@ -404,9 +422,8 @@
 
                 $('.btnPayMonth').each(function () {
                     const $btn = $(this);
-                    // read data-can-request from the month-card
                     const $card = $btn.closest('.month-card');
-                    const canReq = isAttrTrue($card, 'can-request');
+                    const canReq = dataFlag($card, 'can-request');
                     if (canReq) {
                         $btn.prop('disabled', false).show();
                     } else {
@@ -419,6 +436,7 @@
                 const $btn = $('#btnCancelEnroll');
                 if (!$btn.length) return;
 
+                // If any month has pending or paid badge then disabling cancel is appropriate
                 const hasPendingOrPaid = $('.month-card').filter(function () {
                     return $(this).find('.badge.bg-warning, .badge.bg-success').length > 0;
                 }).length > 0;
@@ -430,14 +448,18 @@
                 }
             }
 
+            // Update UI when enrollment happens
             function markEnrolledUI(enrollmentId) {
                 $('#enroll-area').attr('data-enrolled', 'true').attr('data-enrollment-id', enrollmentId || 0);
                 const enrolledLabel = Localized["ReactiveCourse.Enrolled"] || 'Enrolled';
                 const cancelLabel = Localized["ReactiveCourse.CancelEnrollment"] || 'Cancel Enrollment';
-                $('#enroll-area').html(`<div>
-                    <button id="btnCancelEnroll" class="btn btn-outline-danger ms-2" data-course-id="${@Model.CourseId}">${escapeHtml(cancelLabel)}</button>
+                // note: @Model.CourseId is a server constant; safe to inject directly
+                const courseIdConst = '@Model.CourseId';
+                const html = `<div>
+                    <button id="btnCancelEnroll" class="btn btn-outline-danger ms-2" data-course-id="${escapeHtml(courseIdConst)}">${escapeHtml(cancelLabel)}</button>
                     <span class="badge bg-success ms-2">${escapeHtml(enrolledLabel)}</span>
-                </div>`);
+                </div>`;
+                $('#enroll-area').html(html);
                 enablePayButtonsIfAllowed();
                 updateCancelEnrollState();
             }
@@ -446,11 +468,18 @@
                 const $card = $(`.month-card[data-month-id="${monthId}"]`);
                 if (!$card.length) return;
 
-                $card.attr('data-payment-id', paymentId);
-                $card.find('.badge').first().removeClass().addClass('badge bg-warning text-dark').text(Localized["StatusPending"] || 'Pending');
+                $card.attr('data-payment-id', paymentId || 0);
+                // replace the first badge with Pending
+                const $firstBadge = $card.find('.badge').first();
+                if ($firstBadge.length) {
+                    $firstBadge.removeClass().addClass('badge bg-warning text-dark').text(Localized["StatusPending"] || 'Pending');
+                } else {
+                    $card.find('.action-area').prepend(`<span class="badge bg-warning text-dark">${escapeHtml(Localized["StatusPending"]||'Pending')}</span>`);
+                }
+
                 $card.find('.btnPayMonth').remove();
                 if ($card.find('.btnCancelPayment').length === 0) {
-                    $card.find('.action-area').append(`<button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="${paymentId}">${escapeHtml(Localized["ReactiveCourse.CancelPayment"] || 'Cancel Payment')}</button>`);
+                    $card.find('.action-area').append(`<button class="btn btn-sm btn-outline-danger ms-2 btnCancelPayment" data-payment-id="${escapeHtml(paymentId || 0)}">${escapeHtml(Localized["ReactiveCourse.CancelPayment"] || 'Cancel Payment')}</button>`);
                 }
                 updateCancelEnrollState();
             }
@@ -460,16 +489,18 @@
                 if (!$card.length) return;
 
                 $card.attr('data-payment-id', 0);
-                $card.find('.badge').first().removeClass().addClass('badge bg-secondary').text(Localized["NotRequested"] || 'Not requested');
+                const $firstBadge = $card.find('.badge').first();
+                if ($firstBadge.length) {
+                    $firstBadge.removeClass().addClass('badge bg-secondary').text(Localized["NotRequested"] || 'Not requested');
+                }
                 $card.find('.btnCancelPayment').remove();
 
-                const canRequest = isAttrTrue($card, 'can-request');
+                const canRequest = dataFlag($card, 'can-request');
                 if (canRequest && $card.find('.btnPayMonth').length === 0) {
                     $card.find('.action-area').append(
-                        `<button class="btn btn-sm btn-primary ms-2 btnPayMonth" data-month-id="${monthId}" data-course-id="${@Model.CourseId}" data-can-request="${canRequest}">${escapeHtml(Localized["ReactiveCourse.RequestPayment"] || 'Request Payment')}</button>`
+                        `<button class="btn btn-sm btn-primary ms-2 btnPayMonth" data-month-id="${monthId}" data-course-id="${escapeHtml('@Model.CourseId')}" data-can-request="${canRequest}">${escapeHtml(Localized["ReactiveCourse.RequestPayment"] || 'Request Payment')}</button>`
                     );
                 } else if (!canRequest) {
-                    // show localized "month not ready" badge (replace where pay button would be)
                     $card.find('.action-area').append(`<span class="badge bg-secondary ms-2">${escapeHtml(Localized["MonthNotReady"] || "Month not ready")}</span>`);
                 }
 
@@ -478,26 +509,10 @@
 
             function markEnrollmentCancelledUI() {
                 $('#enroll-area').attr('data-enrolled', 'false').attr('data-enrollment-id', 0);
-                $('#enroll-area').html(`<button id="btnEnroll" class="btn btn-primary" data-course-id="${@Model.CourseId}">${escapeHtml(Localized["ReactiveCourse.Enroll"] || 'Enroll')}</button>`);
+                $('#enroll-area').html(`<button id="btnEnroll" class="btn btn-primary" data-course-id="${escapeHtml('@Model.CourseId')}">${escapeHtml(Localized["ReactiveCourse.Enroll"] || 'Enroll')}</button>`);
                 $('.btnPayMonth').prop('disabled', true).hide();
                 $('.btnCancelPayment').remove();
                 updateCancelEnrollState();
-            }
-
-            function escapeHtml(s) {
-                if (s === null || s === undefined) return '';
-                return String(s).replace(/[&<>"'`=\/]/g, function (c) {
-                    return {
-                        '&': '&amp;',
-                        '<': '&lt;',
-                        '>': '&gt;',
-                        '"': '&quot;',
-                        "'": '&#39;',
-                        '/': '&#x2F;',
-                        '`': '&#x60;',
-                        '=': '&#x3D;'
-                    }[c];
-                });
             }
 
             // init
@@ -506,7 +521,7 @@
                 updateCancelEnrollState();
             })();
 
-            // ------------- Delegated handlers -------------
+            // ---------------- Handlers ----------------
             $(document).on('click', '#btnEnroll', function (e) {
                 e.preventDefault();
                 const courseId = $(this).data('course-id');
@@ -528,7 +543,10 @@
                                 showToast(msg, "danger");
                             }
                         },
-                        error: function () { showToast(Localized["EnrollError"] || "Error", "danger"); },
+                        error: function (xhr, status, err) {
+                            console.error('Enroll error', status, err, xhr);
+                            showToast(Localized["EnrollError"] || "Error", "danger");
+                        },
                         complete: function () { unlock(key); }
                     });
                 });
@@ -556,7 +574,10 @@
                                 updateCancelEnrollState();
                             }
                         },
-                        error: function () { showToast(Localized["CancelError"] || "Error", "danger"); },
+                        error: function (xhr, status, err) {
+                            console.error('CancelEnroll error', status, err, xhr);
+                            showToast(Localized["CancelError"] || "Error", "danger");
+                        },
                         complete: function () { unlock(key); }
                     });
                 });
@@ -566,7 +587,7 @@
                 e.preventDefault();
                 const $btn = $(this);
                 const monthId = $btn.data('month-id');
-                const courseId = $btn.data('course-id') || @Model.CourseId;
+                const courseId = $btn.data('course-id') || '@Model.CourseId';
                 const key = `pay:${courseId}:${monthId}`;
                 if (isLocked(key)) return;
                 lock(key);
@@ -586,7 +607,10 @@
                                 showToast(msg, "danger");
                             }
                         },
-                        error: function () { showToast(Localized["PayError"] || "Error", "danger"); },
+                        error: function (xhr, status, err) {
+                            console.error('RequestMonthPayment error', status, err, xhr);
+                            showToast(Localized["PayError"] || "Error", "danger");
+                        },
                         complete: function () { unlock(key); }
                     });
                 });
@@ -616,7 +640,10 @@
                                 showToast(msg, "danger");
                             }
                         },
-                        error: function () { showToast(Localized["CancelError"] || "Error", "danger"); },
+                        error: function (xhr, status, err) {
+                            console.error('CancelMonthPayment error', status, err, xhr);
+                            showToast(Localized["CancelError"] || "Error", "danger");
+                        },
                         complete: function () { unlock(key); }
                     });
                 });
@@ -625,6 +652,7 @@
         });
     </script>
 }
+
 
 
 

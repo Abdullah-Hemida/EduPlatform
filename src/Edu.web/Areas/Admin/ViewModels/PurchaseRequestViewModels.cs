@@ -1,4 +1,9 @@
-﻿namespace Edu.Web.Areas.Admin.ViewModels
+﻿// File: Areas/Admin/ViewModels/PurchaseRequestsViewModels.cs
+using Edu.Domain.Entities;
+using System;
+using System.Collections.Generic;
+
+namespace Edu.Web.Areas.Admin.ViewModels
 {
     public class PurchaseRequestListItemVm
     {
@@ -14,7 +19,10 @@
         public string? TeacherName { get; set; }
 
         public DateTime RequestDateUtc { get; set; }
-        public string Status { get; set; } = string.Empty;
+
+        // Use the domain enum here — easier and safer than strings
+        public PurchaseStatus Status { get; set; } = PurchaseStatus.Pending;
+
         public decimal? Amount { get; set; }
         public string? AmountLabel { get; set; }
         public string? AdminNote { get; set; }
@@ -26,10 +34,13 @@
         public int Page { get; set; }
         public int PageSize { get; set; }
         public int TotalCount { get; set; }
+
+        // Keep the filter as int? (null = all). Controller will interpret it as PurchaseStatus when needed.
         public int? Status { get; set; }
         public string? Search { get; set; }
 
         public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
     }
 }
+
 

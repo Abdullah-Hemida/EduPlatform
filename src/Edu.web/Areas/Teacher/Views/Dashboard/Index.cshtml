@@ -1,4 +1,5 @@
 ﻿@model Edu.Web.Areas.Teacher.ViewModels.TeacherDashboardVm
+@using Edu.Domain.Entities
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
@@ -61,7 +62,7 @@
             <!-- Upcoming bookings -->
             <div class="card mb-3">
                 <div class="card-header d-flex align-items-center justify-content-between">
-                    <strong>@L["Status.Pending"]</strong>
+                    <strong>@L["Bookings.Upcoming"]</strong>
                     <div class="small text-muted">@L["Admin.BookingsSubtitle"]</div>
                 </div>
 
@@ -75,7 +76,6 @@
                         <div class="list-group list-group-flush">
                             @foreach (var b in Model.UpcomingBookings)
                             {
-                                <!-- xs: stacked, sm+: horizontal -->
                                 <div class="list-group-item d-flex flex-column flex-sm-row align-items-start gap-2">
                                     <div class="d-flex flex-column flex-grow-1 min-w-0">
                                         <div class="fw-semibold text-truncate min-w-0 break-anywhere">@((b.StudentName ?? b.StudentEmail) ?? ("#" + b.Id))</div>
@@ -83,7 +83,25 @@
                                     </div>
 
                                     <div class="d-flex align-items-center gap-2 ms-sm-3 mt-2 mt-sm-0">
-                                        <div class="small text-muted text-nowrap">@b.Status</div>
+                                        @{
+                                            var bookingBadgeClass = b.Status switch
+                                            {
+                                                BookingStatus.Pending => "bg-warning text-dark",
+                                                BookingStatus.Paid => "bg-success",
+                                                _ => "bg-secondary"
+                                            };
+
+                                            var bookingLocalized = b.Status switch
+                                            {
+                                                BookingStatus.Pending => L["Status.Pending"],
+                                                BookingStatus.Paid => L["Status.Completed"], // map Paid -> Completed label or add Booking.Paid if you prefer
+                                                _ => L["Status.Unknown", b.Status.ToString()]
+                                            };
+                                        }
+
+                                        <span class="small text-muted text-nowrap">@bookingLocalized</span>
+                                        <span class="badge @bookingBadgeClass" aria-hidden="true">@bookingLocalized</span>
+
                                         <div class="btn-group-wrap ms-2">
                                             <a asp-area="Teacher" asp-controller="Bookings" asp-action="Details" asp-route-id="@b.Id"
                                                class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
@@ -120,7 +138,7 @@
                                     </div>
 
                                     <div class="d-flex align-items-center gap-2 ms-sm-3 mt-2 mt-sm-0">
-                                        <div class="small text-muted text-nowrap">@pr.RequestDateUtc.ToLocalTime().ToString("g")</div>
+                                        <div class="small text-muted">@pr.RequestDateUtc.ToLocalTime().ToString("g")</div>
                                         <div class="btn-group-wrap ms-2">
                                             <a asp-area="Teacher" asp-controller="PurchaseRequests" asp-action="Details" asp-route-id="@pr.Id"
                                                class="btn btn-sm btn-outline-secondary">@L["Button.View"]</a>
@@ -136,10 +154,11 @@
 
         <!-- Right column -->
         <div class="col-12 col-lg-6">
+            <!-- Earnings card (unchanged except we use Model.TotalEarningsLabel) -->
             <div class="card mb-3">
                 <div class="card-header d-flex align-items-center justify-content-between">
-                    <div class="fw-semibold">@(L["Earnings.Total"] ?? "Earnings")</div>
-                    <div class="small text-muted">@(L["Earnings.Last6Months"] ?? "Last 6 months")</div>
+                    <div class="fw-semibold">@L["Earnings.Total"]</div>
+                    <div class="small text-muted">@L["Earnings.Last6Months"]</div>
                 </div>
 
                 <div class="card-body">
@@ -147,7 +166,7 @@
                         <div class="text-start">
                             <div class="small text-muted">@L["Earnings.Total"]</div>
                             <div class="h4">@Model.TotalEarningsLabel</div>
-                            <div class="small text-muted">@(L["Earnings.Accumulated"] ?? "Accumulated earnings (all time)")</div>
+                            <div class="small text-muted">@L["Earnings.Accumulated"]</div>
                         </div>
 
                         <div class="flex-grow-1 w-100">
@@ -233,10 +252,10 @@
                 </div>
             </div>
 
-            <!-- Reactive Courses -->
+            <!-- Reactive Courses (unchanged except cover url usage) -->
             <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between">
-                    <div class="fw-semibold">@(L["ReactiveCourse.MyReactiveCourses"] ?? "Reactive Courses")</div>
+                    <div class="fw-semibold">@L["ReactiveCourse.MyReactiveCourses"]</div>
                     <div class="small text-muted">@L["Nav.Courses"]</div>
                 </div>
 

@@ -20,7 +20,6 @@ namespace Edu.Domain.Entities
         public Category? Category { get; set; }
         public ICollection<PrivateModule> PrivateModules { get; set; } = new List<PrivateModule>();
         public ICollection<PrivateLesson>? PrivateLessons { get; set; }
-        public ICollection<CourseModerationLog> ModerationLogs { get; set; } = new List<CourseModerationLog>();
         public ICollection<PurchaseRequest> PurchaseRequests { get; set; } = new List<PurchaseRequest>();
     }
 

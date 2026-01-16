@@ -24,8 +24,13 @@
                 <label class="form-label">@L["Admin.Level"]</label>
 
                 @* Use select list provided by controller; show localized option label *@
-                @Html.DropDownListFor(m => m.LevelId, levelSelectList, ("-- " + (L["Admin.SelectLevel"].Value ?? "Select level") + " --"),
-                new { @class = "form-select" })
+@Html.DropDownListFor(
+    m => m.LevelId,
+    levelSelectList,
+    "-- " + (L["Admin.SelectLevel"].Value ?? "Select level") + " --",
+    new { @class = "form-select" }
+)
+
                 <span asp-validation-for="LevelId" class="text-danger small"></span>
             </div>
 

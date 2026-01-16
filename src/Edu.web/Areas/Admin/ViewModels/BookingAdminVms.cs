@@ -52,17 +52,12 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? TeacherName { get; set; }
         public BookingStatus Status { get; set; }
         public DateTime RequestedDateUtc { get; set; }
+        public DateTime? SlotStartUtc { get; set; }
+        public DateTime? SlotEndUtc { get; set; }
         public decimal? Price { get; set; }
         public string? PriceLabel { get; set; }
         public string? MeetUrl { get; set; }
         public string? Notes { get; set; }
-        public List<BookingModerationLog> ModerationLogs { get; set; } = new();
-    }
-    public class MarkPaidAdminInput
-    {
-        public int Id { get; set; }
-        public decimal? Amount { get; set; }
-        public string? PaymentRef { get; set; }
     }
 }
 

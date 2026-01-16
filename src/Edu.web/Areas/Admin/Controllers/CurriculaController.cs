@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -19,97 +20,96 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly ApplicationDbContext _db;
         private readonly IFileStorageService _fs;
         private readonly IStringLocalizer<SharedResource> _L;
+        private readonly ILogger<CurriculaController> _logger;
 
-        public CurriculaController(ApplicationDbContext db, IFileStorageService fs, IStringLocalizer<SharedResource> localizer)
+        public CurriculaController(
+            ApplicationDbContext db,
+            IFileStorageService fs,
+            IStringLocalizer<SharedResource> localizer,
+            ILogger<CurriculaController> logger)
         {
             _db = db;
             _fs = fs;
             _L = localizer;
+            _logger = logger;
         }
 
-        // GET: Admin/Curricula?levelId=1
-        public async Task<IActionResult> Index(int? levelId)
+        // Helper to populate levels + select list + display map
+        private async Task PopulateLevelsAsync(int? selectedLevelId = null, CancellationToken cancellationToken = default)
         {
-            ViewData["ActivePage"] = "Curricula";
-
-            // load levels once, compute localized Text for each
             var levels = await _db.Levels
                                   .AsNoTracking()
                                   .OrderBy(l => l.Order)
-                                  .ToListAsync();
+                                  .ToListAsync(cancellationToken);
 
-            // Provide the raw levels list (for foreach + LocalizationHelpers in the Razor view)
             ViewBag.Levels = levels;
 
-            // Provide an optional SelectList (if some views use tag helpers)
-            var levelSelectItems = levels.Select(l => new { l.Id, Name = LocalizationHelpers.GetLocalizedLevelName(l) }).ToList();
-            ViewBag.LevelSelectList = new SelectList(levelSelectItems, "Id", "Name", levelId);
+            var levelSelectItems = levels
+                .Select(l => new { l.Id, Name = LocalizationHelpers.GetLocalizedLevelName(l) })
+                .ToList();
 
-            ViewBag.SelectedLevelId = levelId;
-
-            // also create a lookup map for levelId -> localizedName (useful in views)
+            ViewBag.LevelSelectList = new SelectList(levelSelectItems, "Id", "Name", selectedLevelId);
             ViewBag.LevelDisplayMap = levelSelectItems.ToDictionary(x => (int)x.Id, x => (string)x.Name);
+            ViewBag.SelectedLevelId = selectedLevelId;
+        }
+
+        // GET: Admin/Curricula?levelId=1
+        public async Task<IActionResult> Index(int? levelId, CancellationToken cancellationToken = default)
+        {
+            ViewData["ActivePage"] = "Curricula";
+
+            await PopulateLevelsAsync(levelId, cancellationToken);
 
             var q = _db.Curricula
-                       .Include(c => c.Level)
                        .AsNoTracking()
                        .OrderBy(c => c.Order)
                        .AsQueryable();
 
             if (levelId.HasValue) q = q.Where(c => c.LevelId == levelId.Value);
 
-            var list = await q.ToListAsync();
+            // include Level for display; if you only show name you could project to a lightweight VM
+            q = q.Include(c => c.Level);
 
-            // resolve cover image public URLs from storage keys (if present)
+            var list = await q.ToListAsync(cancellationToken);
+
+            // resolve cover image public URLs concurrently (faster than sequential awaits)
+            var tasks = new List<Task>();
             foreach (var c in list)
             {
                 if (!string.IsNullOrEmpty(c.CoverImageKey))
                 {
-                    try
+                    tasks.Add(Task.Run(async () =>
                     {
-                        c.CoverImageUrl = await _fs.GetPublicUrlAsync(c.CoverImageKey);
-                    }
-                    catch
-                    {
-                        c.CoverImageUrl = null;
-                    }
+                        try
+                        {
+                            c.CoverImageUrl = await _fs.GetPublicUrlAsync(c.CoverImageKey);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Failed getting public URL for curriculum {CurriculumId}", c.Id);
+                            c.CoverImageUrl = null;
+                        }
+                    }));
                 }
             }
+            if (tasks.Count > 0) await Task.WhenAll(tasks);
 
             return View(list); // model: IEnumerable<Curriculum>
         }
 
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(CancellationToken cancellationToken = default)
         {
             ViewData["ActivePage"] = "Curricula";
-
-            var levels = await _db.Levels
-                                  .AsNoTracking()
-                                  .OrderBy(l => l.Order)
-                                  .ToListAsync();
-
-            // Provide raw levels for the Razor foreach + localized name helper
-            ViewBag.Levels = levels;
-
-            // optional SelectList
-            var levelSelectItems = levels.Select(l => new { l.Id, Name = LocalizationHelpers.GetLocalizedLevelName(l) }).ToList();
-            ViewBag.LevelSelectList = new SelectList(levelSelectItems, "Id", "Name");
-
+            await PopulateLevelsAsync(null, cancellationToken);
             return View(new CurriculumCreateViewModel());
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(CurriculumCreateViewModel vm)
+        public async Task<IActionResult> Create(CurriculumCreateViewModel vm, CancellationToken cancellationToken = default)
         {
-            // Ensure levels are available when we need to re-render the view
-            var levels = await _db.Levels.AsNoTracking().OrderBy(l => l.Order).ToListAsync();
-            ViewBag.Levels = levels;
-            ViewBag.LevelSelectList = new SelectList(levels.Select(l => new { l.Id, Name = LocalizationHelpers.GetLocalizedLevelName(l) }), "Id", "Name", vm.LevelId);
+            await PopulateLevelsAsync(vm.LevelId, cancellationToken);
 
-            if (!ModelState.IsValid)
-            {
-                return View(vm);
-            }
+            if (!ModelState.IsValid) return View(vm);
 
             var curr = new Curriculum
             {
@@ -121,57 +121,72 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             if (vm.CoverImage != null)
             {
-                var key = await _fs.SaveFileAsync(vm.CoverImage, "curricula");
-                curr.CoverImageKey = key;
                 try
                 {
-                    curr.CoverImageUrl = await _fs.GetPublicUrlAsync(key); // generated, not stored
+                    var key = await _fs.SaveFileAsync(vm.CoverImage, "curricula");
+                    curr.CoverImageKey = key;
+                    try
+                    {
+                        curr.CoverImageUrl = await _fs.GetPublicUrlAsync(key);
+                    }
+                    catch
+                    {
+                        curr.CoverImageUrl = null;
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.LogWarning(ex, "Failed to save cover image for new curriculum");
+                    // don't fail creation because of storage issues; set url/key to null
+                    curr.CoverImageKey = null;
                     curr.CoverImageUrl = null;
                 }
             }
 
             _db.Curricula.Add(curr);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
-            TempData["Success"] = "Curriculum created.";
+            // store key; layout will localize
+            TempData["Success"] = "Curriculum.Created";
             return RedirectToAction(nameof(Details), new { id = curr.Id });
         }
 
         // GET: Admin/Curricula/Details/5
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             ViewData["ActivePage"] = "Curricula";
 
             var curriculum = await _db.Curricula
                                      .Include(c => c.Level)
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(c => c.Id == id);
-            if (curriculum == null) return NotFound();
+                                     .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+            if (curriculum == null)
+            {
+                TempData["Error"] = "Curriculum.NotFound";
+                return RedirectToAction("Index");
+            }
 
-            // Load cover image URL from storage key (if available)
             if (!string.IsNullOrEmpty(curriculum.CoverImageKey))
             {
                 try
                 {
                     curriculum.CoverImageUrl = await _fs.GetPublicUrlAsync(curriculum.CoverImageKey);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.LogDebug(ex, "Failed to get public url for curriculum {CurriculumId}", id);
                     curriculum.CoverImageUrl = null;
                 }
             }
 
-            // Load modules + their lessons + lesson files
+            // Load modules + their lessons + lesson files (module-first)
             var modules = await _db.SchoolModules
                                    .AsNoTracking()
                                    .Where(m => m.CurriculumId == id)
                                    .OrderBy(m => m.Order)
                                    .Include(m => m.SchoolLessons)
                                        .ThenInclude(sl => sl.Files)
-                                   .ToListAsync();
+                                   .ToListAsync(cancellationToken);
 
             // Load lessons that are directly under the curriculum (module-less)
             var directLessons = await _db.SchoolLessons
@@ -179,7 +194,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                                          .Where(l => l.CurriculumId == id && l.ModuleId == null)
                                          .OrderBy(l => l.Order)
                                          .Include(l => l.Files)
-                                         .ToListAsync();
+                                         .ToListAsync(cancellationToken);
 
             var vm = new CurriculumDetailsViewModel
             {
@@ -189,27 +204,23 @@ namespace Edu.Web.Areas.Admin.Controllers
             };
 
             // Provide localized mapping for levels if view needs it
-            var levels = await _db.Levels.AsNoTracking().OrderBy(l => l.Order).ToListAsync();
-            ViewBag.LevelDisplayMap = levels.Select(l => new { l.Id, Name = LocalizationHelpers.GetLocalizedLevelName(l) })
-                                            .ToDictionary(x => (int)x.Id, x => (string)x.Name);
-            ViewBag.Levels = levels;
+            await PopulateLevelsAsync(curriculum.LevelId, cancellationToken);
 
             return View(vm);
         }
 
-        public async Task<IActionResult> Edit(int id)
+        public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken = default)
         {
             ViewData["ActivePage"] = "Curricula";
-            var curr = await _db.Curricula.FindAsync(id);
-            if (curr == null) return NotFound();
 
-            var levels = await _db.Levels.AsNoTracking().OrderBy(l => l.Order).ToListAsync();
+            var curr = await _db.Curricula.FindAsync(new object[] { id }, cancellationToken);
+            if (curr == null)
+            {
+                TempData["Error"] = "Curriculum.NotFound";
+                return RedirectToAction("Index");
+            }
 
-            // Provide raw levels for Razor foreach + localization helper
-            ViewBag.Levels = levels;
-
-            // Provide a SelectList for convenience (if you use tag helpers elsewhere)
-            ViewBag.LevelSelectList = new SelectList(levels.Select(l => new { l.Id, Name = LocalizationHelpers.GetLocalizedLevelName(l) }), "Id", "Name", curr.LevelId);
+            await PopulateLevelsAsync(curr.LevelId, cancellationToken);
 
             var vm = new CurriculumEditViewModel
             {
@@ -218,27 +229,25 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Description = curr.Description,
                 LevelId = curr.LevelId,
                 Order = curr.Order,
-                ExistingCoverUrl = !string.IsNullOrEmpty(curr.CoverImageKey) ? await _fs.GetPublicUrlAsync(curr.CoverImageKey) : curr.CoverImageUrl
+                ExistingCoverUrl = !string.IsNullOrEmpty(curr.CoverImageKey) ? await SafeGetPublicUrlAsync(curr.CoverImageKey) : curr.CoverImageUrl
             };
 
             return View(vm);
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(CurriculumEditViewModel vm)
+        public async Task<IActionResult> Edit(CurriculumEditViewModel vm, CancellationToken cancellationToken = default)
         {
-            // repopulate levels for re-render on validation error
-            var levels = await _db.Levels.AsNoTracking().OrderBy(l => l.Order).ToListAsync();
-            ViewBag.Levels = levels;
-            ViewBag.LevelSelectList = new SelectList(levels.Select(l => new { l.Id, Name = LocalizationHelpers.GetLocalizedLevelName(l) }), "Id", "Name", vm.LevelId);
+            await PopulateLevelsAsync(vm.LevelId, cancellationToken);
 
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid) return View(vm);
+
+            var curr = await _db.Curricula.FindAsync(new object[] { vm.Id }, cancellationToken);
+            if (curr == null)
             {
-                return View(vm);
+                TempData["Error"] = "Curriculum.NotFound";
+                return RedirectToAction("Index");
             }
-
-            var curr = await _db.Curricula.FindAsync(vm.Id);
-            if (curr == null) return NotFound();
 
             curr.Title = vm.Title;
             curr.Description = vm.Description;
@@ -250,48 +259,49 @@ namespace Edu.Web.Areas.Admin.Controllers
                 // delete old key if exists
                 if (!string.IsNullOrEmpty(curr.CoverImageKey))
                 {
-                    try { await _fs.DeleteFileAsync(curr.CoverImageKey); } catch { /* ignore */ }
+                    try { await _fs.DeleteFileAsync(curr.CoverImageKey); } catch (Exception ex) { _logger.LogDebug(ex, "Failed deleting old cover image"); }
                 }
 
-                var newKey = await _fs.SaveFileAsync(vm.CoverImage, "curricula");
-                curr.CoverImageKey = newKey;
                 try
                 {
-                    curr.CoverImageUrl = await _fs.GetPublicUrlAsync(newKey);
+                    var newKey = await _fs.SaveFileAsync(vm.CoverImage, "curricula");
+                    curr.CoverImageKey = newKey;
+                    curr.CoverImageUrl = await SafeGetPublicUrlAsync(newKey);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.LogWarning(ex, "Failed to save new cover image for curriculum {CurriculumId}", curr.Id);
+                    // keep previous key/url cleared if save failed
+                    curr.CoverImageKey = null;
                     curr.CoverImageUrl = null;
                 }
             }
 
             _db.Curricula.Update(curr);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
-            TempData["Success"] = "Curriculum updated.";
+            TempData["Success"] = "Curriculum.Updated";
             return RedirectToAction(nameof(Details), new { id = curr.Id });
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken = default)
         {
-            var curriculum = await _db.Curricula.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+            // verify existence
+            var curriculum = await _db.Curricula.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
             if (curriculum == null)
             {
-                TempData["Error"] = _L["Curriculum.NotFound"].Value;
+                TempData["Error"] = "Curriculum.NotFound";
                 return RedirectToAction("Index");
             }
 
-            // check for any modules
-            var hasModules = await _db.SchoolModules.AsNoTracking().AnyAsync(m => m.CurriculumId == id);
-
-            // check for any lessons that reference this curriculum (covers direct lessons and module lessons)
-            var hasLessons = await _db.SchoolLessons.AsNoTracking().AnyAsync(l => l.CurriculumId == id);
+            // check for any modules or lessons referencing this curriculum (efficient DB checks)
+            var hasModules = await _db.SchoolModules.AsNoTracking().AnyAsync(m => m.CurriculumId == id, cancellationToken);
+            var hasLessons = await _db.SchoolLessons.AsNoTracking().AnyAsync(l => l.CurriculumId == id, cancellationToken);
 
             if (hasModules || hasLessons)
             {
-                // Localized message
-                TempData["Error"] = _L["Curriculum.DeleteHasChildren"].Value;
+                TempData["Error"] = "Curriculum.DeleteHasChildren";
                 return RedirectToAction("Details", new { id });
             }
 
@@ -300,19 +310,35 @@ namespace Edu.Web.Areas.Admin.Controllers
                 var toDelete = new Curriculum { Id = id };
                 _db.Curricula.Attach(toDelete);
                 _db.Curricula.Remove(toDelete);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
 
-                TempData["Success"] = _L["Curriculum.DeletedSuccess"].Value;
+                TempData["Success"] = "Curriculum.DeletedSuccess";
                 return RedirectToAction("Index");
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException ex)
             {
-                TempData["Error"] = _L["Curriculum.DeleteFailed"].Value;
+                _logger.LogWarning(ex, "Delete failed for curriculum {CurriculumId}", id);
+                TempData["Error"] = "Curriculum.DeleteFailed";
                 return RedirectToAction("Details", new { id });
+            }
+        }
+
+        // Helper that tries to get public URL and returns null on failure
+        private async Task<string?> SafeGetPublicUrlAsync(string key)
+        {
+            try
+            {
+                return await _fs.GetPublicUrlAsync(key);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "GetPublicUrlAsync failed for key {Key}", key);
+                return null;
             }
         }
     }
 }
+
 
 
 

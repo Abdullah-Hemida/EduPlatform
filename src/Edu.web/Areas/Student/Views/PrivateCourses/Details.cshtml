@@ -25,11 +25,18 @@
                     }
                     else
                     {
-                        <form asp-action="RequestPurchase" method="post" class="ms-2">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
-                            <button class="btn btn-primary">@(L["Purchase.Request"] ?? "Request to purchase")</button>
-                        </form>
+                        @if (User?.Identity?.IsAuthenticated == true && User.IsInRole("Student"))
+                        {
+                            <form asp-action="RequestPurchase" method="post" class="ms-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
+                                <button class="btn btn-primary">@L["Purchase.Request"]</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <a asp-area="" asp-controller="Account" asp-action="Login" class="btn btn-outline-primary ms-2">@L["Account.LoginToPurchase"]</a>
+                        }
                     }
                 </div>
             </div>
@@ -95,5 +102,6 @@
         </a>
     </aside>
 </div>
+
 
 

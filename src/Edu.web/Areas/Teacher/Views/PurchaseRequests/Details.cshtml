@@ -1,4 +1,5 @@
 ﻿@model Edu.Web.Areas.Teacher.ViewModels.PurchaseRequestDetailsVm
+@using Edu.Domain.Entities
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
@@ -20,7 +21,10 @@
         <div class="card mb-3">
             <div class="card-body">
                 <h5 class="mb-1 text-truncate min-w-0">@Model.CourseTitle</h5>
-                <div class="small text-muted mb-3">@Model.CategoryName</div>
+                @if (!string.IsNullOrEmpty(Model.CategoryName))
+                {
+                    <div class="small text-muted mb-3">@Model.CategoryName</div>
+                }
 
                 <div class="row g-2">
                     <div class="col-12 col-sm-4 text-muted">@L["Admin.Student"]</div>
@@ -34,18 +38,26 @@
 
                     <div class="col-12 col-sm-4 text-muted">@L["Admin.Status"]</div>
                     <div class="col-12 col-sm-8">
-                        @if (Model.Status == PurchaseStatus.Pending)
-                        {
-                            <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+                        @{
+                            var badgeClass = Model.Status switch
+                            {
+                                PurchaseStatus.Pending => "bg-warning text-dark",
+                                PurchaseStatus.Completed => "bg-success",
+                                PurchaseStatus.Rejected => "bg-danger",
+                                PurchaseStatus.Cancelled => "bg-secondary",
+                                _ => "bg-secondary"
+                            };
+
+                            var localized = Model.Status switch
+                            {
+                                PurchaseStatus.Pending => L["Status.Pending"],
+                                PurchaseStatus.Completed => L["Status.Completed"],
+                                PurchaseStatus.Rejected => L["Status.Rejected"],
+                                PurchaseStatus.Cancelled => L["Status.Cancelled"],
+                                _ => L["Status.Unknown", Model.Status.ToString()]
+                            };
                         }
-                        else if (Model.Status == PurchaseStatus.Completed)
-                        {
-                            <span class="badge bg-success">@L["Status.Completed"]</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-danger">@L["Status.Rejected"]</span>
-                        }
+                        <span class="badge @badgeClass" aria-label="@localized">@localized</span>
                     </div>
 
                     <div class="col-12 col-sm-4 text-muted">@L["Admin.RequestedAt"]</div>
@@ -57,7 +69,7 @@
             </div>
         </div>
 
-        <!-- Course card: use order-md to allow flipping in RTL via CSS above -->
+        <!-- Course card -->
         <div class="card">
             <div class="card-header"><strong>@L["Admin.Course"]</strong></div>
 
@@ -71,13 +83,15 @@
 
                 <div class="min-w-0 flex-grow-1 order-md-2">
                     <div class="fw-semibold text-truncate">@Model.CourseTitle</div>
-                    <div class="small text-muted">@Model.CategoryName</div>
+                    @if (!string.IsNullOrEmpty(Model.CategoryName))
+                    {
+                        <div class="small text-muted">@Model.CategoryName</div>
+                    }
 
                     <div class="mt-3 d-flex flex-wrap gap-2">
                         <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-sm btn-outline-secondary">
                             @L["Button.View"]
                         </a>
-                        @* extra contextual buttons can be added here (they will wrap on small screens) *@
                     </div>
                 </div>
             </div>
@@ -103,6 +117,7 @@
         </div>
     </aside>
 </div>
+
 
 
 

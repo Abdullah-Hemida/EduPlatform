@@ -1,53 +1,51 @@
-﻿@model IEnumerable<Edu.Domain.Entities.Category>
+﻿@model IEnumerable<Edu.Web.Areas.Admin.ViewModels.CategoryAdminListItemVm>
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
-     
     ViewData["Title"] = L["Admin.Categories"];
 }
 
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 gap-md-3 mb-3">
-
-    <!-- Title + Subtitle -->
-    <div>
-        <h4 class="mb-0">@L["Admin.Categories"]</h4>
-        <small class="text-muted">@L["Admin.CategoriesSubtitle"]</small>
-    </div>
-
-    <!-- Add Button -->
-    <a asp-action="Create" class="btn btn-primary btn-sm text-nowrap">
-        @L["Admin.AddCategory"]
-        <i class="fas fa-plus-circle ms-1"></i>
-    </a>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+    <h3 class="m-0">@L["Admin.Categories"]</h3>
+    <a asp-action="Create" class="btn btn-primary text-nowrap">@L["Admin.AddCategory"] <i class="fas fa-plus-circle ms-1"></i></a>
 </div>
 
-
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">@TempData["Success"]</div>
-}
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-danger">@TempData["Error"]</div>
-}
-
-<table class="table table-sm">
-    <thead class="table-light"><tr><th>#</th><th>@L["Admin.Name"]</th><th style="width:160px"></th></tr></thead>
-    <tbody>
-        @foreach (var c in Model)
-        {
+<div class="table-responsive d-none d-md-block">
+    <table class="table table-striped table-hover align-middle mb-0">
+        <thead class="table-light small">
             <tr>
-                <td>@c.Id</td>
-                <td>@c.Name</td>
-                <td>
-                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@c.Id">@L["Button.Edit"]</a>
-                    <form method="post" asp-action="Delete" asp-route-id="@c.Id" class="d-inline" onsubmit="return confirm('@L["Admin.ConfirmDeleteCategory"]');">
-                        @Html.AntiForgeryToken()
-                        <button class="btn btn-sm btn-danger">@L["Admin.Delete"]</button>
-                    </form>
-                </td>
+                <th style="width:60px">#</th>
+                <th>@L["AdminCategory.NameEn"]</th>
+                <th>@L["AdminCategory.NameIt"]</th>
+                <th>@L["AdminCategory.NameAr"]</th>
+                <th class="text-end text-nowrap" style="width:160px">@L["Admin.Actions"]</th>
             </tr>
-        }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @if (!Model.Any())
+            {
+                <tr><td colspan="5" class="text-center small text-muted">@L["Admin.NoRecords"]</td></tr>
+            }
+            else
+            {
+                foreach (var item in Model)
+                {
+                    <tr>
+                        <td class="small text-muted">@item.Id</td>
+                        <td>@item.NameEn</td>
+                        <td>@item.NameIt</td>
+                        <td dir="rtl">@item.NameAr</td>
+                        <td class="text-end text-nowrap">
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary"><i class="fas fa-edit me-1"></i>@L["Button.Edit"]</a>
+                            <form asp-action="Delete" asp-route-id="@item.Id" method="post" class="m-0 d-inline" onsubmit="return confirm('@L["Admin.ConfirmDelete"]');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash me-1"></i>@L["Button.Delete"]</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
 

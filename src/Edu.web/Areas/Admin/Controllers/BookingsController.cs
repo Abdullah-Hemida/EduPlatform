@@ -1,7 +1,6 @@
 ﻿using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
-using Edu.Infrastructure.Services;
 using Edu.Web.Areas.Admin.ViewModels;
 using Edu.Web.Helpers;
 using Edu.Web.Resources;
@@ -10,7 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using System.Globalization;
-
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -23,7 +21,13 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly INotificationService _notifier;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<BookingsController> _logger;
-        public BookingsController(ApplicationDbContext db, IStringLocalizer<SharedResource> L, INotificationService notifier, IWebHostEnvironment env, ILogger<BookingsController> logger)
+
+        public BookingsController(
+            ApplicationDbContext db,
+            IStringLocalizer<SharedResource> L,
+            INotificationService notifier,
+            IWebHostEnvironment env,
+            ILogger<BookingsController> logger)
         {
             _db = db;
             _L = L;
@@ -33,14 +37,15 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // GET: Admin/Bookings
-        public async Task<IActionResult> Index(string? status = null, string tab = "upcoming", int page = 1, int pageSize = 20)
+        // Note: no server-side formatting here — return UTC datetimes and format in view
+        public async Task<IActionResult> Index(string? status = null, string tab = "upcoming", int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
         {
             tab = (tab ?? "upcoming").ToLowerInvariant();
             if (tab != "upcoming" && tab != "past" && tab != "all") tab = "upcoming";
 
             var now = DateTime.UtcNow;
 
-            // Note: project the minimal fields first (anonymous projection)
+            // Base query: minimal projection of scalars (EF can translate)
             var q = _db.Bookings
                 .AsNoTracking()
                 .Select(b => new
@@ -50,43 +55,42 @@ namespace Edu.Web.Areas.Admin.Controllers
                     b.Price,
                     b.Status,
                     b.SlotId,
-                    SlotStart = b.Slot != null ? b.Slot.StartUtc : (DateTime?)null,
-                    SlotEnd = b.Slot != null ? b.Slot.EndUtc : (DateTime?)null,
-                    StudentFullName = b.Student != null && b.Student.User != null ? b.Student.User.FullName : null,
-                    StudentEmail = b.Student != null && b.Student.User != null ? b.Student.User.Email : null,
-                    StudentPhoneNumber = b.Student != null && b.Student.User != null ? b.Student.User.PhoneNumber : null,
-                    TeacherFullName = b.Teacher != null && b.Teacher.User != null ? b.Teacher.User.FullName : null
-                }).AsQueryable();
+                    SlotStartUtc = b.Slot != null ? b.Slot.StartUtc : (DateTime?)null,
+                    SlotEndUtc = b.Slot != null ? b.Slot.EndUtc : (DateTime?)null,
+                    StudentFullName = b.Student!.User!.FullName,
+                    StudentEmail = b.Student!.User!.Email,
+                    StudentPhoneNumber = b.Student!.User!.PhoneNumber,
+                    TeacherFullName = b.Teacher!.User!.FullName
+                });
 
-            // status filter (existing)
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<BookingStatus>(status, true, out var st))
             {
                 q = q.Where(x => x.Status == st);
             }
 
-            // tab time filter (use SlotEnd/SlotStart from projection)
             if (tab == "upcoming")
             {
-                q = q.Where(x => x.SlotEnd != null && x.SlotEnd >= now);
+                q = q.Where(x => x.SlotEndUtc != null && x.SlotEndUtc >= now);
             }
             else if (tab == "past")
             {
-                q = q.Where(x => x.SlotEnd != null && x.SlotEnd < now);
+                q = q.Where(x => x.SlotEndUtc != null && x.SlotEndUtc < now);
             }
-            // else "all" -> no additional time filter
 
             q = q.OrderByDescending(x => x.RequestedDateUtc);
 
+            // Project to view-model but keep UTC datetimes; do NOT format them here
             var projected = q.Select(x => new AdminBookingListItemVm
             {
                 Id = x.Id,
                 RequestedDateUtc = x.RequestedDateUtc,
+                Price = x.Price,                         // keep numeric price; provide label when rendering
                 PriceLabel = x.Price.ToEuro(),
                 Status = x.Status,
                 SlotId = x.SlotId,
-                SlotStartUtc = x.SlotStart,
-                SlotEndUtc = x.SlotEnd,
-                SlotTimes = x.SlotStart != null ? $"{x.SlotStart.Value.ToLocalTime():g} - {x.SlotEnd.Value.ToLocalTime():g}" : null,
+                SlotStartUtc = x.SlotStartUtc,
+                SlotEndUtc = x.SlotEndUtc,
+                // SlotTimes will be built in the view (local timezone + culture)
                 StudentName = x.StudentFullName,
                 StudentEmail = x.StudentEmail,
                 StudentPhoneNumber = x.StudentPhoneNumber,
@@ -98,7 +102,7 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             var vm = new AdminBookingsIndexVm
             {
-                Bookings = paged,                // PaginatedList<T> is itself enumerable/list
+                Bookings = paged,
                 Page = paged.PageIndex,
                 PageSize = paged.PageSize,
                 TotalCount = paged.TotalCount,
@@ -111,47 +115,41 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // GET: Admin/Bookings/Details/5 
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             var booking = await _db.Bookings
                 .AsNoTracking()
                 .Include(b => b.Slot)
                 .Include(b => b.Student).ThenInclude(s => s.User)
                 .Include(b => b.Teacher).ThenInclude(t => t.User)
-                .FirstOrDefaultAsync(b => b.Id == id);
+                .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
             if (booking == null) return NotFound();
 
-            // determine default region code (two-letter ISO, e.g. "IT")
+            // derive a reasonable default region code
             string defaultRegion = "IT";
             try
             {
-                // derive from current culture (e.g. "it-IT" -> RegionInfo -> "IT")
                 var regionInfo = new RegionInfo(CultureInfo.CurrentCulture.Name);
-                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
-                {
-                    defaultRegion = regionInfo.TwoLetterISORegionName;
-                }
+                if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName)) defaultRegion = regionInfo.TwoLetterISORegionName;
             }
-            catch
-            {
-                // ignore and keep fallback "IT"
-            }
-
-            var studentPhone = booking.Student?.User?.PhoneNumber;
-            var guardianPhone = booking.Student?.GuardianPhoneNumber;
+            catch { /* keep default */ }
 
             var vm = new AdminBookingDetailsVm
             {
                 Id = booking.Id,
                 SlotId = booking.SlotId,
-                SlotTimes = booking.Slot != null ? $"{booking.Slot.StartUtc.ToLocalTime():g} - {booking.Slot.EndUtc.ToLocalTime():g}" : null,
+                SlotStartUtc = booking.Slot.StartUtc,
+                // Replace this line:
+                // With this line (remove the cancellationToken argument):
+                SlotEndUtc = booking.Slot.EndUtc,
+                // View will display a human friendly formatted time (local)
                 StudentName = booking.Student?.User?.FullName,
                 StudentEmail = booking.Student?.User?.Email,
-                StudentPhoneNumber = studentPhone,
-                StudentWhatsapp = PhoneHelpers.ToWhatsappDigits(studentPhone, defaultRegion),
-                GuardianPhoneNumber = guardianPhone,
-                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(guardianPhone, defaultRegion),
+                StudentPhoneNumber = booking.Student?.User?.PhoneNumber,
+                StudentWhatsapp = PhoneHelpers.ToWhatsappDigits(booking.Student?.User?.PhoneNumber, defaultRegion),
+                GuardianPhoneNumber = booking.Student?.GuardianPhoneNumber,
+                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(booking.Student?.GuardianPhoneNumber, defaultRegion),
                 TeacherName = booking.Teacher?.User?.FullName,
                 Status = booking.Status,
                 RequestedDateUtc = booking.RequestedDateUtc,
@@ -165,114 +163,113 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id, string? note)
+        public async Task<IActionResult> Delete(int id, string? note, CancellationToken cancellationToken = default)
         {
             var booking = await _db.Bookings
                 .Include(b => b.Student).ThenInclude(s => s.User)
                 .Include(b => b.Teacher).ThenInclude(t => t.User)
-                .FirstOrDefaultAsync(b => b.Id == id);
+                .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
             if (booking == null) return NotFound();
 
-            // allow deleting only pending (or cancelled) to be safe:
             if (booking.Status == BookingStatus.Paid)
             {
-                TempData["Error"] = _L["Booking.CannotDeletePaid"].Value ?? "Cannot delete a paid booking.";
+                TempData["Error"] = "Booking.CannotDeletePaid";
                 return RedirectToAction("Index");
             }
 
             _db.Bookings.Remove(booking);
-
             try
             {
-                await _db.SaveChangesAsync();
-                TempData["Success"] = _L["Admin.Deleted"].Value ?? "Deleted successfully.";
+                await _db.SaveChangesAsync(cancellationToken);
+                TempData["Success"] = "Admin.Deleted";
+                _logger.LogInformation("Booking {BookingId} deleted by {User}", booking.Id, User?.Identity?.Name ?? "unknown");
             }
-            catch
+            catch (Exception ex)
             {
-                TempData["Error"] = _L["Admin.OperationFailed"].Value ?? "Operation failed.";
+                _logger.LogError(ex, "Failed to delete booking {BookingId}", booking.Id);
+                TempData["Error"] = "Admin.OperationFailed";
             }
 
             return RedirectToAction("Index");
         }
 
-        // DTO for AJAX request
-        public class MarkPaidRequest
-        {
-            public int Id { get; set; }
-            public decimal? Amount { get; set; }
-            public string? PaymentRef { get; set; }
-        }
-
         [HttpPost]
-        public async Task<IActionResult> MarkPaid([FromBody] MarkPaidRequest request)
+        [Authorize(Roles = "Admin")]
+        [Route("Admin/Bookings/MarkPaid/{id:int}")]
+        public async Task<IActionResult> MarkPaid(int id, CancellationToken cancellationToken = default)
         {
-            if (request == null) return BadRequest(new { success = false, error = "Invalid payload" });
-
             var booking = await _db.Bookings
                 .Include(b => b.Student).ThenInclude(s => s.User)
                 .Include(b => b.Teacher).ThenInclude(t => t.User)
-                .FirstOrDefaultAsync(b => b.Id == request.Id);
+                .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
-            if (booking == null) return NotFound(new { success = false, error = "Booking not found" });
+            if (booking == null)
+                return NotFound(new { success = false, error = "Booking not found" });
 
-            if (booking.Status == BookingStatus.Paid) return BadRequest(new { success = false, error = "Already paid" });
+            if (booking.Status == BookingStatus.Paid)
+                return BadRequest(new { success = false, error = "Booking is already marked as paid" });
 
+            // Transition Pending → Paid
             booking.Status = BookingStatus.Paid;
-            if (request.Amount.HasValue) booking.Price = request.Amount.Value;
 
-            var paymentRefProp = booking.GetType().GetProperty("PaymentRef");
-            if (paymentRefProp != null && paymentRefProp.CanWrite) paymentRefProp.SetValue(booking, request.PaymentRef);
+            // Set PaidAtUtc only now (authoritative payment moment)
+            booking.PaidAtUtc = DateTime.UtcNow;
 
-            var paidAtProp = booking.GetType().GetProperty("PaidAtUtc");
-            if (paidAtProp != null && paidAtProp.CanWrite) paidAtProp.SetValue(booking, DateTime.UtcNow);
-
-            try { await _db.SaveChangesAsync(); }
-            catch (Exception ex) { return StatusCode(500, new { success = false, error = _L["Admin.OperationFailed"].Value ?? "Operation failed" }); }
-
-            // Notify teacher and student via NotificationService (best-effort)
             try
             {
-                async Task SendForUser(ApplicationUser? user)
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Conflict(new { success = false, error = "The booking was modified by another user. Please reload." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to mark booking {BookingId} as paid", booking.Id);
+                return StatusCode(500, new { success = false, error = "Failed to update booking" });
+            }
+
+            // Best-effort notification. Prefer background queue/hosted service in production.
+            _ = Task.Run(async () =>
+            {
+                try
                 {
-                    if (user == null || string.IsNullOrEmpty(user.Email)) return;
-                    await _notifier.SendLocalizedEmailAsync(user, "Booking.Email.Subject.Paid", "Booking.Email.Body.Paid", booking.Id, booking.Price.ToString("C"));
+                    var student = booking.Student?.User;
+                    var teacher = booking.Teacher?.User;
+
+                    if (student != null)
+                        await _notifier.SendLocalizedEmailAsync(
+                            student,
+                            "Booking.Email.Subject.Paid",
+                            "Booking.Email.Body.Paid",
+                            booking.Id,
+                            booking.Price.ToString("C"));
+
+                    if (teacher != null)
+                        await _notifier.SendLocalizedEmailAsync(
+                            teacher,
+                            "Booking.Email.Subject.Paid",
+                            "Booking.Email.Body.Paid",
+                            booking.Id,
+                            booking.Price.ToString("C"));
                 }
-
-                var studentUser = booking.Student?.User;
-                var teacherUser = booking.Teacher?.User;
-
-                await NotifyFireAndForgetAsync(async () =>
+                catch (Exception ex)
                 {
-                    if (studentUser != null) await SendForUser(studentUser);
-                    if (teacherUser != null) await SendForUser(teacherUser);
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Notify after MarkPaid failed for booking {BookingId}", booking.Id);
-            }
+                    _logger.LogWarning(ex, "Notifications after marking booking {BookingId} paid failed", booking.Id);
+                }
+            });
 
-            var priceLabelRes = booking.Price.ToEuro();
-            return Ok(new { success = true, price = booking.Price, priceLabel = priceLabelRes });
-        }
-
-        // Helper to run notifications awaited in development, fire-and-forget otherwise
-        private async Task NotifyFireAndForgetAsync(Func<Task> work)
-        {
-            if (work == null) return;
-            try
+            return Ok(new
             {
-                if (_env?.IsDevelopment() == true) await work();
-                else _ = Task.Run(work);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "NotifyFireAndForget failed");
-            }
+                success = true,
+                id = booking.Id,
+                paidAtUtc = booking.PaidAtUtc
+            });
         }
     }
 }
+
 
 
 

@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using Edu.Infrastructure.Data;
+﻿using Edu.Infrastructure.Data;
 using Edu.Domain.Entities;
 using Edu.Web.Areas.Admin.ViewModels;
 using Edu.Web.Resources;
@@ -28,40 +27,40 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // GET: Admin/Earnings?year=2025
-        public async Task<IActionResult> Index(int? year)
+        public async Task<IActionResult> Index(int? year, CancellationToken cancellationToken = default)
         {
             var selectedYear = year ?? DateTime.UtcNow.Year;
 
-            // fetch teachers and user profile
-            var teachers = await _db.Teachers
-                                    .AsNoTracking()
-                                    .Include(t => t.User)
-                                    .OrderBy(t => t.User.FullName)
-                                    .ToListAsync();
+            // compute inclusive start, exclusive end for the selected year (UTC)
+            var yearStart = new DateTime(selectedYear, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var yearEnd = yearStart.AddYears(1);
 
-            // prepare dictionary to accumulate sums per teacherId => month (1..12)
+            // fetch teachers (basic projection) - you may prefer only teachers that have earnings, but keeping all is fine
+            var teachers = await _db.Teachers
+                .AsNoTracking()
+                .Include(t => t.User) // small set: ok; if large, project instead
+                .OrderBy(t => t.User.FullName)
+                .ToListAsync(cancellationToken);
+
             var teacherMap = teachers.ToDictionary(t => t.Id, t => new TeacherEarningsVm
             {
                 TeacherId = t.Id,
                 FullName = t.User?.FullName ?? t.User?.UserName ?? "",
                 PhotoUrl = t.User?.PhotoUrl,
                 PhoneNumber = t.User?.PhoneNumber,
-                Months = new decimal[12], // index 0 => Jan
+                Months = new decimal[12],
                 Total = 0m
             });
 
-            // 1) Bookings: Paid bookings with Price not null. Group by TeacherId and month (RequestedDateUtc).
-            // Bookings: use PaidAtUtc for month/year grouping
+            // 1) Bookings: group by teacherId and month based on PaidAtUtc range
             var bookingGroups = await _db.Bookings
                 .AsNoTracking()
                 .Where(b => b.Status == BookingStatus.Paid
-                            && b.Price != null
                             && b.TeacherId != null
-                            && b.PaidAtUtc.HasValue
-                            && b.PaidAtUtc.Value.Year == selectedYear)
+                            && b.PaidAtUtc >= yearStart && b.PaidAtUtc < yearEnd)
                 .GroupBy(b => new { b.TeacherId, Month = b.PaidAtUtc.Value.Month })
                 .Select(g => new { TeacherId = g.Key.TeacherId!, Month = g.Key.Month, Sum = g.Sum(x => x.Price) })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             foreach (var g in bookingGroups)
             {
@@ -74,22 +73,20 @@ namespace Edu.Web.Areas.Admin.Controllers
                 }
             }
 
-            // 2) Reactive course month payments: payments with Status == Paid and PaidAtUtc in year
-            // We'll join payments -> enrollments -> courses to get teacher id
+            // 2) Reactive course month payments: already joined in your version — keep join but use range filter
             var reactivePayments = await (
                 from p in _db.ReactiveEnrollmentMonthPayments.AsNoTracking()
                 join e in _db.ReactiveEnrollments.AsNoTracking() on p.ReactiveEnrollmentId equals e.Id
                 join c in _db.ReactiveCourses.AsNoTracking() on e.ReactiveCourseId equals c.Id
                 where p.Status == EnrollmentMonthPaymentStatus.Paid
-                      && p.PaidAtUtc.HasValue
-                      && p.PaidAtUtc.Value.Year == selectedYear
+                      && p.PaidAtUtc >= yearStart && p.PaidAtUtc < yearEnd
                       && c.TeacherId != null
                 select new
                 {
                     TeacherId = c.TeacherId,
                     Month = p.PaidAtUtc.Value.Month,
                     Amount = p.Amount
-                }).ToListAsync();
+                }).ToListAsync(cancellationToken);
 
             foreach (var p in reactivePayments)
             {
@@ -102,31 +99,33 @@ namespace Edu.Web.Areas.Admin.Controllers
                 }
             }
 
-            // 3) Private course purchases (PurchaseRequests)
-            // NOTE: your PurchaseRequest.Amount is string — parse safely. If you can migrate to decimal, do it later.
-            var purchaseRequests = await _db.PurchaseRequests
-                                           .AsNoTracking()
-                                           .Include(pr => pr.PrivateCourse)
-                                           .ThenInclude(pc => pc!.Teacher)
-                                           .Where(pr => pr.Status == PurchaseStatus.Completed && pr.PrivateCourse != null && pr.RequestDateUtc.Year == selectedYear)
-                                           .ToListAsync();
+            // 3) Private course purchases: group in DB to avoid materializing all rows
+            // join PurchaseRequests -> PrivateCourse to get teacherId
+            var purchaseGroups = await (
+                from pr in _db.PurchaseRequests.AsNoTracking()
+                join pc in _db.PrivateCourses.AsNoTracking() on pr.PrivateCourseId equals pc.Id
+                where pr.Status == PurchaseStatus.Completed
+                      && pr.RequestDateUtc >= yearStart && pr.RequestDateUtc < yearEnd
+                      && pc.TeacherId != null
+                group pr by new { pc.TeacherId, Month = pr.RequestDateUtc.Month } into g
+                select new
+                {
+                    TeacherId = g.Key.TeacherId!,
+                    Month = g.Key.Month,
+                    Sum = g.Sum(x => x.Amount)
+                }).ToListAsync(cancellationToken);
 
-            // purchaseRequests is loaded from DB and now has decimal? Amount
-            foreach (var pr in purchaseRequests)
+            foreach (var g in purchaseGroups)
             {
-                var teacherId = pr.PrivateCourse?.TeacherId;
-                if (string.IsNullOrEmpty(teacherId)) continue;
-                if (!teacherMap.TryGetValue(teacherId, out var vm)) continue;
-
-                    var amt = pr.Amount;
-                    var month = pr.RequestDateUtc.Month;
-                    var idx = month - 1;
-                    vm.Months[idx] += amt;
-                    vm.Total += amt;
+                if (!teacherMap.TryGetValue(g.TeacherId, out var vm)) continue;
+                var idx = g.Month - 1;
+                if (idx >= 0 && idx < 12)
+                {
+                    vm.Months[idx] += g.Sum;
+                    vm.Total += g.Sum;
+                }
             }
 
-
-            // prepare final VM
             var result = new EarningsIndexVm
             {
                 Year = selectedYear,

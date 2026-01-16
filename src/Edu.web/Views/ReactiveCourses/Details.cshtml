@@ -13,20 +13,6 @@
 <div class="row g-3" dir="@dir" style="text-align:@textAlign">
     <div class="col-lg-8">
 
-        @* Feedback (TempData) *@
-        @if (TempData["Success"] != null)
-        {
-            <div class="alert alert-success">@TempData["Success"]</div>
-        }
-        else if (TempData["Error"] != null)
-        {
-            <div class="alert alert-danger">@TempData["Error"]</div>
-        }
-        else if (TempData["Info"] != null)
-        {
-            <div class="alert alert-info">@TempData["Info"]</div>
-        }
-
         <div class="card mb-3 shadow-sm">
             @if (!string.IsNullOrEmpty(Model.CoverPublicUrl))
             {

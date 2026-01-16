@@ -23,9 +23,13 @@
 
             <div class="col-md-6">
                 <label class="form-label">@L["Admin.Level"]</label>
+                @Html.DropDownListFor(
+                m => m.LevelId,
+                levelSelectList,
+                "-- " + (L["Admin.SelectLevel"].Value ?? "Select level") + " --",
+               new { @class = "form-select" }
+                )
 
-                @Html.DropDownListFor(m => m.LevelId, levelSelectList, ("-- " + (L["Admin.SelectLevel"].Value ?? "Select level") + " --"),
-                new { @class = "form-select" })
             </div>
 
             <div class="col-12">

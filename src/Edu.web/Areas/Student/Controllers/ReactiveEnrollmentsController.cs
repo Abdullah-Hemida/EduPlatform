@@ -1,4 +1,5 @@
-﻿using Edu.Application.IServices;
+﻿// File: Areas/Student/Controllers/ReactiveEnrollmentsController.cs
+using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
@@ -46,6 +47,7 @@ namespace Edu.Web.Areas.Student.Controllers
         [AllowAnonymous] // public; Admin/Teacher/Student may access but only Student role treated as 'student'
         public async Task<IActionResult> Details(int id)
         {
+            // Load lightweight course + months summary
             var course = await _db.ReactiveCourses
                 .AsNoTracking()
                 .Where(c => c.Id == id && !c.IsArchived)
@@ -84,8 +86,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 catch { coverPublicUrl = course.CoverImageKey; }
             }
 
-            // Only treat the current user as a student when they are in the Student role.
-            // This prevents Admins/Teachers from being mistaken for students in the UI.
+            // Only treat current user as a student when in Student role
             string? studentId = null;
             if (User?.Identity?.IsAuthenticated == true && User.IsInRole("Student"))
             {
@@ -102,7 +103,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 LessonsCount = m.LessonsCount
             }).OrderBy(m => m.MonthIndex).ToList();
 
-            // If not a student (anonymous or admin/teacher) return public VM (no payment/enrollment info)
+            // Public view (no payment/enrollment info)
             if (string.IsNullOrEmpty(studentId))
             {
                 var publicVm = new StudentReactiveCourseDetailsVm
@@ -148,23 +149,18 @@ namespace Edu.Web.Areas.Student.Controllers
                 m.PaymentId = payment?.Id;
                 m.MyPaymentStatus = payment?.Status;
 
-                // mark explicit boolean for convenience (Paid means student already paid for this month)
                 m.HasPaidPayment = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Paid);
-
-                // SIMPLE rule: allow request only if admin marked month ready AND student doesn't already have a paid payment for that month.
-                // keep previous behavior of using payment == null for initial request prevention.
                 m.CanRequestPayment = m.IsReadyForPayment && !m.HasPaidPayment && (payment == null);
-
                 m.CanCancelPayment = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Pending);
                 m.CanViewLessons = (payment != null && payment.Status == EnrollmentMonthPaymentStatus.Paid);
             }
 
-            // If any paid months -> load lessons for those months and their attachments
+            // If any paid months -> load lessons + attachments for those paid months
             var paidMonthIds = monthsBase.Where(m => m.CanViewLessons).Select(m => m.Id).ToList();
             var lessonVmList = new List<StudentCourseLessonVm>();
             if (paidMonthIds.Any())
             {
-                // load lessons (including RecordedVideoUrl)
+                // load lessons
                 var lessons = await _db.ReactiveCourseLessons
                     .AsNoTracking()
                     .Where(l => l.ReactiveCourseMonthId != null && paidMonthIds.Contains(l.ReactiveCourseMonthId))
@@ -183,7 +179,7 @@ namespace Edu.Web.Areas.Student.Controllers
 
                 var lessonIds = lessons.Select(x => x.Id).ToList();
 
-                // fetch file resources for these lessons (best-effort)
+                // fetch file resources for these lessons
                 var files = new List<FileResource>();
                 if (lessonIds.Any())
                 {
@@ -193,18 +189,52 @@ namespace Edu.Web.Areas.Student.Controllers
                         .ToListAsync();
                 }
 
-                // map to VM (resolve public urls via file storage synchronously - consistent with your other code)
+                // prepare distinct keys to resolve public urls asynchronously
+                var distinctKeys = files
+                    .Select(fr => fr.StorageKey ?? fr.FileUrl)
+                    .Where(k => !string.IsNullOrEmpty(k))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var keyToUrl = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                if (distinctKeys.Any())
+                {
+                    try
+                    {
+                        var urlTasks = distinctKeys.Select(k => _fileStorage.GetPublicUrlAsync(k!)).ToArray();
+                        var urls = await Task.WhenAll(urlTasks);
+                        keyToUrl = distinctKeys.Select((k, i) => (k, urls[i]))
+                                              .ToDictionary(x => x.k!, x => x.Item2, StringComparer.OrdinalIgnoreCase);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Some file public URL lookups failed for reactive course {CourseId}", course.Id);
+                        // fallback: dictionary left empty, use fileUrl or storageKey later
+                    }
+                }
+
+                // map lessons -> VMs, using keyToUrl to fill PublicUrl
                 lessonVmList = lessons.Select(l =>
                 {
                     var attached = files
                         .Where(f => f.ReactiveCourseLessonId == l.Id)
-                        .Select(ff => new ReactiveCourseLessonFileVm
+                        .Select(ff =>
                         {
-                            Id = ff.Id,
-                            FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
-                            PublicUrl = !string.IsNullOrEmpty(ff.StorageKey) ? _fileStorage.GetPublicUrlAsync(ff.StorageKey).Result
-                                        : (ff.FileUrl ?? null)
-                        }).ToList();
+                            var keyOrUrl = ff.StorageKey ?? ff.FileUrl;
+                            string? publicUrl = null;
+                            if (!string.IsNullOrEmpty(keyOrUrl) && keyToUrl.TryGetValue(keyOrUrl, out var resolved) && !string.IsNullOrEmpty(resolved))
+                                publicUrl = resolved;
+                            else
+                                publicUrl = ff.FileUrl ?? ff.StorageKey;
+
+                            return new ReactiveCourseLessonFileVm
+                            {
+                                Id = ff.Id,
+                                FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
+                                PublicUrl = publicUrl
+                            };
+                        })
+                        .ToList();
 
                     return new StudentCourseLessonVm
                     {
@@ -265,9 +295,9 @@ namespace Edu.Web.Areas.Student.Controllers
             var studentId = _userManager.GetUserId(User);
             if (string.IsNullOrEmpty(studentId)) return Challenge();
 
-            string msgNotFound = _localizer["ReactiveCourse.NotFound"].Value;
-            string msgCourseFull = _localizer["ReactiveCourse.CourseFull"].Value;
-            string msgServerErr = _localizer["Admin.ServerError"].Value;
+            var msgNotFound = _localizer["ReactiveCourse.NotFound"].Value ?? "Course not found";
+            var msgCourseFull = _localizer["ReactiveCourse.CourseFull"].Value ?? "Course is full";
+            var msgServerErr = _localizer["Admin.ServerError"].Value ?? "Server error";
 
             var course = await _db.ReactiveCourses
                 .Where(c => c.Id == courseId && !c.IsArchived)
@@ -298,20 +328,9 @@ namespace Edu.Web.Areas.Student.Controllers
                 _db.ReactiveEnrollments.Add(enr);
                 await _db.SaveChangesAsync();
 
-                _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
-                {
-                    ReactiveCourseId = courseId,
-                    EnrollmentId = enr.Id,
-                    ActorId = studentId,
-                    ActorName = User.Identity?.Name,
-                    Action = "RequestedEnrollment",
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                await _db.SaveChangesAsync();
-
                 await tx.CommitAsync();
 
-                // notify in dev synchronously, otherwise fire-and-forget
+                // notify teacher + admins (best-effort)
                 await NotifyFireAndForgetAsync(async () =>
                 {
                     var teacher = !string.IsNullOrEmpty(course.TeacherId) ? await _userManager.FindByIdAsync(course.TeacherId) : null;
@@ -336,7 +355,7 @@ namespace Edu.Web.Areas.Student.Controllers
                     );
                 });
 
-                return Json(new { success = true, enrollmentId = enr.Id, message = _localizer["Enroll.Success"].Value });
+                return Json(new { success = true, enrollmentId = enr.Id, message = _localizer["Enroll.Success"].Value ?? "Enrollment requested" });
             }
             catch (Exception ex)
             {
@@ -355,12 +374,11 @@ namespace Edu.Web.Areas.Student.Controllers
             var studentId = _userManager.GetUserId(User);
             if (string.IsNullOrEmpty(studentId)) return Challenge();
 
-            var msgNotEnrolled = _localizer["ReactiveCourse.NotEnrolled"].Value;
-            var msgHasPaid = _localizer["ReactiveCourse.HasPaidMonths"].Value;
-            // new: localized message instructing user to cancel pending month payments first
+            var msgNotEnrolled = _localizer["ReactiveCourse.NotEnrolled"].Value ?? "Not enrolled";
+            var msgHasPaid = _localizer["ReactiveCourse.HasPaidMonths"].Value ?? "You have paid months; cannot cancel";
             var msgHasPending = _localizer["ReactiveCourse.MustCancelPendingPaymentsFirst"].Value ?? "Please cancel pending month payments before cancelling enrollment.";
-            var msgSuccess = _localizer["Cancel.Success"].Value;
-            var msgError = _localizer["Cancel.Error"].Value;
+            var msgSuccess = _localizer["Cancel.Success"].Value ?? "Cancelled";
+            var msgError = _localizer["Cancel.Error"].Value ?? "Error";
 
             var enr = await _db.ReactiveEnrollments
                 .Include(e => e.MonthPayments)
@@ -368,18 +386,15 @@ namespace Edu.Web.Areas.Student.Controllers
 
             if (enr == null) return Json(new { success = false, error = "NotEnrolled", message = msgNotEnrolled });
 
-            // Disallow cancel if any paid months exist
             if (enr.MonthPayments.Any(m => m.Status == EnrollmentMonthPaymentStatus.Paid))
                 return Json(new { success = false, error = "HasPaidMonths", message = msgHasPaid });
 
-            // NEW: Disallow cancel if any pending month payment exists (student must cancel those first)
             if (enr.MonthPayments.Any(m => m.Status == EnrollmentMonthPaymentStatus.Pending))
                 return Json(new { success = false, error = "HasPendingPayments", message = msgHasPending });
 
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Remove all non-paid month payments (Pending/Rejected/Cancelled) for this enrollment
                 var nonPaid = enr.MonthPayments.Where(m => m.Status != EnrollmentMonthPaymentStatus.Paid).ToList();
                 if (nonPaid.Any())
                 {
@@ -387,20 +402,6 @@ namespace Edu.Web.Areas.Student.Controllers
                     await _db.SaveChangesAsync();
                 }
 
-                // Log optionally
-                _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
-                {
-                    ReactiveCourseId = courseId,
-                    EnrollmentId = enr.Id,
-                    ActorId = studentId,
-                    ActorName = User.Identity?.Name,
-                    Action = "CancelledEnrollment",
-                    Note = $"Student cancelled enrollment. Removed {nonPaid.Count} non-paid month payments.",
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                await _db.SaveChangesAsync();
-
-                // Delete enrollment
                 _db.ReactiveEnrollments.Remove(enr);
                 await _db.SaveChangesAsync();
 
@@ -425,14 +426,13 @@ namespace Edu.Web.Areas.Student.Controllers
             var studentId = _userManager.GetUserId(User);
             if (string.IsNullOrEmpty(studentId)) return Challenge();
 
-            var msgNotFound = _localizer["ReactiveCourse.NotFound"].Value;
-            var msgMonthNotFound = _localizer["ReactiveCourse.MonthNotFound"].Value;
-            var msgMonthNotReady = _localizer["ReactiveCourse.MonthNotReady"].Value;
-            var msgAlreadyRequested = _localizer["ReactiveCourse.PaymentAlreadyRequested"].Value;
-            var msgCourseFull = _localizer["ReactiveCourse.CourseFull"].Value;
-            var msgServerErr = _localizer["Admin.ServerError"].Value;
+            var msgNotFound = _localizer["ReactiveCourse.NotFound"].Value ?? "Course not found";
+            var msgMonthNotFound = _localizer["ReactiveCourse.MonthNotFound"].Value ?? "Month not found";
+            var msgMonthNotReady = _localizer["ReactiveCourse.MonthNotReady"].Value ?? "Month not ready";
+            var msgAlreadyRequested = _localizer["ReactiveCourse.PaymentAlreadyRequested"].Value ?? "Already requested";
+            var msgCourseFull = _localizer["ReactiveCourse.CourseFull"].Value ?? "Course is full";
+            var msgServerErr = _localizer["Admin.ServerError"].Value ?? "Server error";
 
-            // fetch course minimal info
             var course = await _db.ReactiveCourses
                 .AsNoTracking()
                 .Where(c => c.Id == courseId && !c.IsArchived)
@@ -456,7 +456,6 @@ namespace Edu.Web.Areas.Student.Controllers
 
                 if (enrollment == null)
                 {
-                    // capacity guard
                     var enrolledCount = await _db.ReactiveEnrollments.CountAsync(e => e.ReactiveCourseId == courseId);
                     if (course.Capacity > 0 && enrolledCount >= course.Capacity)
                     {
@@ -473,22 +472,10 @@ namespace Edu.Web.Areas.Student.Controllers
                     _db.ReactiveEnrollments.Add(enrollment);
                     await _db.SaveChangesAsync();
 
-                    _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
-                    {
-                        ReactiveCourseId = courseId,
-                        EnrollmentId = enrollment.Id,
-                        ActorId = studentId,
-                        ActorName = User.Identity?.Name,
-                        Action = "RequestedEnrollment",
-                        CreatedAtUtc = DateTime.UtcNow
-                    });
-                    await _db.SaveChangesAsync();
-
-                    // notify teacher + admins (dev: awaited by NotifyFireAndForgetAsync)
+                    // notify teacher + admins
                     await NotifyFireAndForgetAsync(() => NotifyTeacherOfEnrollmentAsync(course.TeacherId, course.Title, studentId));
                 }
 
-                // duplicate pending guard (for this enrollment)
                 var alreadyRequested = await _db.ReactiveEnrollmentMonthPayments
                     .AnyAsync(p => p.ReactiveEnrollmentId == enrollment.Id && p.ReactiveCourseMonthId == monthId && p.Status == EnrollmentMonthPaymentStatus.Pending);
 
@@ -510,24 +497,12 @@ namespace Edu.Web.Areas.Student.Controllers
                 _db.ReactiveEnrollmentMonthPayments.Add(payment);
                 await _db.SaveChangesAsync();
 
-                _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
-                {
-                    ReactiveCourseId = courseId,
-                    EnrollmentId = enrollment.Id,
-                    ActorId = studentId,
-                    ActorName = User.Identity?.Name,
-                    Action = "RequestedMonthPayment",
-                    Note = $"MonthIndex={month.MonthIndex}; Amount={payment.Amount}",
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                await _db.SaveChangesAsync();
-
                 await tx.CommitAsync();
 
-                // notify teacher and admins (dev: awaited by NotifyFireAndForgetAsync)
+                // notify teacher + admins about payment request
                 await NotifyFireAndForgetAsync(() => NotifyTeacherOfPaymentRequestAsync(course.TeacherId, course.Title, month.MonthIndex, studentId));
 
-                return Json(new { success = true, paymentId = payment.Id, enrollmentId = enrollment.Id, message = _localizer["ReactiveCourse.PaymentRequested"].Value });
+                return Json(new { success = true, paymentId = payment.Id, enrollmentId = enrollment.Id, message = _localizer["ReactiveCourse.PaymentRequested"].Value ?? "Payment requested" });
             }
             catch (Exception ex)
             {
@@ -548,10 +523,9 @@ namespace Edu.Web.Areas.Student.Controllers
 
             var msgNotFound = _localizer["ReactiveCourse.PaymentNotFound"].Value ?? "Payment not found";
             var msgInvalid = _localizer["ReactiveCourse.PaymentInvalidState"].Value ?? "Invalid payment state";
-            var msgSuccess = _localizer["Cancel.Success"].Value;
-            var msgError = _localizer["Cancel.Error"].Value;
+            var msgSuccess = _localizer["Cancel.Success"].Value ?? "Cancelled";
+            var msgError = _localizer["Cancel.Error"].Value ?? "Error";
 
-            // Load payment with its enrollment (we need enrollment.StudentId)
             var payment = await _db.ReactiveEnrollmentMonthPayments
                 .Include(p => p.ReactiveEnrollment)
                 .FirstOrDefaultAsync(p => p.Id == paymentId && p.ReactiveEnrollment.StudentId == studentId);
@@ -559,35 +533,13 @@ namespace Edu.Web.Areas.Student.Controllers
             if (payment == null)
                 return Json(new { success = false, error = "NotFound", message = msgNotFound });
 
-            // Disallow cancelling a paid payment
             if (payment.Status == EnrollmentMonthPaymentStatus.Paid)
                 return Json(new { success = false, error = "InvalidState", message = msgInvalid });
 
             try
             {
-                // Remove the row entirely (student-cancel of a pending/rejected/cancelled request)
                 _db.ReactiveEnrollmentMonthPayments.Remove(payment);
                 await _db.SaveChangesAsync();
-
-                // Log the cancellation (best-effort)
-                try
-                {
-                    _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
-                    {
-                        ReactiveCourseId = payment.ReactiveEnrollment.ReactiveCourseId,
-                        EnrollmentId = payment.ReactiveEnrollmentId,
-                        ActorId = studentId,
-                        ActorName = User.Identity?.Name,
-                        Action = "StudentCancelledMonthPayment",
-                        Note = $"Deleted PaymentId={paymentId}",
-                        CreatedAtUtc = DateTime.UtcNow
-                    });
-                    await _db.SaveChangesAsync();
-                }
-                catch
-                {
-                    // swallow logging error
-                }
 
                 return Json(new { success = true, message = msgSuccess });
             }
@@ -598,7 +550,7 @@ namespace Edu.Web.Areas.Student.Controllers
             }
         }
 
-        // --- Notification helpers using INotificationService (centralized) ---
+        // Notification helpers
         private async Task NotifyFireAndForgetAsync(Func<Task> work)
         {
             if (work == null) return;
@@ -688,12 +640,12 @@ namespace Edu.Web.Areas.Student.Controllers
         }
 
         // GET: Student/ReactiveEnrollments/MyEnrollments
+        [Authorize(Roles = "Student")]
         public async Task<IActionResult> MyEnrollments()
         {
             var studentId = _userManager.GetUserId(User);
             if (string.IsNullOrEmpty(studentId)) return Challenge();
 
-            // load enrollments with minimal needed fields to avoid heavy includes
             var enrollments = await _db.ReactiveEnrollments
                 .Where(e => e.StudentId == studentId)
                 .Select(e => new
@@ -728,4 +680,5 @@ namespace Edu.Web.Areas.Student.Controllers
         }
     }
 }
+
 

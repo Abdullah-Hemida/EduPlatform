@@ -24,5 +24,25 @@ namespace Edu.Infrastructure.Helpers
 
             return string.Empty;
         }
+
+        public static string GetLocalizedCategoryName(Category c)
+        {
+            var lang = CultureInfo.CurrentCulture.TwoLetterISOLanguageName.ToLowerInvariant();
+            return lang switch
+            {
+                "ar" when !string.IsNullOrWhiteSpace(c.NameAr) => c.NameAr,
+                "it" when !string.IsNullOrWhiteSpace(c.NameIt) => c.NameIt,
+                "en" when !string.IsNullOrWhiteSpace(c.NameEn) => c.NameEn,
+                // fallbacks
+                "ar" => FirstNonEmpty(c.NameEn, c.NameIt, c.NameAr),
+                "it" => FirstNonEmpty(c.NameEn, c.NameIt, c.NameAr),
+                _ => FirstNonEmpty(c.NameEn, c.NameIt, c.NameAr)
+            };
+        }
+
+        public static string FirstNonEmpty(params string[] values)
+        {
+            return values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? string.Empty;
+        }
     }
 }

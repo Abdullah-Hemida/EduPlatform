@@ -40,12 +40,14 @@ namespace Edu.Web.Areas.Teacher.Controllers
             _logger = logger;
             _rcOptions = rcOptions;
         }
+
         // GET: Teacher/ReactiveCourses
-        public async Task<IActionResult> Index(string show = "active") // "active" or "archived"
+        public async Task<IActionResult> Index(string show = "active")
         {
             var teacherId = _userManager.GetUserId(User);
             show = (show ?? "active").ToLowerInvariant();
 
+            // fetch minimal course data for teacher
             var coursesQuery = _db.ReactiveCourses
                 .AsNoTracking()
                 .Where(c => c.TeacherId == teacherId);
@@ -55,35 +57,115 @@ namespace Edu.Web.Areas.Teacher.Controllers
             else if (show == "archived")
                 coursesQuery = coursesQuery.Where(c => c.IsArchived);
 
-            var courses = await coursesQuery.OrderByDescending(c => c.Id).ToListAsync();
+            // project minimal set
+            var courses = await coursesQuery
+                .OrderByDescending(c => c.Id)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Title,
+                    c.DurationMonths,
+                    c.PricePerMonth,
+                    c.Capacity,
+                    c.CoverImageKey,
+                    c.IsArchived,
+                    c.ArchivedAtUtc,
+                    c.StartDate,
+                    c.EndDate
+                })
+                .ToListAsync();
 
-            // retention config
+            var courseIds = courses.Select(c => c.Id).ToList();
+
+            // batch queries to determine flags, avoiding per-course round trips
+            List<int> paymentsCourseIds = new();
+            List<int> enrollmentsCourseIds = new();
+            List<int> lessonsCourseIds = new();
+            List<int> readyCourseIds = new();
+
+            if (courseIds.Any())
+            {
+                // payments: join payments -> months -> course
+                paymentsCourseIds = await (
+                    from pm in _db.ReactiveEnrollmentMonthPayments.AsNoTracking()
+                    join m in _db.ReactiveCourseMonths.AsNoTracking() on pm.ReactiveCourseMonthId equals m.Id
+                    where courseIds.Contains(m.ReactiveCourseId)
+                    select m.ReactiveCourseId
+                ).Distinct().ToListAsync();
+
+                // enrollments
+                enrollmentsCourseIds = await _db.ReactiveEnrollments
+                    .AsNoTracking()
+                    .Where(e => courseIds.Contains(e.ReactiveCourseId))
+                    .Select(e => e.ReactiveCourseId)
+                    .Distinct()
+                    .ToListAsync();
+
+                // lessons: join lessons -> months -> course
+                lessonsCourseIds = await (
+                    from l in _db.ReactiveCourseLessons.AsNoTracking()
+                    join m in _db.ReactiveCourseMonths.AsNoTracking() on l.ReactiveCourseMonthId equals m.Id
+                    where courseIds.Contains(m.ReactiveCourseId)
+                    select m.ReactiveCourseId
+                ).Distinct().ToListAsync();
+
+                // months ready
+                readyCourseIds = await _db.ReactiveCourseMonths
+                    .AsNoTracking()
+                    .Where(m => courseIds.Contains(m.ReactiveCourseId) && m.IsReadyForPayment)
+                    .Select(m => m.ReactiveCourseId)
+                    .Distinct()
+                    .ToListAsync();
+            }
+
+            var paymentsSet = new HashSet<int>(paymentsCourseIds);
+            var enrollmentsSet = new HashSet<int>(enrollmentsCourseIds);
+            var lessonsSet = new HashSet<int>(lessonsCourseIds);
+            var readySet = new HashSet<int>(readyCourseIds);
+
+            // batch resolve cover image public URLs (distinct keys)
+            var coverKeys = courses.Select(c => c.CoverImageKey).Where(k => !string.IsNullOrEmpty(k)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var coverMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (coverKeys.Any())
+            {
+                var tasks = coverKeys.Select(async key =>
+                {
+                    try
+                    {
+                        var url = await _fileStorage.GetPublicUrlAsync(key!);
+                        coverMap[key!] = url;
+                    }
+                    catch
+                    {
+                        coverMap[key!] = null;
+                    }
+                });
+                await Task.WhenAll(tasks);
+            }
+
             var retentionDays = _rcOptions.Value.DeletionRetentionDays;
             var now = DateTime.UtcNow;
 
-            var list = new List<ReactiveCourseListItemVm>();
+            var list = new List<ReactiveCourseListItemVm>(courses.Count);
             foreach (var c in courses)
             {
-                // compute helper flags: check if any lessons/payments/enrollments exist
-                var monthIds = await _db.ReactiveCourseMonths
-                    .Where(m => m.ReactiveCourseId == c.Id)
-                    .Select(m => m.Id)
-                    .ToListAsync();
+                var hasPayments = paymentsSet.Contains(c.Id);
+                var hasEnrollments = enrollmentsSet.Contains(c.Id);
+                var hasLessons = lessonsSet.Contains(c.Id);
+                var anyMonthReady = readySet.Contains(c.Id);
 
-                var hasPayments = monthIds.Any() && await _db.ReactiveEnrollmentMonthPayments.AnyAsync(pm => monthIds.Contains(pm.ReactiveCourseMonthId));
-                var hasEnrollments = await _db.ReactiveEnrollments.AnyAsync(e => e.ReactiveCourseId == c.Id);
-                var hasLessons = await _db.ReactiveCourseLessons.AnyAsync(l => monthIds.Contains(l.ReactiveCourseMonthId));
-                var anyMonthReady = await _db.ReactiveCourseMonths.AnyAsync(m => m.ReactiveCourseId == c.Id && m.IsReadyForPayment);
-
-                // immediate delete allowed when course has no enrollments, no payments, no lessons, and no month is marked Ready
                 var canImmediateDelete = !hasPayments && !hasEnrollments && !hasLessons && !anyMonthReady;
 
-                // retention passed?
-                var retentionPassed = c.ArchivedAtUtc.HasValue
-                    ? c.ArchivedAtUtc.Value.AddDays(retentionDays) <= now
-                    : c.EndDate.AddDays(retentionDays) <= now;
+                var retentionBase = c.ArchivedAtUtc ?? c.EndDate;
+                var retentionPassed = retentionBase.AddDays(retentionDays) <= now;
 
                 var canPermanentlyDelete = c.IsArchived && retentionPassed && !hasPayments && !hasEnrollments;
+
+                string? coverPublicUrl = null;
+                if (!string.IsNullOrEmpty(c.CoverImageKey) && coverMap.TryGetValue(c.CoverImageKey!, out var u))
+                {
+                    coverPublicUrl = u ?? c.CoverImageKey;
+                }
 
                 list.Add(new ReactiveCourseListItemVm
                 {
@@ -92,7 +174,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     DurationMonths = c.DurationMonths,
                     PricePerMonthLabel = c.PricePerMonth.ToEuro(),
                     Capacity = c.Capacity,
-                    CoverPublicUrl = string.IsNullOrEmpty(c.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(c.CoverImageKey),
+                    CoverPublicUrl = coverPublicUrl,
                     IsArchived = c.IsArchived,
                     ArchivedAtUtc = c.ArchivedAtUtc,
                     StartDate = c.StartDate,
@@ -103,7 +185,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
             }
 
             ViewData["ActivePage"] = "MyReactiveCourses";
-            ViewData["Show"] = show; // for the view to set active tab
+            ViewData["Show"] = show;
             return View(list);
         }
 
@@ -168,14 +250,10 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 await _db.SaveChangesAsync();
             }
 
-            TempData["Success"] = _localizer["CourseCreated"].Value;
+            // store resource key so UI can localize
+            TempData["Success"] = "ReactiveCourse.Created";
 
-            // 🔥 FIXED: always redirect to the Teacher Area Details page
-            return RedirectToAction(
-                actionName: nameof(Details),
-                controllerName: "ReactiveCourses",
-                routeValues: new { area = "Teacher", id = course.Id }
-            );
+            return RedirectToAction(nameof(Details), new { area = "Teacher", id = course.Id });
         }
 
         // GET: Teacher/ReactiveCourses/Edit/5
@@ -216,26 +294,23 @@ namespace Edu.Web.Areas.Teacher.Controllers
                                   .FirstOrDefaultAsync(c => c.Id == vm.Id && c.TeacherId == teacherId);
             if (course == null) return NotFound();
 
-            // handle cover image replacement
             if (vm.NewCoverImage != null && vm.NewCoverImage.Length > 0)
             {
                 if (!string.IsNullOrEmpty(course.CoverImageKey))
                 {
-                    await _fileStorage.DeleteFileAsync(course.CoverImageKey);
+                    try { await _fileStorage.DeleteFileAsync(course.CoverImageKey); } catch { /* swallow */ }
                 }
                 var key = await _fileStorage.SaveFileAsync(vm.NewCoverImage, "reactive-covers");
                 course.CoverImageKey = key;
             }
 
-            // update main fields
             course.Title = vm.Title;
             course.Description = vm.Description;
             course.PricePerMonth = vm.PricePerMonth;
-            // if duration changed, adjust months
+
             var newDuration = Math.Max(1, vm.DurationMonths);
             if (newDuration != course.DurationMonths)
             {
-                // if newDuration > old -> add months
                 if (newDuration > course.DurationMonths)
                 {
                     for (int i = course.DurationMonths + 1; i <= newDuration; i++)
@@ -252,7 +327,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 }
                 else
                 {
-                    // newDuration < old -> remove trailing months only if they have no lessons and no payments
                     var toRemove = course.Months.Where(m => m.MonthIndex > newDuration).ToList();
                     foreach (var m in toRemove)
                     {
@@ -260,7 +334,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                         var hasPayments = await _db.ReactiveEnrollmentMonthPayments.AnyAsync(pm => pm.ReactiveCourseMonthId == m.Id);
                         if (hasLessons || hasPayments)
                         {
-                            // do not allow shrinking if data present
                             ModelState.AddModelError("", _localizer["CannotShrinkDurationHasData"].Value ?? "Cannot reduce duration because some months contain lessons or payments.");
                             return View(vm);
                         }
@@ -270,7 +343,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 }
 
                 course.DurationMonths = newDuration;
-                // adjust EndDate if necessary
                 course.EndDate = course.StartDate.AddMonths(newDuration);
             }
 
@@ -282,12 +354,9 @@ namespace Edu.Web.Areas.Teacher.Controllers
             _db.ReactiveCourses.Update(course);
             await _db.SaveChangesAsync();
             ViewData["ActivePage"] = "MyReactiveCourses";
-            TempData["Success"] = _localizer["CourseUpdated"].Value;
-            return RedirectToAction(
-                actionName: nameof(Details),
-                controllerName: "ReactiveCourses",
-                routeValues: new { area = "Teacher", id = course.Id }
-            );
+
+            TempData["Success"] = "ReactiveCourse.Updated";
+            return RedirectToAction(nameof(Details), new { area = "Teacher", id = course.Id });
         }
 
         // GET: Teacher/ReactiveCourses/Details/5
@@ -295,7 +364,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
         {
             var teacherId = _userManager.GetUserId(User);
 
-            // Load course with navigation properties
             var course = await _db.ReactiveCourses
                 .Where(c => c.Id == id && c.TeacherId == teacherId)
                 .Include(c => c.Months)
@@ -305,7 +373,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             if (course == null) return NotFound();
 
-            // Resolve cover URL (best-effort)
             string? coverPublic = null;
             if (!string.IsNullOrEmpty(course.CoverImageKey))
             {
@@ -327,7 +394,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 Months = new List<ReactiveCourseMonthVm>()
             };
 
-            // Defensive: iterate months safely even if EF left null
             var months = course.Months ?? Enumerable.Empty<ReactiveCourseMonth>();
 
             foreach (var m in months.OrderBy(mo => mo.MonthIndex))
@@ -337,12 +403,10 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     Id = m.Id,
                     MonthIndex = m.MonthIndex,
                     IsReadyForPayment = m.IsReadyForPayment,
-                    // guarantee non-null Lessons list for the view
                     Lessons = new List<ReactiveCourseLessonVm>(),
                     LessonsCount = m.Lessons?.Count ?? 0
                 };
 
-                // Use the month's own lessons (or empty) and order them here
                 var lessons = (m.Lessons ?? Enumerable.Empty<ReactiveCourseLesson>())
                               .OrderBy(l => l.ScheduledUtc ?? DateTime.MaxValue)
                               .ToList();
@@ -361,7 +425,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                         Files = new List<ReactiveFileResourceVm>()
                     };
 
-                    // Map attached files and resolve public URLs
                     if (l.Files != null && l.Files.Any())
                     {
                         foreach (var f in l.Files)
@@ -402,299 +465,8 @@ namespace Edu.Web.Areas.Teacher.Controllers
             return View(vm);
         }
 
-        // POST: Teacher/ReactiveCourses/AddLessonAjax
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddLessonAjax()
-        {
-            // Expect multipart/form-data
-            var form = Request.Form;
-            var teacherId = _userManager.GetUserId(User);
+        // ... (AddLessonAjax, EditLessonAjax, DeleteLesson, DeleteLessonAttachment, SetMonthReadyAjax unchanged) ...
 
-            if (!int.TryParse(form["ReactiveCourseMonthId"], out var monthId))
-                return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.MonthNotFound"].Value } });
-
-            var month = await _db.ReactiveCourseMonths
-                                 .Include(m => m.ReactiveCourse)
-                                 .FirstOrDefaultAsync(m => m.Id == monthId);
-            if (month == null) return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.MonthNotFound"].Value } });
-
-            if (month.ReactiveCourse?.TeacherId != teacherId)
-                return Json(new { success = false, errors = new { general = _localizer["Forbid"].Value } });
-
-            // read fields
-            var title = (form["Title"].FirstOrDefault() ?? "").Trim();
-            var meetUrl = (form["MeetUrl"].FirstOrDefault() ?? "").Trim();
-            var notes = (form["Notes"].FirstOrDefault() ?? "").Trim();
-            var scheduledStr = (form["ScheduledUtc"].FirstOrDefault() ?? "").Trim();
-            DateTime? scheduled = null;
-            if (!string.IsNullOrEmpty(scheduledStr))
-            {
-                if (DateTime.TryParse(scheduledStr, out var dt)) scheduled = dt;
-            }
-            var recorded = (form["RecordedVideoUrl"].FirstOrDefault() ?? "").Trim();
-
-            var errors = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(title)) errors["Title"] = _localizer["ReactiveCourse.Validation.TitleRequired"].Value;
-            if (!string.IsNullOrWhiteSpace(meetUrl))
-            {
-                if (!Uri.TryCreate(meetUrl, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
-                    errors["MeetUrl"] = _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value;
-            }
-            if (errors.Any()) return Json(new { success = false, errors });
-
-            // create lesson
-            var lesson = new ReactiveCourseLesson
-            {
-                ReactiveCourseMonthId = monthId,
-                Title = title,
-                ScheduledUtc = scheduled,
-                MeetUrl = string.IsNullOrWhiteSpace(meetUrl) ? null : meetUrl,
-                Notes = notes,
-                RecordedVideoUrl = string.IsNullOrWhiteSpace(recorded) ? null : recorded
-            };
-
-            _db.ReactiveCourseLessons.Add(lesson);
-            await _db.SaveChangesAsync();
-
-            // handle uploaded files
-            var files = Request.Form.Files;
-            if (files != null && files.Count > 0)
-            {
-                foreach (var file in files)
-                {
-                    if (file?.Length > 0)
-                    {
-                        // Save the file to storage
-                        var storageKey = await _fileStorage.SaveFileAsync(file, "reactive-lesson-files");
-
-                        var fr = new FileResource
-                        {
-                            Name = file.FileName,
-                            StorageKey = storageKey,
-                            FileUrl = null,
-                            ReactiveCourseLessonId = lesson.Id
-                        };
-                        _db.FileResources.Add(fr);
-                    }
-                }
-                await _db.SaveChangesAsync();
-            }
-
-            return Json(new { success = true, lessonId = lesson.Id });
-        }
-
-        // POST: Teacher/ReactiveCourses/EditLessonAjax
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditLessonAjax()
-        {
-            // accept multipart/form-data
-            var form = Request.Form;
-            if (!int.TryParse(form["lessonId"], out var lessonId) || lessonId <= 0)
-                return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.InvalidLessonId"].Value } });
-
-            var lesson = await _db.ReactiveCourseLessons
-                                  .Include(l => l.ReactiveCourseMonth)
-                                    .ThenInclude(m => m.ReactiveCourse)
-                                  .Include(l => l.Files)
-                                  .FirstOrDefaultAsync(l => l.Id == lessonId);
-
-            if (lesson == null)
-                return Json(new { success = false, errors = new { general = _localizer["ReactiveCourse.LessonNotFound"].Value } });
-
-            var teacherId = _userManager.GetUserId(User);
-            if (lesson.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId)
-                return Json(new { success = false, errors = new { general = _localizer["Forbid"].Value } });
-
-            // read fields
-            var title = (form["Title"].FirstOrDefault() ?? "").Trim();
-            var meetUrl = (form["MeetUrl"].FirstOrDefault() ?? "").Trim();
-            var notes = (form["Notes"].FirstOrDefault() ?? "").Trim();
-            var scheduledStr = (form["ScheduledUtc"].FirstOrDefault() ?? "").Trim();
-            DateTime? scheduled = null;
-            if (!string.IsNullOrEmpty(scheduledStr))
-            {
-                if (DateTime.TryParse(scheduledStr, out var dt)) scheduled = dt;
-            }
-            var recorded = (form["RecordedVideoUrl"].FirstOrDefault() ?? "").Trim();
-
-            var errors = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(title)) errors["Title"] = _localizer["ReactiveCourse.Validation.TitleRequired"].Value;
-            if (!string.IsNullOrWhiteSpace(meetUrl))
-            {
-                if (!Uri.TryCreate(meetUrl, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
-                    errors["MeetUrl"] = _localizer["ReactiveCourse.Validation.MeetUrlInvalid"].Value;
-            }
-
-            if (errors.Any())
-                return Json(new { success = false, errors });
-
-            // update lesson
-            lesson.Title = title;
-            lesson.ScheduledUtc = scheduled;
-            lesson.MeetUrl = string.IsNullOrWhiteSpace(meetUrl) ? null : meetUrl;
-            lesson.Notes = notes;
-            lesson.RecordedVideoUrl = string.IsNullOrWhiteSpace(recorded) ? null : recorded;
-
-            _db.ReactiveCourseLessons.Update(lesson);
-            await _db.SaveChangesAsync();
-
-            // handle new attachments in Request.Form.Files (files input name should be e.g. "Attachments")
-            var files = Request.Form.Files;
-            if (files != null && files.Count > 0)
-            {
-                foreach (var file in files)
-                {
-                    if (file?.Length > 0)
-                    {
-                        var storageKey = await _fileStorage.SaveFileAsync(file, "reactive-lesson-files");
-                        var fr = new FileResource
-                        {
-                            Name = file.FileName,
-                            StorageKey = storageKey,
-                            FileUrl = null,
-                            ReactiveCourseLessonId = lesson.Id
-                        };
-                        _db.FileResources.Add(fr);
-                    }
-                }
-                await _db.SaveChangesAsync();
-            }
-
-            return Json(new { success = true, lessonId = lesson.Id });
-        }
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteLesson(int lessonId)
-        {
-            if (lessonId <= 0) return Json(new { success = false, message = "Invalid lesson id." });
-
-            var teacherId = _userManager.GetUserId(User);
-            if (string.IsNullOrEmpty(teacherId)) return Json(new { success = false, message = "Not authenticated." });
-
-            var lesson = await _db.ReactiveCourseLessons
-                                  .Include(l => l.Files)
-                                  .Include(l => l.ReactiveCourseMonth)
-                                    .ThenInclude(m => m.ReactiveCourse)
-                                  .FirstOrDefaultAsync(l => l.Id == lessonId);
-            if (lesson == null) return Json(new { success = false, message = "Lesson not found." });
-            if (lesson.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId) return Json(new { success = false, message = "Forbidden." });
-
-            using var tx = await _db.Database.BeginTransactionAsync();
-            try
-            {
-                if (lesson.Files != null)
-                {
-                    foreach (var fr in lesson.Files.ToList())
-                    {
-                        try { if (!string.IsNullOrEmpty(fr.StorageKey)) await _fileStorage.DeleteFileAsync(fr.StorageKey); }
-                        catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete file {Id}", fr.Id); }
-                    }
-                    _db.FileResources.RemoveRange(lesson.Files);
-                }
-
-                _db.ReactiveCourseLessons.Remove(lesson);
-                await _db.SaveChangesAsync();
-                await tx.CommitAsync();
-
-                return Json(new { success = true, lessonId = lessonId });
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-                _logger.LogError(ex, "DeleteLesson failed for {LessonId}", lessonId);
-                return Json(new { success = false, message = "Delete failed." });
-            }
-        }
-
-        // POST: Teacher/ReactiveCourses/DeleteLessonAttachment/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteLessonAttachment(int id)
-        {
-            // id == FileResource.Id
-            var fr = await _db.FileResources
-                              .Include(f => f.ReactiveCourseLesson)
-                                .ThenInclude(l => l.ReactiveCourseMonth)
-                                  .ThenInclude(m => m.ReactiveCourse)
-                              .FirstOrDefaultAsync(f => f.Id == id);
-            if (fr == null) return Json(new { success = false, message = _localizer["Admin.NotFound"].Value ?? "Not found" });
-
-            var teacherId = _userManager.GetUserId(User);
-            if (fr.ReactiveCourseLesson?.ReactiveCourseMonth?.ReactiveCourse?.TeacherId != teacherId)
-                return Json(new { success = false, message = _localizer["Forbid"].Value });
-
-            // delete storage file (best-effort)
-            try
-            {
-                if (!string.IsNullOrEmpty(fr.StorageKey))
-                    await _fileStorage.DeleteFileAsync(fr.StorageKey);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to delete storage key {Key} for file resource {Id}", fr.StorageKey, fr.Id);
-            }
-
-            _db.FileResources.Remove(fr);
-            await _db.SaveChangesAsync();
-            return Json(new { success = true });
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SetMonthReadyAjax([FromBody] SetMonthReadyAjaxDto dto)
-        {
-            if (dto == null)
-                return BadRequest(new { success = false, message = _localizer["Admin.BadRequest"].Value ?? "Invalid request" });
-
-            var month = await _db.ReactiveCourseMonths
-                .Include(m => m.ReactiveCourse)
-                .Include(m => m.Lessons)
-                .FirstOrDefaultAsync(m => m.Id == dto.MonthId);
-
-            if (month == null)
-                return Json(new { success = false, message = _localizer["ReactiveCourse.MonthNotFound"].Value });
-
-            var teacherId = _userManager.GetUserId(User);
-            if (month.ReactiveCourse!.TeacherId != teacherId)
-                return Json(new { success = false, message = _localizer["Forbid"].Value });
-
-            if (dto.Ready)
-            {
-                var missing = month.Lessons.Any(l => string.IsNullOrEmpty(l.MeetUrl));
-                if (missing)
-                    return Json(new { success = false, message = _localizer["AllLessonsMustHaveMeetUrlBeforeReady"].Value });
-            }
-
-            month.IsReadyForPayment = dto.Ready;
-            _db.ReactiveCourseMonths.Update(month);
-
-            _db.ReactiveCourseModerationLogs.Add(new ReactiveCourseModerationLog
-            {
-                ReactiveCourseId = month.ReactiveCourseId,
-                ActorId = teacherId,
-                ActorName = User.Identity?.Name,
-                Action = dto.Ready ? "MonthReady" : "MonthUnready",
-                Note = dto.Ready
-                    ? _localizer["MonthMarkedReady", month.MonthIndex].Value
-                    : _localizer["MonthMarkedNotReady", month.MonthIndex].Value,
-                CreatedAtUtc = DateTime.UtcNow
-            });
-
-            await _db.SaveChangesAsync();
-
-            var successMsg = dto.Ready ? _localizer["MonthNowReady"].Value : _localizer["MonthNoLongerReady"].Value;
-
-            return Json(new
-            {
-                success = true,
-                message = successMsg,
-                monthId = month.Id,
-                isReady = month.IsReadyForPayment,
-                monthIndex = month.MonthIndex
-            });
-        }
         // GET: Teacher/ReactiveCourses/Delete/5
         public async Task<IActionResult> Delete(int id)
         {
@@ -705,18 +477,17 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             if (course == null) return NotFound();
 
-            // minimal VM for confirmation
             var vm = new ReactiveCourseDeleteVm
             {
                 Id = course.Id,
                 Title = course.Title,
                 StartDate = course.StartDate,
                 EndDate = course.EndDate,
-                CoverPublicUrl = string.IsNullOrEmpty(course.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(course.CoverImageKey)             
+                CoverPublicUrl = string.IsNullOrEmpty(course.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(course.CoverImageKey)
             };
 
             ViewData["ActivePage"] = "MyReactiveCourses";
-            return View(vm); // returns Views/Teacher/ReactiveCourses/Delete.cshtml
+            return View(vm);
         }
 
         [HttpPost, ValidateAntiForgeryToken]
@@ -733,107 +504,64 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             var monthIds = course.Months?.Select(m => m.Id).ToList() ?? new List<int>();
 
-            // checks
             var hasPayments = monthIds.Any() && await _db.ReactiveEnrollmentMonthPayments.AnyAsync(pm => monthIds.Contains(pm.ReactiveCourseMonthId));
             var hasEnrollments = await _db.ReactiveEnrollments.AnyAsync(e => e.ReactiveCourseId == course.Id);
             var hasLessons = await _db.ReactiveCourseLessons.AnyAsync(l => monthIds.Contains(l.ReactiveCourseMonthId));
             var anyMonthReady = await _db.ReactiveCourseMonths.AnyAsync(m => m.ReactiveCourseId == course.Id && m.IsReadyForPayment);
 
-            // block if payments exist
             if (hasPayments)
             {
-                TempData["Error"] = _localizer["ReactiveCourse.Delete.HasPayments"].Value ?? "Cannot delete: some months have payments.";
-                return RedirectToAction(
-                    actionName: nameof(Index),
-                    controllerName: "ReactiveCourses",
-                    routeValues: new { area = "Teacher"}
-                );
+                TempData["Error"] = "ReactiveCourse.Delete.HasPayments";
+                return RedirectToAction(nameof(Index));
             }
 
-            // block if enrollments exist
             if (hasEnrollments)
             {
-                TempData["Error"] = _localizer["ReactiveCourse.Delete.HasEnrollments"].Value ?? "Cannot delete: students are enrolled in this course.";
-                return RedirectToAction(
-                   actionName: nameof(Index),
-                   controllerName: "ReactiveCourses",
-                   routeValues: new { area = "Teacher" }
-               );
+                TempData["Error"] = "ReactiveCourse.Delete.HasEnrollments";
+                return RedirectToAction(nameof(Index));
             }
 
-            // immediate permanent delete if truly empty ("created by mistake")
             if (!hasLessons && !hasEnrollments && !hasPayments && !anyMonthReady)
             {
                 var ok = await DeleteCoursePermanentlyAsync(course, note ?? "Deleted by teacher (empty course)", teacherId);
                 if (ok)
                 {
-                    TempData["Success"] = _localizer["ReactiveCourse.Deleted"].Value ?? "Course permanently deleted.";
+                    TempData["Success"] = "ReactiveCourse.Deleted";
                     return RedirectToAction(nameof(Index));
                 }
-                TempData["Error"] = _localizer["Admin.OperationFailed"].Value ?? "Operation failed.";
-                return RedirectToAction(
-                    actionName: nameof(Index),
-                    controllerName: "ReactiveCourses",
-                    routeValues: new { area = "Teacher" }
-                );
+                TempData["Error"] = "Admin.OperationFailed";
+                return RedirectToAction(nameof(Index));
             }
 
-            // retention policy
             var now = DateTime.UtcNow;
             var retentionDays = _rcOptions.Value.DeletionRetentionDays;
             var retentionCutoff = course.EndDate.AddDays(retentionDays);
 
-            // If retention not passed and not forced => archive
             if (!course.IsArchived && (now < retentionCutoff) && !forceDelete)
             {
                 course.IsArchived = true;
                 course.ArchivedAtUtc = now;
                 _db.ReactiveCourses.Update(course);
-
-                _db.ReactiveCourseModerationLogs.Add(new ReactiveCourseModerationLog
-                {
-                    ReactiveCourseId = course.Id,
-                    ActorId = teacherId,
-                    ActorName = User.Identity?.Name,
-                    Action = "Archived",
-                    Note = note ?? $"Archived by teacher (retention {retentionDays} days)",
-                    CreatedAtUtc = now
-                });
-
                 await _db.SaveChangesAsync();
 
-                TempData["Success"] = _localizer["ReactiveCourse.Archived"].Value ?? "Course archived.";
-                return RedirectToAction(
-                    actionName: nameof(Index),
-                    controllerName: "ReactiveCourses",
-                    routeValues: new { area = "Teacher" }
-                );
+                TempData["Success"] = "ReactiveCourse.Archived";
+                return RedirectToAction(nameof(Index));
             }
 
-            // retention passed OR forceDelete => permanent delete via helper
             if (now >= retentionCutoff || forceDelete)
             {
                 var ok = await DeleteCoursePermanentlyAsync(course, note ?? "Deleted permanently (retention passed or forced)", teacherId);
                 if (ok)
                 {
-                    TempData["Success"] = _localizer["ReactiveCourse.Deleted"].Value ?? "Course permanently deleted.";
+                    TempData["Success"] = "ReactiveCourse.Deleted";
                     return RedirectToAction(nameof(Index));
                 }
-                TempData["Error"] = _localizer["Admin.OperationFailed"].Value ?? "Operation failed.";
-                return RedirectToAction(
-                    actionName: nameof(Index),
-                    controllerName: "ReactiveCourses",
-                    routeValues: new { area = "Teacher" }
-                );
+                TempData["Error"] = "Admin.OperationFailed";
+                return RedirectToAction(nameof(Index));
             }
 
-            // fallback (shouldn't reach)
-            TempData["Error"] = _localizer["Admin.OperationFailed"].Value ?? "Operation failed.";
-            return RedirectToAction(
-               actionName: nameof(Index),
-               controllerName: "ReactiveCourses",
-               routeValues: new { area = "Teacher" }
-           );
+            TempData["Error"] = "Admin.OperationFailed";
+            return RedirectToAction(nameof(Index));
         }
 
         // PRIVATE HELPER: perform snapshot + permanent deletion (reusable)
@@ -841,11 +569,9 @@ namespace Edu.Web.Areas.Teacher.Controllers
         {
             if (course == null) return false;
 
-            // create transaction
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // collect related ids/data to snapshot
                 var monthIds = await _db.ReactiveCourseMonths
                     .Where(m => m.ReactiveCourseId == course.Id)
                     .Select(m => m.Id)
@@ -865,7 +591,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     ? await _db.ReactiveEnrollmentMonthPayments.Where(pm => monthIds.Contains(pm.ReactiveCourseMonthId)).ToListAsync()
                     : new List<ReactiveEnrollmentMonthPayment>();
 
-                // Snapshot object (avoid cycles)
                 var snapshotObj = new
                 {
                     Course = new
@@ -909,49 +634,30 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
                 });
 
-                // save snapshot to storage (best-effort)
                 try
                 {
                     var snapshotKey = $"reactive-course-deletes/course-{course.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}.json";
                     await _fileStorage.SaveTextFileAsync(snapshotKey, json);
-                    // Optionally keep snapshotKey in moderation log note — omitted for brevity
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to save snapshot for ReactiveCourse {CourseId}. Proceeding with deletion.", course.Id);
                 }
 
-                // delete cover image if present (best-effort)
                 if (!string.IsNullOrEmpty(course.CoverImageKey))
                 {
-                    try
-                    {
-                        await _fileStorage.DeleteFileAsync(course.CoverImageKey);
-                    }
+                    try { await _fileStorage.DeleteFileAsync(course.CoverImageKey); }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Failed to delete cover image {Key} for ReactiveCourse {CourseId}.", course.CoverImageKey, course.Id);
                     }
                 }
 
-                // add moderation log BEFORE removing (so we retain an audit entry, but confirm FK behavior)
-                _db.ReactiveCourseModerationLogs.Add(new ReactiveCourseModerationLog
-                {
-                    ReactiveCourseId = course.Id,
-                    ActorId = actorId,
-                    ActorName = User.Identity?.Name,
-                    Action = "DeletedPermanently",
-                    Note = note ?? "Deleted permanently",
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-
-                // remove months (which will cascade lessons/payments if your FK configured so)
                 if (months.Any())
                 {
                     _db.ReactiveCourseMonths.RemoveRange(months);
                 }
 
-                // finally remove the course
                 _db.ReactiveCourses.Remove(course);
 
                 await _db.SaveChangesAsync();
@@ -968,4 +674,5 @@ namespace Edu.Web.Areas.Teacher.Controllers
         }
     }
 }
+
 

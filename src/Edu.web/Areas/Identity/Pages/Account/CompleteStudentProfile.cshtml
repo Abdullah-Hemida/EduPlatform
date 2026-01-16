@@ -30,8 +30,8 @@
 
                             <input asp-for="Input.PhoneNumber" id="phone" class="form-control" placeholder="+39 345 123 4567" dir="ltr" />
 
-                            <div class="form-text">@L["Profile.PhoneHelp"]</div>
-                            <span class="text-danger field-validation" data-val-for="Input.PhoneNumber" id="phoneError">
+@*                             <div class="form-text">@L["Profile.PhoneHelp"]</div>
+ *@                            <span class="text-danger field-validation" data-val-for="Input.PhoneNumber" id="phoneError">
                                 @Html.Raw(ViewData.ModelState[nameof(Model.Input.PhoneNumber)]?.Errors.FirstOrDefault()?.ErrorMessage)
                             </span>
                             <span asp-validation-for="Input.PhoneNumber" class="text-danger visually-hidden"></span> @* unobtrusive slot *@
@@ -123,6 +123,39 @@
             window.itiPhone = null;
             window.itiGuardian = null;
 
+            // helper: prefix dial code into input when country changes (only if user hasn't already provided an international number)
+            function prefixDialCodeIfNeeded(itiInstance, inputEl) {
+                if (!itiInstance || !inputEl) return;
+                try {
+                    const countryData = itiInstance.getSelectedCountryData();
+                    if (!countryData || !countryData.dialCode) return;
+                    const dial = countryData.dialCode; // e.g. "39"
+                    const raw = (inputEl.value || '').trim();
+                    // if empty -> insert +<dial> and space
+                    if (raw.length === 0) {
+                        inputEl.value = '+' + dial + ' ';
+                        // move caret to end
+                        inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+                        inputEl.focus();
+                        return;
+                    }
+                    // if starts with + keep as-is (user entered an explicit international number)
+                    if (/^\+/.test(raw)) return;
+                    // if starts with country code digits (e.g. "39 ...") do not change
+                    // otherwise, prefix only if the user value is short (likely local national)
+                    // we'll prefix only if there are <= 6 digits (likely not a full number)
+                    const digitsOnly = raw.replace(/\D/g, '');
+                    if (digitsOnly.length <= 6) {
+                        inputEl.value = '+' + dial + ' ' + digitsOnly;
+                        inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+                        inputEl.focus();
+                    }
+                } catch (ex) {
+                    // harmless - don't block user
+                    console.debug('prefixDialCodeIfNeeded', ex);
+                }
+            }
+
             function createIti(el) {
                 if (!el || !window.intlTelInput) return null;
                 const inst = window.intlTelInput(el, {
@@ -132,11 +165,30 @@
                     utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.min.js"
                 });
 
-                // If server provided an E.164 value in the field, restore it
+                // Try restore server-provided E.164 value into the widget
                 const currentVal = el.value;
                 if (currentVal && currentVal.trim().length > 0) {
                     try { inst.setNumber(currentVal); } catch (ex) { /* ignore */ }
                 }
+
+                // When user changes country (clicks the flag / picks another country),
+                // automatically prefill the dialing code if the field is empty (or clearly local).
+                try {
+                    inst.on && inst.on('countrychange', function () {
+                        prefixDialCodeIfNeeded(inst, el);
+                    });
+                } catch (ex) { /* ignore */ }
+
+                // Also add a click handler on the flag container to prefix right away (some browsers)
+                try {
+                    const flagContainer = el.parentNode && el.parentNode.querySelector('.iti__flag-container');
+                    if (flagContainer) {
+                        flagContainer.addEventListener('click', function () {
+                            // small timeout because the country picker UI opens and then triggers countrychange
+                            setTimeout(() => prefixDialCodeIfNeeded(inst, el), 150);
+                        });
+                    }
+                } catch (ex) { /* ignore */ }
 
                 return inst;
             }
@@ -207,5 +259,6 @@
             });
         })();
     </script>
+}
 }
 

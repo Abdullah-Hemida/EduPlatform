@@ -113,21 +113,60 @@
                             <tr class="@(Model.ShowDeleted ? "table-secondary" : "")">
                                 <td>@idx</td>
                                 <td>
-                                    <img src="@(row.PhotoUrl ?? Url.Content("~/images/default-avatar.png"))"
+                                    <img src="@(row.PhotoUrl ?? Url.Content("~/uploads/images/default-avatar.jpg"))"
                                          class="rounded-circle avatar-xs" alt="">
                                 </td>
                                 <td>
                                     <div class="fw-semibold text-truncate-ellipsis" style="max-width:260px;">@row.FullName</div>
                                     <div class="small text-muted text-truncate-ellipsis" style="max-width:260px;">@row.Email</div>
                                 </td>
-                                <td class="text-nowrap">
+                                <td dir="ltr" class="text-nowrap ltr-phone">
                                     @Html.Raw(string.IsNullOrEmpty(row.PhoneNumber) ? "<span class=\"text-muted\">—</span>" : System.Net.WebUtility.HtmlEncode(row.PhoneNumber))
                                 </td>
                                 <td>
-                                    <div class="small text-truncate-ellipsis" style="max-width:200px;">@Html.Raw(System.Net.WebUtility.HtmlEncode(row.Roles))</div>
+                                    @{
+                                        // defensively parse row.Roles (supports comma / semicolon / pipe separators)
+                                        var rolesRaw = (row.Roles ?? string.Empty);
+                                        var separators = new[] { ',', ';', '|' };
+                                        var roles = rolesRaw
+                                        .Split(separators, StringSplitOptions.RemoveEmptyEntries)
+                                        .Select(r => r.Trim())
+                                        .Where(r => !string.IsNullOrEmpty(r))
+                                        .ToList();
+
+                                        // map role identifier -> localized resource
+                                        string LocalizeRole(string roleIdentifier)
+                                        {
+                                            if (string.IsNullOrEmpty(roleIdentifier)) return string.Empty;
+                                            switch (roleIdentifier.Trim().ToLowerInvariant())
+                                            {
+                                                case "admin": return L["Role.Admin"];
+                                                case "teacher": return L["Role.Teacher"];
+                                                case "student": return L["Role.Student"];
+                                                default: return L["Role.Unknown", roleIdentifier]; // fallback: resource with param or the id
+                                            }
+                                        }
+                                    }
+
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        @if (!roles.Any())
+                                        {
+                                            <span class="text-muted small">@L["Role.None"]</span>
+                                        }
+                                        else
+                                        {
+                                            foreach (var r in roles)
+                                            {
+                                                var localized = LocalizeRole(r);
+                                                // show as small badge (keeps UI tidy)
+                                                <span class="badge bg-secondary text-truncate" style="max-width:160px;">@localized</span>
+                                            }
+                                        }
+                                    </div>
                                 </td>
+
                                 <td class="text-end">
-                                    <div class="d-flex justify-content-end flex-wrap gap-1">
+                                    <div class="d-flex justify-content-end flex-nowrap gap-1">
                                         <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="ManageUsers" asp-action="Details" asp-route-id="@row.Id">@L["Button.View"]</a>
 
                                         @* Approve/Unapprove toggle for Teacher role *@
@@ -138,7 +177,7 @@
                                                 <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="UnapproveTeacher" class="m-0 d-inline confirm">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="id" value="@row.Id" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-warning">@L["Admin.Unapprove"]</button>
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap">@L["Admin.Unapprove"]</button>
                                                 </form>
                                             }
                                             else
@@ -172,17 +211,28 @@
                                             </form>
                                         }
 
-                                        @* Soft-delete / Restore *@
-                                        <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="SoftDelete" class="m-0 d-inline confirm">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@row.Id" />
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                @(Model.ShowDeleted? L["Admin.Restore"] : L["Admin.Suspend"])
-                                            </button>
-                                        </form>
+                                        @{
+                                            // determine if the target user has Admin role (case-insensitive)
+                                            var isTargetAdmin = (row.Roles ?? "")
+                                            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                            .Select(r => r.Trim())
+                                            .Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase));
+                                        }
 
-                                        @* Hard delete when viewing deleted *@
-                                        @if (Model.ShowDeleted)
+                                        @* Soft-delete / Restore: hide for Admin users *@
+                                        @if (!isTargetAdmin)
+                                        {
+                                            <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="SoftDelete" class="m-0 d-inline confirm">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@row.Id" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    @(Model.ShowDeleted? L["Admin.Restore"] : L["Admin.Suspend"])
+                                                </button>
+                                            </form>
+                                        }
+
+                                        @* Hard delete when viewing deleted (also hide for Admin users) *@
+                                        @if (Model.ShowDeleted && !isTargetAdmin)
                                         {
                                             <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="HardDelete" class="m-0 d-inline">
                                                 @Html.AntiForgeryToken()
@@ -215,7 +265,7 @@
                         <div class="card-body card-list-item">
                             <div class="d-flex gap-3">
                                 <div class="d-flex flex-column">
-                                    <img src="@(row.PhotoUrl ?? Url.Content("~/images/default-avatar.png"))"
+                                    <img src="@(row.PhotoUrl ?? Url.Content("~/uploads/images/default-avatar.png"))"
                                          class="avatar-md flex-shrink-0" alt="">
                                     <div class="text-end small text-muted ms-2">#@cidx</div>
                                 </div>
@@ -231,57 +281,107 @@
                                     </div>
 
                                     <div class="mt-2 small">
-                                        <div class="text-truncate"><strong>@L["Admin.Phone"]:</strong> @(string.IsNullOrEmpty(row.PhoneNumber) ? "—" : row.PhoneNumber)</div>
-                                        <div class="text-truncate"><strong>@L["Admin.Roles"]:</strong> @Html.Raw(System.Net.WebUtility.HtmlEncode(row.Roles))</div>
+                                        <div><strong>@L["Admin.Phone"]:</strong> <span dir="ltr" class="text-truncate ltr-phone">@(string.IsNullOrEmpty(row.PhoneNumber) ? "—" : row.PhoneNumber)</span></div>
+                                        <div class="text-truncate">
+                                            <strong>@L["Admin.Roles"]:</strong>    @{
+                                            // defensively parse row.Roles (supports comma / semicolon / pipe separators)
+                                            var rolesRaw = (row.Roles ?? string.Empty);
+                                            var separators = new[] { ',', ';', '|' };
+                                            var roles = rolesRaw
+                                            .Split(separators, StringSplitOptions.RemoveEmptyEntries)
+                                            .Select(r => r.Trim())
+                                            .Where(r => !string.IsNullOrEmpty(r))
+                                            .ToList();
+
+                                            // map role identifier -> localized resource
+                                            string LocalizeRole(string roleIdentifier)
+                                            {
+                                                if (string.IsNullOrEmpty(roleIdentifier)) return string.Empty;
+                                                switch (roleIdentifier.Trim().ToLowerInvariant())
+                                                {
+                                                    case "admin": return L["Role.Admin"];
+                                                    case "teacher": return L["Role.Teacher"];
+                                                    case "student": return L["Role.Student"];
+                                                    default: return L["Role.Unknown", roleIdentifier]; // fallback: resource with param or the id
+                                                }
+                                            }
+                                        }
+
+                                        <div class="d-flex gap-1 flex-wrap">
+                                            @if (!roles.Any())
+                                            {
+                                                <span class="text-muted small">@L["Role.None"]</span>
+                                            }
+                                            else
+                                            {
+                                                foreach (var r in roles)
+                                                {
+                                                    var localized = LocalizeRole(r);
+                                                    // show as small badge (keeps UI tidy)
+                                                    <span class="badge bg-secondary text-truncate" style="max-width:160px;">@localized</span>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- footer: action buttons — full-width on xs, scrollable if overflow -->
-                        <div class="card-footer bg-white d-flex flex-nowrap card-action-bar overflow-auto">
-                            <a class="btn btn-sm btn-outline-primary flex-shrink-0" asp-area="Admin" asp-controller="ManageUsers" asp-action="Details" asp-route-id="@row.Id">
-                                @L["Button.View"]
-                            </a>
+                    <div class="card-footer bg-white d-flex flex-nowrap card-action-bar overflow-auto">
+                        <a class="btn btn-sm btn-outline-primary flex-shrink-0" asp-area="Admin" asp-controller="ManageUsers" asp-action="Details" asp-route-id="@row.Id">
+                            @L["Button.View"]
+                        </a>
 
-                            @if ((row.Roles ?? "").Split(',').Select(r => r.Trim()).Contains("Teacher"))
+                        @if ((row.Roles ?? "").Split(',').Select(r => r.Trim()).Contains("Teacher"))
+                        {
+                            if (string.Equals(row.TeacherStatus, "Approved", StringComparison.OrdinalIgnoreCase))
                             {
-                                if (string.Equals(row.TeacherStatus, "Approved", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="UnapproveTeacher" class="m-0 d-inline-block">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@row.Id" />
-                                        <button type="submit" class="btn btn-sm btn-outline-warning flex-shrink-0">@L["Admin.Unapprove"]</button>
-                                    </form>
-                                }
-                                else
-                                {
-                                    <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="ApproveTeacher" class="m-0 d-inline-block">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@row.Id" />
-                                        <button type="submit" class="btn btn-sm btn-outline-success flex-shrink-0">@L["Button.Approve"]</button>
-                                    </form>
-                                }
-                            }
-
-                            @if (row.IsAllowed.HasValue)
-                            {
-                                <form method="post"
-                                      asp-area="Admin"
-                                      asp-controller="ManageUsers"
-                                      asp-action="ToggleStudentAllowedAjax"
-                                      class="student-allow-form m-0 d-inline-block"
-                                      data-user-id="@row.Id">
+                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="UnapproveTeacher" class="m-0 d-inline-block">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@row.Id" />
-                                    <input type="hidden" name="setTo" value="@(row.IsAllowed.Value ? "false" : "true")" class="setToInput" />
-                                    <button type="submit"
-                                            class="btn btn-sm student-allow-btn @(row.IsAllowed.Value ? "btn-success" : "btn-outline-secondary") flex-shrink-0">
-                                        @(row.IsAllowed.Value? L["Admin.Allowed"] : L["Admin.NotAllowed"])
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-outline-warning flex-shrink-0">@L["Admin.Unapprove"]</button>
                                 </form>
                             }
+                            else
+                            {
+                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="ApproveTeacher" class="m-0 d-inline-block">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@row.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-success flex-shrink-0">@L["Button.Approve"]</button>
+                                </form>
+                            }
+                        }
 
+                        @if (row.IsAllowed.HasValue)
+                        {
+                            <form method="post"
+                                  asp-area="Admin"
+                                  asp-controller="ManageUsers"
+                                  asp-action="ToggleStudentAllowedAjax"
+                                  class="student-allow-form m-0 d-inline-block"
+                                  data-user-id="@row.Id">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@row.Id" />
+                                <input type="hidden" name="setTo" value="@(row.IsAllowed.Value ? "false" : "true")" class="setToInput" />
+                                <button type="submit"
+                                        class="btn btn-sm student-allow-btn @(row.IsAllowed.Value ? "btn-success" : "btn-outline-secondary") flex-shrink-0">
+                                    @(row.IsAllowed.Value? L["Admin.Allowed"] : L["Admin.NotAllowed"])
+                                </button>
+                            </form>
+                        }
+
+                        @{
+                            var isTargetAdmin = (row.Roles ?? "")
+                            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(r => r.Trim())
+                            .Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase));
+                        }
+
+                        @* Soft-delete / Restore: hide for Admin users *@
+                        @if (!isTargetAdmin)
+                        {
                             <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="SoftDelete" class="m-0 d-inline-block">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="id" value="@row.Id" />
@@ -289,16 +389,18 @@
                                     @(Model.ShowDeleted? L["Admin.Restore"] : L["Admin.Suspend"])
                                 </button>
                             </form>
+                        }
 
-                            @if (Model.ShowDeleted)
-                            {
-                                <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="HardDelete" class="m-0 d-inline-block">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="id" value="@row.Id" />
-                                    <button type="submit" class="btn btn-sm btn-danger flex-shrink-0">@L["Admin.DeletePermanently"]</button>
-                                </form>
-                            }
-                        </div>
+                        @if (Model.ShowDeleted && !isTargetAdmin)
+                        {
+                            <form method="post" asp-area="Admin" asp-controller="ManageUsers" asp-action="HardDelete" class="m-0 d-inline-block">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@row.Id" />
+                                <button type="submit" class="btn btn-sm btn-danger flex-shrink-0">@L["Admin.DeletePermanently"]</button>
+                            </form>
+                        }
+                    </div>
+
                     </div>
                 }
             }

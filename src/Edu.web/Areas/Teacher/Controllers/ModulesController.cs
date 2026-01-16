@@ -28,7 +28,12 @@ namespace Edu.Web.Areas.Teacher.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            var course = await _db.PrivateCourses.AsNoTracking().FirstOrDefaultAsync(c => c.Id == privateCourseId);
+            var course = await _db.PrivateCourses
+                                  .AsNoTracking()
+                                  .Where(c => c.Id == privateCourseId)
+                                  .Select(c => new { c.Id, c.TeacherId })
+                                  .FirstOrDefaultAsync();
+
             if (course == null) return NotFound();
             if (course.TeacherId != user.Id) return Forbid();
 
@@ -42,23 +47,39 @@ namespace Edu.Web.Areas.Teacher.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            var course = await _db.PrivateCourses.FirstOrDefaultAsync(c => c.Id == vm.PrivateCourseId);
-            if (course == null) return NotFound();
-            if (course.TeacherId != user.Id) return Forbid();
+            // check course ownership (only fetch what we need)
+            var courseTeacher = await _db.PrivateCourses
+                .AsNoTracking()
+                .Where(c => c.Id == vm.PrivateCourseId)
+                .Select(c => c.TeacherId)
+                .FirstOrDefaultAsync();
+
+            if (courseTeacher == null) return NotFound();
+            if (courseTeacher != user.Id) return Forbid();
 
             if (!ModelState.IsValid) return View(vm);
 
             var module = new PrivateModule
             {
                 PrivateCourseId = vm.PrivateCourseId,
-                Title = vm.Title,
+                Title = vm.Title?.Trim(),
                 Order = vm.Order
             };
-            _db.PrivateModules.Add(module);
-            await _db.SaveChangesAsync();
 
-            TempData["Success"] = "Module added.";
-            return RedirectToAction("Details", "PrivateCourses", new { area = "Teacher", id = vm.PrivateCourseId });
+            _db.PrivateModules.Add(module);
+
+            try
+            {
+                await _db.SaveChangesAsync();
+                TempData["Success"] = "Module.Created";
+                return RedirectToAction("Details", "PrivateCourses", new { area = "Teacher", id = vm.PrivateCourseId });
+            }
+            catch (Exception ex)
+            {
+                // log if you want: _logger?.LogError(ex, "Failed creating module");
+                TempData["Error"] = "Module.CreateFailed";
+                return View(vm);
+            }
         }
 
         // GET: Teacher/Modules/Edit/5
@@ -85,18 +106,34 @@ namespace Edu.Web.Areas.Teacher.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            var module = await _db.PrivateModules.Include(m => m.PrivateCourse).FirstOrDefaultAsync(m => m.Id == vm.Id);
+            var module = await _db.PrivateModules
+                                  .Include(m => m.PrivateCourse)
+                                  .FirstOrDefaultAsync(m => m.Id == vm.Id);
+
             if (module == null) return NotFound();
             if (module.PrivateCourse?.TeacherId != user.Id) return Forbid();
 
-            if (!ModelState.IsValid) return View(vm);
+            if (!ModelState.IsValid)
+            {
+                return View(vm);
+            }
 
-            module.Title = vm.Title;
+            module.Title = vm.Title?.Trim();
             module.Order = vm.Order;
-            await _db.SaveChangesAsync();
 
-            TempData["Success"] = "Module updated.";
-            return RedirectToAction("Details", "Courses", new { area = "Teacher", id = vm.PrivateCourseId });
+            try
+            {
+                await _db.SaveChangesAsync();
+                TempData["Success"] = "Module.Updated";
+            }
+            catch (Exception ex)
+            {
+                // _logger?.LogError(ex, "Failed updating module {ModuleId}", vm.Id);
+                TempData["Error"] = "Module.UpdateFailed";
+            }
+
+            // redirect back to the private course details
+            return RedirectToAction("Details", "PrivateCourses", new { area = "Teacher", id = vm.PrivateCourseId });
         }
 
         [HttpPost, ValidateAntiForgeryToken]
@@ -105,17 +142,30 @@ namespace Edu.Web.Areas.Teacher.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            var module = await _db.PrivateModules.Include(m => m.PrivateCourse).FirstOrDefaultAsync(m => m.Id == id);
+            var module = await _db.PrivateModules
+                                  .Include(m => m.PrivateCourse)
+                                  .FirstOrDefaultAsync(m => m.Id == id);
+
             if (module == null) return NotFound();
             if (module.PrivateCourse?.TeacherId != user.Id) return Forbid();
 
             _db.PrivateModules.Remove(module);
-            await _db.SaveChangesAsync();
 
-            TempData["Success"] = "Module deleted.";
+            try
+            {
+                await _db.SaveChangesAsync();
+                TempData["Success"] = "Module.Deleted";
+            }
+            catch (Exception ex)
+            {
+                // _logger?.LogError(ex, "Failed deleting module {ModuleId}", id);
+                TempData["Error"] = "Module.DeleteFailed";
+            }
+
             return RedirectToAction("Details", "PrivateCourses", new { area = "Teacher", id = courseId });
         }
     }
 }
+
 
 

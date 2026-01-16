@@ -8,9 +8,7 @@
 }
 
 <div class="mb-3 mt-3">
-
     <form method="get" id="filterForm" class="row g-2 align-items-end">
-
         <!-- Search -->
         <div class="col-12 col-sm-6 col-md-3">
             <input name="q" value="@Model.Query"
@@ -18,31 +16,62 @@
                    placeholder="@L["Admin.SearchPlaceholder"]" />
         </div>
 
-        <!-- Category -->
+        <!-- Category (explicit All option + cached items) -->
         <div class="col-12 col-sm-6 col-md-3">
-            <select asp-for="CategoryId"
-                    asp-items="ViewBag.CategorySelect"
-                    asp-option-label="@L["Common.All"]"
-                    class="form-select form-select-sm">
-            </select>
+<select id="categoryFilter" name="categoryId" class="form-select form-select-sm" onchange="submitFilter(this)">
+    <option value="">@L["Common.All"]</option>
+    @foreach (var it in (List<SelectListItem>)ViewBag.CategorySelect)
+    {
+        if (Model.CategoryId?.ToString() == it.Value)
+        {
+            <option value="@it.Value" selected>@it.Text</option>
+        }
+        else
+        {
+            <option value="@it.Value">@it.Text</option>
+        }
+    }
+</select>
+
         </div>
 
         <!-- Published -->
         <div class="col-12 col-sm-6 col-md-2">
-            <select asp-for="ShowPublished"
-                    asp-items="ViewBag.ShowPublishedSelect"
-                    asp-option-label="@L["Common.All"]"
-                    class="form-select form-select-sm">
-            </select>
+<select id="publishedFilter" name="showPublished" class="form-select form-select-sm" onchange="submitFilter(this)">
+    <option value="">@L["Common.All"]</option>
+    @foreach (var it in (List<SelectListItem>)ViewBag.ShowPublishedSelect)
+    {
+        var current = Model.ShowPublished.HasValue ? (Model.ShowPublished.Value ? "true" : "false") : "";
+        if (current == it.Value)
+        {
+            <option value="@it.Value" selected>@it.Text</option>
+        }
+        else
+        {
+            <option value="@it.Value">@it.Text</option>
+        }
+    }
+</select>
+
         </div>
 
         <!-- For Children -->
         <div class="col-12 col-sm-6 col-md-2">
-            <select asp-for="ForChildren"
-                    asp-items="ViewBag.ForChildrenSelect"
-                    asp-option-label="@L["Common.All"]"
-                    class="form-select form-select-sm">
-            </select>
+    <select id="childrenFilter" name="forChildren" class="form-select form-select-sm" onchange="submitFilter(this)">
+    <option value="">@L["Common.All"]</option>
+    @foreach (var it in (List<SelectListItem>)ViewBag.ForChildrenSelect)
+    {
+        var current = Model.ForChildren.HasValue ? (Model.ForChildren.Value ? "true" : "false") : "";
+        if (current == it.Value)
+        {
+            <option value="@it.Value" selected>@it.Text</option>
+        }
+        else
+        {
+            <option value="@it.Value">@it.Text</option>
+        }
+    }
+</select>
         </div>
 
         <!-- Hidden Keep ShowAll -->
@@ -53,24 +82,19 @@
 
         <!-- Buttons -->
         <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+            <button class="btn btn-primary btn-sm px-3">@L["Admin.Search"]</button>
 
-            <button class="btn btn-primary btn-sm px-3">
-                @L["Admin.Search"]
-            </button>
-
-            <a class="btn btn-outline-secondary btn-sm text-nowrap"
-               href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
+            <a class="btn btn-outline-secondary btn-sm text-nowrap" href="@Url.Action("Index", "PrivateCourses", new { area = "Admin" })">
                 @L["Admin.Reset"]
             </a>
 
             @if (!Model.ShowAll)
             {
                 <a class="btn btn-outline-info btn-sm text-nowrap"
-                   href="@Url.Action("Index", "PrivateCourses",
-                                      new { area = "Admin", q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = true })">
-                @(L["Admin.ShowAll"] ?? "Show all")
-            </a>
-                        }
+                   href="@Url.Action("Index", "PrivateCourses", new { area = "Admin", q = Model.Query, categoryId = Model.CategoryId, showPublished = Model.ShowPublished, showAll = true })">
+                    @(L["Admin.ShowAll"] ?? "Show all")
+                </a>
+            }
             else
             {
                 <a class="btn btn-outline-secondary btn-sm text-nowrap"
@@ -79,10 +103,8 @@
                 </a>
             }
         </div>
-
     </form>
 </div>
-
 
 <div class="row g-3">
     @foreach (var c in Model.Courses)
@@ -207,6 +229,25 @@
                 });
             });
         })();
+
+                // Submit the form while preserving other params (search, showAll, page etc.)
+        function submitFilter(el) {
+            const form = document.getElementById('filterForm');
+            if (!form) return;
+
+            // we do a plain submit which preserves other named inputs in the form
+            form.submit();
+        }
+
+        // Optional: wire Enter key on search to submit
+        document.querySelectorAll('#filterForm input[name="q"]').forEach(function (inp) {
+            inp.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    document.getElementById('filterForm').submit();
+                }
+            });
+        });
     </script>
 }
 

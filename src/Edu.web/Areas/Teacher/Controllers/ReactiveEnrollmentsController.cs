@@ -25,12 +25,12 @@ namespace Edu.Web.Areas.Teacher.Controllers
             ApplicationDbContext db,
             IFileStorageService fileStorage)
         {
-            _db = db;
-            _fileStorage = fileStorage;
+            _db = db ?? throw new ArgumentNullException(nameof(db));
+            _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
         }
 
         // GET: Teacher/ReactiveEnrollments
-        public async Task<IActionResult> Index(int page = 1, int pageSize = 10)
+        public async Task<IActionResult> Index(int page = 1, int pageSize = 10, CancellationToken cancellationToken = default)
         {
             var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (teacherId == null) return Unauthorized();
@@ -38,11 +38,14 @@ namespace Edu.Web.Areas.Teacher.Controllers
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 10;
 
+            cancellationToken = cancellationToken == default ? HttpContext.RequestAborted : cancellationToken;
+
             // Count separately (lightweight scalar)
             var totalCount = await _db.ReactiveEnrollments
                 .AsNoTracking()
-                .Where(e => e.ReactiveCourse.TeacherId == teacherId)
-                .CountAsync();
+                .Where(e => e.ReactiveCourse!.TeacherId == teacherId)
+                .CountAsync(cancellationToken);
+
             // compute default region from admin UI culture (fallback to IT)
             string defaultRegion = "IT";
             try
@@ -56,56 +59,91 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 defaultRegion = "IT";
             }
 
-            // Project only required columns (avoids loading whole entities / using Include)
+            // Project only EF-translatable fields
             var query = _db.ReactiveEnrollments
                 .AsNoTracking()
-                .Where(e => e.ReactiveCourse.TeacherId == teacherId)
+                .Where(e => e.ReactiveCourse!.TeacherId == teacherId)
                 .OrderByDescending(e => e.CreatedAtUtc)
-                .Select(e => new TeacherEnrollmentViewModel
+                .Select(e => new
                 {
-                    // note: defensive null-coalescing to prevent client-side NREs if any path is null
-                    Id = e.Id,
-                    StudentName = e.Student!.User!.FullName ?? e.Student!.User!.UserName ?? string.Empty,
+                    e.Id,
+                    StudentFullName = e.Student!.User!.FullName,
+                    StudentUserName = e.Student!.User!.UserName,
                     StudentPhone = e.Student!.User!.PhoneNumber,
-                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(e.Student!.User!.PhoneNumber, defaultRegion),
                     StudentImageKey = e.Student!.User!.PhotoStorageKey,
-                    CourseTitle = e.ReactiveCourse!.Title ?? string.Empty,
+                    CourseTitle = e.ReactiveCourse!.Title,
                     CreatedAtUtc = e.CreatedAtUtc,
-                    PaymentStatus = e.MonthPayments.All(m => m.Status == EnrollmentMonthPaymentStatus.Paid)
-                        ? "Paid"
-                        : (e.MonthPayments.Any(m => m.Status == EnrollmentMonthPaymentStatus.Paid) ? "Partial" : "Pending"),
                     PaidMonths = e.MonthPayments.Count(m => m.Status == EnrollmentMonthPaymentStatus.Paid),
                     TotalMonths = e.MonthPayments.Count()
                 });
 
-            var paged = await query
+            var pageItems = await query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
+
+            // Map to view model and compute derived fields (outside EF)
+            var paged = pageItems.Select(i =>
+            {
+                var studentName = !string.IsNullOrWhiteSpace(i.StudentFullName)
+                    ? i.StudentFullName
+                    : (!string.IsNullOrWhiteSpace(i.StudentUserName) ? i.StudentUserName : string.Empty);
+
+                var paymentStatus = i.PaidMonths == 0
+                    ? "Pending"
+                    : (i.PaidMonths == i.TotalMonths ? "Paid" : "Partial");
+
+                return new TeacherEnrollmentViewModel
+                {
+                    Id = i.Id,
+                    StudentName = studentName,
+                    StudentPhone = i.StudentPhone,
+                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(i.StudentPhone, defaultRegion),
+                    StudentImageKey = i.StudentImageKey,
+                    CourseTitle = i.CourseTitle ?? string.Empty,
+                    CreatedAtUtc = i.CreatedAtUtc,
+                    PaymentStatus = paymentStatus,
+                    PaidMonths = i.PaidMonths,
+                    TotalMonths = i.TotalMonths
+                };
+            }).ToList();
 
             // Resolve image keys -> urls in parallel (only unique keys)
             var imageKeys = paged
                 .Where(x => !string.IsNullOrWhiteSpace(x.StudentImageKey))
                 .Select(x => x.StudentImageKey!)
-                .Distinct()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var imageUrlMap = new Dictionary<string, string?>();
+            var imageUrlMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             if (imageKeys.Count > 0)
             {
-                var tasks = imageKeys.Select(k => _fileStorage.GetPublicUrlAsync(k)).ToArray();
-                var urls = await Task.WhenAll(tasks);
-                imageUrlMap = imageKeys.Zip(urls, (k, u) => (k, u))
-                                       .ToDictionary(x => x.k, x => x.u);
+                try
+                {
+                    var urlTasks = imageKeys.Select(k => _fileStorage.GetPublicUrlAsync(k, TimeSpan.FromHours(1))).ToArray();
+                    var urls = await Task.WhenAll(urlTasks);
+                    imageUrlMap = imageKeys.Zip(urls, (k, u) => (k, u)).ToDictionary(x => x.k, x => x.u, StringComparer.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    // if any storage lookup fails, we'll fall back to default avatar for those keys
+                }
             }
 
             // assign resolved urls or fallback
+            var fallbackUrl = Url.Content(DefaultAvatar);
             foreach (var item in paged)
             {
-                if (!string.IsNullOrWhiteSpace(item.StudentImageKey) && imageUrlMap.TryGetValue(item.StudentImageKey!, out var url) && !string.IsNullOrWhiteSpace(url))
+                if (!string.IsNullOrWhiteSpace(item.StudentImageKey)
+                    && imageUrlMap.TryGetValue(item.StudentImageKey!, out var url)
+                    && !string.IsNullOrWhiteSpace(url))
+                {
                     item.StudentImageUrl = url;
+                }
                 else
-                    item.StudentImageUrl = DefaultAvatar;
+                {
+                    item.StudentImageUrl = fallbackUrl;
+                }
             }
 
             // Pagination metadata
@@ -118,10 +156,12 @@ namespace Edu.Web.Areas.Teacher.Controllers
         }
 
         // GET: Teacher/ReactiveEnrollments/Details/5
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(teacherId)) return Unauthorized();
+
+            cancellationToken = cancellationToken == default ? HttpContext.RequestAborted : cancellationToken;
 
             // 1) load enrollment and verify the course belongs to this teacher (single DB op)
             var enrollment = await _db.ReactiveEnrollments
@@ -134,30 +174,32 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     CourseTitle = e.ReactiveCourse!.Title,
                     CourseCoverKey = e.ReactiveCourse!.CoverImageKey,
                     StudentId = e.StudentId,
-                    StudentIdFallback = e.StudentId, // fallback
-                    StudentUserId = e.StudentId,
-                    CreatedAtUtc = e.CreatedAtUtc,
+                    e.CreatedAtUtc,
                     e.IsApproved,
                     e.IsPaid
                 })
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (enrollment == null) return NotFound();
 
             // 2) load payments for this enrollment
-            var payments = await _db.ReactiveEnrollmentMonthPayments
+            var paymentsTask = _db.ReactiveEnrollmentMonthPayments
                 .AsNoTracking()
                 .Where(p => p.ReactiveEnrollmentId == id)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             // 3) load months for course
-            var months = await _db.ReactiveCourseMonths
+            var monthsTask = _db.ReactiveCourseMonths
                 .AsNoTracking()
                 .Where(m => m.ReactiveCourseId == enrollment.ReactiveCourseId)
                 .OrderBy(m => m.MonthIndex)
                 .Select(m => new { m.Id, m.MonthIndex })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
+            await Task.WhenAll(paymentsTask, monthsTask);
+
+            var payments = paymentsTask.Result;
+            var months = monthsTask.Result;
             var monthIds = months.Select(m => m.Id).ToList();
 
             // 4) compute lesson counts grouped by month id
@@ -169,42 +211,79 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     .Where(l => monthIds.Contains(l.ReactiveCourseMonthId))
                     .GroupBy(l => l.ReactiveCourseMonthId)
                     .Select(g => new { MonthId = g.Key, Count = g.Count() })
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
                 lessonCounts = grouped.ToDictionary(x => x.MonthId, x => x.Count);
             }
 
-            // 5) load student user and student entity
+            // 5) load student user and student entity in parallel
             ApplicationUser? studentUser = null;
             Domain.Entities.Student? student = null;
             if (!string.IsNullOrEmpty(enrollment.StudentId))
             {
-                studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId);
-                student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == enrollment.StudentId);
+                var userTask = _db.Users
+                    .AsNoTracking()
+                    .Where(u => u.Id == enrollment.StudentId)
+                    .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.PhotoStorageKey, u.PhotoUrl })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                var studentTask = _db.Students
+                    .AsNoTracking()
+                    .Where(s => s.Id == enrollment.StudentId)
+                    .Select(s => new { s.Id, s.GuardianPhoneNumber })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                await Task.WhenAll(userTask, studentTask);
+
+                var userRes = userTask.Result;
+                var studentRes = studentTask.Result;
+
+                if (userRes != null)
+                {
+                    studentUser = new ApplicationUser
+                    {
+                        Id = userRes.Id,
+                        FullName = userRes.FullName ?? string.Empty,
+                        Email = userRes.Email,
+                        PhoneNumber = userRes.PhoneNumber,
+                        PhotoStorageKey = userRes.PhotoStorageKey,
+                        PhotoUrl = userRes.PhotoUrl
+                    };
+                }
+
+                if (studentRes != null)
+                {
+                    student = new Domain.Entities.Student
+                    {
+                        Id = studentRes.Id,
+                        GuardianPhoneNumber = studentRes.GuardianPhoneNumber ?? string.Empty
+                    };
+                }
             }
 
-            // 6) resolve student photo URL (best-effort)
+            // 6) resolve student photo URL and course cover URL (parallel)
             string? studentPhotoUrl = null;
+            string? courseCoverUrl = null;
+            var tasks = new List<Task>();
             if (studentUser != null && !string.IsNullOrEmpty(studentUser.PhotoStorageKey))
             {
-                try
+                tasks.Add(Task.Run(async () =>
                 {
-                    studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey);
-                }
-                catch
-                {
-                    studentPhotoUrl = studentUser.PhotoUrl ?? studentUser.PhotoStorageKey;
-                }
+                    try { studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey); }
+                    catch { studentPhotoUrl = studentUser.PhotoUrl ?? studentUser.PhotoStorageKey; }
+                }));
             }
-            else studentPhotoUrl = studentUser?.PhotoUrl;
 
-            // resolve course cover url (best-effort)
-            string? courseCoverUrl = null;
             if (!string.IsNullOrEmpty(enrollment.CourseCoverKey))
             {
-                try { courseCoverUrl = await _fileStorage.GetPublicUrlAsync(enrollment.CourseCoverKey); }
-                catch { courseCoverUrl = null; }
+                tasks.Add(Task.Run(async () =>
+                {
+                    try { courseCoverUrl = await _fileStorage.GetPublicUrlAsync(enrollment.CourseCoverKey); }
+                    catch { courseCoverUrl = null; }
+                }));
             }
+
+            if (tasks.Count > 0) await Task.WhenAll(tasks);
 
             // compute default region for PhoneHelpers conversion (fallback IT)
             string defaultRegion = "IT";
@@ -237,8 +316,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                         AdminNote = p.AdminNote,
                         StudentId = enrollment.StudentId
                     }).ToList()
-            })
-            .ToList();
+            }).ToList();
 
             // 8) compute whatsapp digits
             var phone = studentUser?.PhoneNumber;
@@ -260,17 +338,18 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 GuardianPhoneNumber = student?.GuardianPhoneNumber,
                 GuardianWhatsapp = guardianWhatsapp,
                 PhotoStorageKey = studentUser?.PhotoStorageKey,
-                StudentPhotoUrl = studentPhotoUrl,
+                StudentPhotoUrl = studentPhotoUrl ?? studentUser?.PhotoUrl,
                 TeacherFullName = User.Identity?.Name, // current teacher's display name
                 CreatedAtUtc = enrollment.CreatedAtUtc,
-                Months = monthsVm
+                Months = monthsVm,
+                CourseCoverUrl = courseCoverUrl
             };
 
             ViewData["ActivePage"] = "ReactiveEnrollments";
-
             return View(vm);
         }
     }
 }
+
 
 

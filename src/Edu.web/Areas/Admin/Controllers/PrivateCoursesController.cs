@@ -11,8 +11,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Localization;
-
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -26,6 +26,9 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly IStringLocalizer<SharedResource> _localizer;
         private readonly IEmailSender _emailSender;
         private readonly IFileStorageService _fileStorage;
+        private readonly IMemoryCache _memoryCache;
+
+        private const string CategoriesCacheKey = "Admin_PrivateCourses_Categories_v1";
 
         public PrivateCoursesController(
             ApplicationDbContext db,
@@ -33,7 +36,8 @@ namespace Edu.Web.Areas.Admin.Controllers
             UserManager<ApplicationUser> userManager,
             ILogger<PrivateCoursesController> logger,
             IStringLocalizer<SharedResource> localizer,
-            IEmailSender emailSender)
+            IEmailSender emailSender,
+            IMemoryCache memoryCache)    // <-- new param
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
@@ -41,38 +45,31 @@ namespace Edu.Web.Areas.Admin.Controllers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _localizer = localizer;
             _emailSender = emailSender;
+            _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
         }
 
-        // GET: Admin/PrivateCourses 
-        // Query params: q (search), categoryId (nullable), showPublished (nullable bool), showAll (bool), forChildren (nullable bool), page (int)
-        public async Task<IActionResult> Index(string? q, int? categoryId, bool? showPublished, bool showAll = false, bool? forChildren = null, int page = 1)
+        // GET: Admin/PrivateCourses
+        public async Task<IActionResult> Index(
+            string? q, int? categoryId, bool? showPublished, bool showAll = false, bool? forChildren = null, int page = 1,
+            CancellationToken cancellationToken = default)
         {
             const int PageSize = 12;
             ViewData["ActivePage"] = "PrivateCourses";
 
-            // Base query
-            var baseQuery = _db.PrivateCourses
-                .AsNoTracking()
-                .AsQueryable();
+            // Base query (no tracking)
+            var baseQuery = _db.PrivateCourses.AsNoTracking().AsQueryable();
 
             if (!showAll)
-            {
                 baseQuery = baseQuery.Where(pc => pc.IsPublishRequested == true);
-            }
-            if (categoryId.HasValue)
-            {
-                baseQuery = baseQuery.Where(pc => pc.CategoryId == categoryId.Value);
-            }
-            if (showPublished.HasValue)
-            {
-                baseQuery = baseQuery.Where(pc => pc.IsPublished == showPublished.Value);
-            }
 
-            // NEW: filter for children/adults
+            if (categoryId.HasValue)
+                baseQuery = baseQuery.Where(pc => pc.CategoryId == categoryId.Value);
+
+            if (showPublished.HasValue)
+                baseQuery = baseQuery.Where(pc => pc.IsPublished == showPublished.Value);
+
             if (forChildren.HasValue)
-            {
                 baseQuery = baseQuery.Where(pc => pc.IsForChildren == forChildren.Value);
-            }
 
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -80,7 +77,13 @@ namespace Edu.Web.Areas.Admin.Controllers
                 baseQuery = baseQuery.Where(pc =>
                     (pc.Title != null && EF.Functions.Like(pc.Title, $"%{term}%")) ||
                     (pc.Description != null && EF.Functions.Like(pc.Description, $"%{term}%")) ||
-                    (pc.Category != null && pc.Category.Name != null && EF.Functions.Like(pc.Category.Name, $"%{term}%")) ||
+                    (pc.Category != null &&
+                        (
+                            (pc.Category.NameEn != null && EF.Functions.Like(pc.Category.NameEn, $"%{term}%")) ||
+                            (pc.Category.NameIt != null && EF.Functions.Like(pc.Category.NameIt, $"%{term}%")) ||
+                            (pc.Category.NameAr != null && EF.Functions.Like(pc.Category.NameAr, $"%{term}%"))
+                        )
+                    ) ||
                     (pc.Teacher != null && pc.Teacher.User != null &&
                         ((pc.Teacher.User.FullName != null && EF.Functions.Like(pc.Teacher.User.FullName, $"%{term}%")) ||
                          (pc.Teacher.User.Email != null && EF.Functions.Like(pc.Teacher.User.Email, $"%{term}%"))))
@@ -89,17 +92,18 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             baseQuery = baseQuery.OrderByDescending(pc => pc.Id);
 
-            // Project only DB-translatable fields
+            // Project only the fields we need
             var projected = baseQuery.Select(pc => new PrivateCourseListItemVm
             {
                 Id = pc.Id,
                 Title = pc.Title,
                 CategoryId = pc.CategoryId,
-                CategoryName = pc.Category != null ? pc.Category.Name : null,
-                Price = pc.Price,                       // numeric, EF-friendly
+                CategoryNameEn = pc.Category != null ? pc.Category.NameEn : null,
+                CategoryNameIt = pc.Category != null ? pc.Category.NameIt : null,
+                CategoryNameAr = pc.Category != null ? pc.Category.NameAr : null,
+                Price = pc.Price,
                 IsPublished = pc.IsPublished,
                 IsPublishRequested = pc.IsPublishRequested,
-                // <-- store the storage key column (not a public url)
                 CoverImageKey = pc.CoverImageKey,
                 TeacherId = pc.TeacherId,
                 TeacherName = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.FullName : null,
@@ -107,47 +111,51 @@ namespace Edu.Web.Areas.Admin.Controllers
                 IsForChildren = pc.IsForChildren
             });
 
-            // Paginate efficiently
+            // Pagination
             var paged = await PaginatedList<PrivateCourseListItemVm>.CreateAsync(projected, page, PageSize);
 
-            // After materialization: compute price labels and batch resolve cover public URLs
+            // Post-processing after materialization
             if (paged != null && paged.Any())
             {
-                // 1) Compute PriceLabel in-memory
                 foreach (var it in paged)
                 {
-                    try
+                    var pseudo = new Edu.Domain.Entities.Category
                     {
-                        it.PriceLabel = it.Price.ToEuro();
-                    }
-                    catch
-                    {
-                        it.PriceLabel = it.Price.ToString("0.##");
-                    }
+                        NameEn = it.CategoryNameEn ?? string.Empty,
+                        NameIt = it.CategoryNameIt ?? string.Empty,
+                        NameAr = it.CategoryNameAr ?? string.Empty
+                    };
+                    it.CategoryName = LocalizationHelpers.GetLocalizedCategoryName(pseudo);
+
+                    try { it.PriceLabel = it.Price.ToEuro(); }
+                    catch { it.PriceLabel = it.Price.ToString("0.##"); }
                 }
 
-                // 2) Batch resolve distinct cover keys to public URLs
+                // Batch-resolve distinct cover keys
                 var keys = paged.Select(x => x.CoverImageKey).Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
-                var resolved = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                foreach (var k in keys)
+                if (keys.Any())
                 {
-                    try
+                    var tasks = keys.ToDictionary(k => k, k => Task.Run(async () =>
                     {
-                        resolved[k!] = await _fileStorage.GetPublicUrlAsync(k!);
-                    }
-                    catch
-                    {
-                        // fallback to key (or null) — keep original value so image can still attempt to use it
-                        resolved[k!] = k;
-                    }
-                }
+                        try { return await _fileStorage.GetPublicUrlAsync(k); }
+                        catch
+                        {
+                            _logger.LogDebug("Failed to resolve cover public url for key {Key}", k);
+                            return (string?)null;
+                        }
+                    }));
 
-                foreach (var it in paged)
-                {
-                    if (!string.IsNullOrEmpty(it.CoverImageKey) && resolved.TryGetValue(it.CoverImageKey!, out var pub))
-                        it.PublicCoverUrl = pub;
-                    else
-                        it.PublicCoverUrl = null;
+                    await Task.WhenAll(tasks.Values);
+
+                    var resolved = tasks.ToDictionary(p => p.Key, p => p.Value.Result);
+
+                    foreach (var it in paged)
+                    {
+                        if (!string.IsNullOrEmpty(it.CoverImageKey) && resolved.TryGetValue(it.CoverImageKey!, out var pub))
+                            it.PublicCoverUrl = pub;
+                        else
+                            it.PublicCoverUrl = null;
+                    }
                 }
             }
 
@@ -164,34 +172,64 @@ namespace Edu.Web.Areas.Admin.Controllers
                 ForChildren = forChildren
             };
 
-            // categories for filter
-            var categories = await _db.Categories.OrderBy(c => c.Name).ToListAsync();
-            ViewBag.CategorySelect = new SelectList(categories, "Id", "Name", categoryId);
+            // --- Categories for filter: cached, minimal fields, localized in-memory ---
+            // Try cache
+            if (!_memoryCache.TryGetValue(CategoriesCacheKey, out List<SelectListItem> categoryItems))
+            {
+                var cats = await _db.Categories
+                    .AsNoTracking()
+                    .Select(c => new { c.Id, c.NameEn, c.NameIt, c.NameAr })
+                    .ToListAsync(cancellationToken);
 
-            // showPublished select items
+                categoryItems = cats
+                    .Select(c =>
+                    {
+                        var tmp = new Edu.Domain.Entities.Category
+                        {
+                            NameEn = c.NameEn ?? string.Empty,
+                            NameIt = c.NameIt ?? string.Empty,
+                            NameAr = c.NameAr ?? string.Empty
+                        };
+                        return new SelectListItem
+                        {
+                            Value = c.Id.ToString(),
+                            Text = LocalizationHelpers.GetLocalizedCategoryName(tmp)
+                        };
+                    })
+                    .OrderBy(x => x.Text)
+                    .ToList();
+
+                // cache for 30 minutes (invalidated by your admin actions when categories change)
+                _memoryCache.Set(CategoriesCacheKey, categoryItems, TimeSpan.FromMinutes(30));
+            }
+
+            // mark selected
+            foreach (var si in categoryItems) si.Selected = categoryId.HasValue && si.Value == categoryId.Value.ToString();
+
+            // Expose for view; the view will render an explicit "All" option first
+            ViewBag.CategorySelect = categoryItems;
+
             ViewBag.ShowPublishedSelect = new List<SelectListItem>
-    {
-        new SelectListItem { Value = "true", Text = _localizer != null ? _localizer["Admin.Published"].Value : "Published", Selected = showPublished == true },
-        new SelectListItem { Value = "false", Text = _localizer != null ? _localizer["Admin.Unpublished"].Value : "Unpublished", Selected = showPublished == false }
-    };
+        {
+            new SelectListItem { Value = "true", Text = _localizer != null ? _localizer["Admin.Published"].Value : "Published", Selected = showPublished == true},
+            new SelectListItem { Value = "false", Text = _localizer != null ? _localizer["Admin.Unpublished"].Value : "Unpublished", Selected = showPublished == false}
+        };
 
-            // ForChildren select
             ViewBag.ForChildrenSelect = new List<SelectListItem>
-    {
-        new SelectListItem { Value = "", Text = _localizer != null ? _localizer["Common.All"].Value : "All", Selected = forChildren == null },
-        new SelectListItem { Value = "true", Text = _localizer != null ? _localizer["Teacher.ForChildren"].Value : "For children", Selected = forChildren == true },
-        new SelectListItem { Value = "false", Text = _localizer != null ? _localizer["Teacher.ForAdults"].Value : "For adults", Selected = forChildren == false }
-    };
+        {
+            new SelectListItem { Value = "", Text = _localizer != null ? _localizer["Common.All"].Value : "All", Selected = forChildren == null },
+            new SelectListItem { Value = "true", Text = _localizer != null ? _localizer["Teacher.ForChildren"].Value : "For children", Selected = forChildren == true },
+            new SelectListItem { Value = "false", Text = _localizer != null ? _localizer["Teacher.ForAdults"].Value : "For adults", Selected = forChildren == false }
+        };
 
-            ViewData["ActivePage"] = "Private Courses";
+            ViewData["ActivePage"] = "PrivateCourses";
             return View(vm);
         }
 
-
         // GET: Admin/PrivateCourses/Details/5
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
-            // 1) Basic course projection (lightweight, no collection includes)
+            // lightweight projection
             var courseBasic = await _db.PrivateCourses
                 .AsNoTracking()
                 .Where(pc => pc.Id == id)
@@ -201,7 +239,9 @@ namespace Edu.Web.Areas.Admin.Controllers
                     pc.Title,
                     pc.Description,
                     pc.CategoryId,
-                    CategoryName = pc.Category != null ? pc.Category.Name : null,
+                    CategoryNameEn = pc.Category != null ? pc.Category.NameEn : null,
+                    CategoryNameIt = pc.Category != null ? pc.Category.NameIt : null,
+                    CategoryNameAr = pc.Category != null ? pc.Category.NameAr : null,
                     pc.Price,
                     pc.IsPublished,
                     pc.CoverImageKey,
@@ -209,18 +249,19 @@ namespace Edu.Web.Areas.Admin.Controllers
                     TeacherFullName = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.FullName : null,
                     TeacherEmail = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.Email : null
                 })
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (courseBasic == null) return NotFound();
 
-            // Map the simple fields into VM
             var courseVm = new PrivateCourseDetailsVm
             {
                 Id = courseBasic.Id,
                 Title = courseBasic.Title,
                 Description = courseBasic.Description,
                 CategoryId = courseBasic.CategoryId,
-                CategoryName = courseBasic.CategoryName,
+                CategoryNameEn = courseBasic.CategoryNameEn,
+                CategoryNameIt = courseBasic.CategoryNameIt,
+                CategoryNameAr = courseBasic.CategoryNameAr,
                 PriceLabel = courseBasic.Price.ToEuro(),
                 IsPublished = courseBasic.IsPublished,
                 CoverImageKey = courseBasic.CoverImageKey,
@@ -231,61 +272,29 @@ namespace Edu.Web.Areas.Admin.Controllers
                     Email = courseBasic.TeacherEmail
                 }
             };
-            // Resolve public cover url (best-effort)
+            // set localized CategoryName
+            courseVm.CategoryName = LocalizationHelpers.GetLocalizedCategoryName(new Edu.Domain.Entities.Category
+            {
+                NameEn = courseVm.CategoryNameEn ?? string.Empty,
+                NameIt = courseVm.CategoryNameIt ?? string.Empty,
+                NameAr = courseVm.CategoryNameAr ?? string.Empty
+            });
+            // resolve cover public url (best-effort)
             if (!string.IsNullOrEmpty(courseVm.CoverImageKey))
             {
-                try
-                {
-                    courseVm.PublicCoverUrl = await _fileStorage.GetPublicUrlAsync(courseVm.CoverImageKey);
-                }
+                try { courseVm.PublicCoverUrl = await _fileStorage.GetPublicUrlAsync(courseVm.CoverImageKey, TimeSpan.FromHours(1)); }
                 catch { courseVm.PublicCoverUrl = null; }
             }
-            // 2) Load modules (sequential)
-            var modules = await _db.PrivateModules
-                .AsNoTracking()
-                .Where(m => m.PrivateCourseId == id)
-                .OrderBy(m => m.Order)
-                .ToListAsync();
 
-            // 3) Load lessons with files (sequential)
-            var lessonsWithFiles = await _db.PrivateLessons
-                .AsNoTracking()
-                .Where(l => l.PrivateCourseId == id)
-                .Include(l => l.Files)
-                .ToListAsync();
+            // modules & lessons (include files)
+            var modules = await _db.PrivateModules.AsNoTracking().Where(m => m.PrivateCourseId == id).OrderBy(m => m.Order).ToListAsync(cancellationToken);
+            var lessonsWithFiles = await _db.PrivateLessons.AsNoTracking().Where(l => l.PrivateCourseId == id).Include(l => l.Files).ToListAsync(cancellationToken);
 
-            // 4) Load moderation logs (sequential)
-            var moderationLogs = await _db.CourseModerationLogs // adjust table name if different: CourseModerationLogs or similar
-                .AsNoTracking()
-                .Where(l => l.PrivateCourseId == id)
-                .OrderByDescending(l => l.CreatedAtUtc)
-                .ToListAsync();
-
-            // 5) Build admin lookup for moderation logs to avoid per-log DB calls
-            var adminIds = moderationLogs
-                .Select(l => l.AdminId)
-                .Where(aid => !string.IsNullOrEmpty(aid))
-                .Distinct()
-                .ToList();
-
-            var adminLookup = new Dictionary<string, (string FullName, string Email)>();
-            if (adminIds.Any())
-            {
-                var admins = await _db.Users
-                    .AsNoTracking()
-                    .Where(u => adminIds.Contains(u.Id))
-                    .Select(u => new { u.Id, u.FullName, u.Email })
-                    .ToListAsync();
-
-                adminLookup = admins.ToDictionary(a => a.Id, a => (a.FullName ?? "", a.Email ?? ""));
-            }
-
-            // 6) Map modules + lessons into VMs
-            // prepare a dictionary of lessons by module id for quick grouping
-            var lessonsByModule = lessonsWithFiles
-                .GroupBy(l => l.PrivateModuleId ?? 0)
+            // group lessons by module id
+            var lessonsByModule = lessonsWithFiles.GroupBy(l => l.PrivateModuleId ?? 0)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Order).ToList());
 
+            // map modules & lessons to VMs (no reflection)
             foreach (var m in modules)
             {
                 var moduleVm = new PrivateModuleVm
@@ -312,14 +321,11 @@ namespace Edu.Web.Areas.Admin.Controllers
                             {
                                 Id = f.Id,
                                 Name = f.Name,
-                                StorageKey = (f.GetType().GetProperty("StorageKey") != null)
-                                    ? (string?)f.GetType().GetProperty("StorageKey")!.GetValue(f)
-                                    : (string?)null,
+                                StorageKey = f.StorageKey, // direct property access
                                 FileUrl = f.FileUrl,
                                 FileType = f.FileType
                             }).ToList() ?? new List<FileResourceVm>()
                         };
-
                         moduleVm.Lessons.Add(lessonVm);
                     }
                 }
@@ -343,278 +349,121 @@ namespace Edu.Web.Areas.Admin.Controllers
                         {
                             Id = f.Id,
                             Name = f.Name,
-                            StorageKey = (f.GetType().GetProperty("StorageKey") != null)
-                                ? (string?)f.GetType().GetProperty("StorageKey")!.GetValue(f)
-                                : (string?)null,
+                            StorageKey = f.StorageKey,
                             FileUrl = f.FileUrl,
                             FileType = f.FileType
                         }).ToList() ?? new List<FileResourceVm>()
                     };
-
                     courseVm.StandaloneLessons.Add(lvm);
                 }
             }
 
-            // 7) Map moderation logs into VMs using the adminLookup
-            courseVm.ModerationLogs = moderationLogs.Select(log =>
-            {
-                var adminName = log.AdminId != null && adminLookup.TryGetValue(log.AdminId, out var adm) && !string.IsNullOrEmpty(adm.FullName)
-                    ? adm.FullName
-                    : (adminLookup.TryGetValue(log.AdminId ?? "", out var adm2) ? adm2.Email : log.AdminId);
-
-                var adminEmail = log.AdminId != null && adminLookup.TryGetValue(log.AdminId, out var adm3) ? adm3.Email : null;
-
-                return new CourseModerationLogVm
-                {
-                    Id = log.Id,
-                    Action = log.Action,
-                    Note = log.Note,
-                    AdminId = log.AdminId,
-                    AdminName = adminName,
-                    AdminEmail = adminEmail,
-                    CreatedAtUtc = log.CreatedAtUtc
-                };
-            }).ToList();
-
-            // 9) Resolve file public URLs in batch (distinct keys)
+            // Resolve file public URLs in parallel for all distinct keys
             var fileKeys = new List<string>();
             foreach (var m in courseVm.Modules)
-            {
-                foreach (var l in m.Lessons)
-                {
-                    if (l.Files == null) continue;
-                    foreach (var f in l.Files)
-                    {
-                        var key = f.StorageKey ?? f.FileUrl;
-                        if (!string.IsNullOrEmpty(key)) fileKeys.Add(key);
-                    }
-                }
-            }
+                foreach (var l in m.Lessons ?? Enumerable.Empty<PrivateLessonVm>())
+                    foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
+                        if (!string.IsNullOrEmpty(f.StorageKey ?? f.FileUrl)) fileKeys.Add(f.StorageKey ?? f.FileUrl);
+
             foreach (var l in courseVm.StandaloneLessons)
-            {
-                if (l.Files == null) continue;
-                foreach (var f in l.Files)
-                {
-                    var key = f.StorageKey ?? f.FileUrl;
-                    if (!string.IsNullOrEmpty(key)) fileKeys.Add(key);
-                }
-            }
+                foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
+                    if (!string.IsNullOrEmpty(f.StorageKey ?? f.FileUrl)) fileKeys.Add(f.StorageKey ?? f.FileUrl);
 
             var distinctKeys = fileKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            foreach (var k in distinctKeys)
+            if (distinctKeys.Any())
             {
+                var urlTasks = distinctKeys.Select(k => _fileStorage.GetPublicUrlAsync(k, TimeSpan.FromHours(1))).ToArray();
+                string?[] urls;
                 try
                 {
-                    var pub = await _fileStorage.GetPublicUrlAsync(k, TimeSpan.FromHours(1));
-                    map[k] = pub;
+                    urls = await Task.WhenAll(urlTasks);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    map[k] = k;
+                    _logger.LogWarning(ex, "Some file public URL lookups failed for course {CourseId}", id);
+                    urls = distinctKeys.Select(k => (string?)k).ToArray();
                 }
-            }
 
-            // populate FileResourceVm.PublicUrl
-            foreach (var m in courseVm.Modules)
-            {
-                foreach (var l in m.Lessons)
-                {
-                    if (l.Files == null) continue;
-                    foreach (var f in l.Files)
+                var map = distinctKeys.Select((k, i) => new { Key = k, Url = urls[i] }).ToDictionary(x => x.Key, x => x.Url);
+
+                foreach (var m in courseVm.Modules)
+                    foreach (var l in m.Lessons ?? Enumerable.Empty<PrivateLessonVm>())
+                        foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
+                        {
+                            var key = f.StorageKey ?? f.FileUrl;
+                            f.PublicUrl = key != null && map.TryGetValue(key, out var pu) ? pu : key;
+                        }
+
+                foreach (var l in courseVm.StandaloneLessons)
+                    foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
                     {
                         var key = f.StorageKey ?? f.FileUrl;
-                        f.PublicUrl = key != null && map.TryGetValue(key, out var p) ? p : key;
+                        f.PublicUrl = key != null && map.TryGetValue(key, out var pu) ? pu : key;
                     }
-                }
-            }
-            foreach (var l in courseVm.StandaloneLessons)
-            {
-                if (l.Files == null) continue;
-                foreach (var f in l.Files)
-                {
-                    var key = f.StorageKey ?? f.FileUrl;
-                    f.PublicUrl = key != null && map.TryGetValue(key, out var p) ? p : key;
-                }
             }
 
-            ViewData["ActivePage"] = "Private Courses";
+            ViewData["ActivePage"] = "PrivateCourses";
             return View(courseVm);
         }
 
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Approve(int id)
-        //{
-        //    var course = await _db.PrivateCourses.Include(pc => pc.Teacher).ThenInclude(t => t.User).FirstOrDefaultAsync(pc => pc.Id == id);
-        //    if (course == null) return NotFound();
-
-        //    course.IsPublished = true;
-        //    course.IsPublishRequested = false; // clear request
-        //    var adminId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-
-        //    _db.CourseModerationLogs.Add(new CourseModerationLog
-        //    {
-        //        PrivateCourseId = course.Id,
-        //        AdminId = adminId,
-        //        Action = "Approved",
-        //        Note = null,
-        //        CreatedAtUtc = DateTime.UtcNow
-        //    });
-
-        //    try
-        //    {
-        //        await _db.SaveChangesAsync();
-
-        //        // Send email to teacher if email available
-        //        var teacherEmail = course.Teacher?.User?.Email;
-        //        if (!string.IsNullOrEmpty(teacherEmail))
-        //        {
-        //            var subject = $"Your course '{course.Title}' was approved";
-        //            var body = $"Hello {course.Teacher?.User?.FullName ?? ""},<br/><br/>" +
-        //                       $"Your course <strong>{course.Title}</strong> has been approved by the admin and is now live on the platform.<br/><br/>" +
-        //                       "Regards,<br/>Edu Platform Team";
-        //            try { await _emailSender.SendEmailAsync(teacherEmail, subject, body); }
-        //            catch (Exception ex) { _logger.LogWarning(ex, "Failed sending approval email for course {CourseId}", id); }
-        //        }
-
-        //        TempData["Success"] = "Course approved and published.";
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error approving course {CourseId}", id);
-        //        TempData["Error"] = "Unable to approve course.";
-        //    }
-
-        //    return RedirectToAction(nameof(Details), new { id });
-        //}
-
-
-        //// POST: Admin/PrivateCourses/Reject/5
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Reject(int id, string? adminNote)
-        //{
-        //    var course = await _db.PrivateCourses.Include(pc => pc.Teacher).ThenInclude(t => t.User).FirstOrDefaultAsync(pc => pc.Id == id);
-        //    if (course == null) return NotFound();
-
-        //    course.IsPublished = false;
-        //    course.IsPublishRequested = false;
-
-        //    var adminId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        //    _db.CourseModerationLogs.Add(new CourseModerationLog
-        //    {
-        //        PrivateCourseId = course.Id,
-        //        AdminId = adminId,
-        //        Action = "Rejected",
-        //        Note = adminNote,
-        //        CreatedAtUtc = DateTime.UtcNow
-        //    });
-
-        //    try
-        //    {
-        //        await _db.SaveChangesAsync();
-
-        //        // send email to teacher with note
-        //        var teacherEmail = course.Teacher?.User?.Email;
-        //        if (!string.IsNullOrEmpty(teacherEmail))
-        //        {
-        //            var subject = $"Your course '{course.Title}' was not approved";
-        //            var body = $"Hello {course.Teacher?.User?.FullName ?? ""},<br/><br/>" +
-        //                       $"Your course <strong>{course.Title}</strong> was not approved by our admin.<br/><br/>" +
-        //                       $"Admin note: <blockquote>{System.Net.WebUtility.HtmlEncode(adminNote ?? "No note provided")}</blockquote><br/>" +
-        //                       "Please review the note and update your course accordingly.<br/><br/>Regards,<br/>Edu Platform Team";
-        //            try { await _emailSender.SendEmailAsync(teacherEmail, subject, body); }
-        //            catch (Exception ex) { _logger.LogWarning(ex, "Failed sending rejection email for course {CourseId}", id); }
-        //        }
-        //        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json"))
-        //        {
-        //            return Json(new { success = true });
-        //        }
-
-        //        TempData["Success"] = "Course rejected.";
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error rejecting course {CourseId}", id);
-        //        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json"))
-        //        {
-        //            return StatusCode(500, new { success = false, message = "Unable to update course." });
-        //        }
-        //        TempData["Error"] = "Unable to update course.";
-        //    }
-
-        //    return RedirectToAction(nameof(Details), new { id });
-        //}
-
-        // POST: Admin/PrivateCourses/TogglePublish/5 (AJAX-friendly)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> TogglePublish(int id)
+        public async Task<IActionResult> TogglePublish(int id, CancellationToken cancellationToken = default)
         {
-            var course = await _db.PrivateCourses.FindAsync(id);
+            var course = await _db.PrivateCourses.FindAsync(new object[] { id }, cancellationToken);
             if (course == null) return NotFound();
 
             course.IsPublished = !course.IsPublished;
 
-            // log action
-            var adminId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            _db.CourseModerationLogs.Add(new Edu.Domain.Entities.CourseModerationLog
-            {
-                PrivateCourseId = course.Id,
-                AdminId = adminId,
-                Action = course.IsPublished ? "Published" : "Unpublished",
-                Note = null,
-                CreatedAtUtc = DateTime.UtcNow
-            });
+            var adminId = _userManager.GetUserId(User);
+            await _db.SaveChangesAsync(cancellationToken);
 
-            await _db.SaveChangesAsync();
-
+            // Return new state
             return Json(new { success = true, isPublished = course.IsPublished });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken = default)
         {
-            var course = await _db.PrivateCourses.FindAsync(id);
+            var course = await _db.PrivateCourses.FindAsync(new object[] { id }, cancellationToken);
             if (course == null) return NotFound();
 
-            _db.PrivateCourses.Remove(course);
-            await _db.SaveChangesAsync();
-            TempData["Success"] = "Course deleted.";
-            return RedirectToAction(nameof(Index));
+            try
+            {
+                // Attempt best-effort cleanup of files attached to lessons
+                var lessonIds = await _db.PrivateLessons.AsNoTracking().Where(l => l.PrivateCourseId == id).Select(l => l.Id).ToListAsync(cancellationToken);
+                var files = await _db.FileResources.Where(f => f.PrivateLessonId != null && lessonIds.Contains(f.PrivateLessonId.Value)).ToListAsync(cancellationToken);
+
+                foreach (var f in files)
+                {
+                    try
+                    {
+                        var key = f.StorageKey ?? f.FileUrl;
+                        if (!string.IsNullOrEmpty(key))
+                            await _fileStorage.DeleteFileAsync(key);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete storage item for FileResource {FileId}", f.Id);
+                    }
+                }
+
+                if (files.Any()) _db.FileResources.RemoveRange(files);
+
+                _db.PrivateCourses.Remove(course);
+                await _db.SaveChangesAsync(cancellationToken);
+
+                TempData["Success"] = "PrivateCourse.Deleted";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed deleting private course {CourseId}", id);
+                TempData["Error"] = "PrivateCourse.DeleteFailed";
+                return RedirectToAction(nameof(Index));
+            }
         }
-
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> RequestPublish(int id)
-        //{
-        //    var user = await _userManager.GetUserAsync(User);
-        //    if (user == null) return Challenge();
-
-        //    var course = await _db.PrivateCourses.FindAsync(id);
-        //    if (course == null) return NotFound();
-        //    if (course.TeacherId != user.Id) return Forbid();
-
-        //    course.IsPublishRequested = !course.IsPublishRequested;
-
-        //    _db.CourseModerationLogs.Add(new CourseModerationLog
-        //    {
-        //        PrivateCourseId = course.Id,
-        //        AdminId = user.Id,
-        //        Action = course.IsPublishRequested ? "PublishRequested" : "PublishRequestCancelled",
-        //        Note = null,
-        //        CreatedAtUtc = DateTime.UtcNow
-        //    });
-
-        //    await _db.SaveChangesAsync();
-
-        //    TempData["Success"] = course.IsPublishRequested
-        //        ? _localizer["Admin.PublishRequestSent"].Value
-        //        : _localizer["Admin.PublishRequestCancelledMsg"].Value;
-
-        //    return RedirectToAction("Details", new { id });
-        //}
     }
 }
+

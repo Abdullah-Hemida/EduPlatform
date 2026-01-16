@@ -26,15 +26,11 @@ namespace Edu.Infrastructure.Data
         public DbSet<Slot> Slots { get; set; }
         public DbSet<PurchaseRequest> PurchaseRequests { get; set; }
         public DbSet<FileResource> FileResources { get; set; }
-        public DbSet<CourseModerationLog> CourseModerationLogs { get; set; }
-        public DbSet<BookingModerationLog> BookingModerationLogs { get; set; }
         public DbSet<ReactiveCourse> ReactiveCourses { get; set; }
         public DbSet<ReactiveCourseMonth> ReactiveCourseMonths { get; set; }
         public DbSet<ReactiveCourseLesson> ReactiveCourseLessons { get; set; }
         public DbSet<ReactiveEnrollment> ReactiveEnrollments { get; set; }
         public DbSet<ReactiveEnrollmentMonthPayment> ReactiveEnrollmentMonthPayments { get; set; }
-        public DbSet<ReactiveCourseModerationLog> ReactiveCourseModerationLogs { get; set; }
-        public DbSet<ReactiveEnrollmentLog> ReactiveEnrollmentLogs { get; set; } = null!;
         public DbSet<HomeSection> HomeSections { get; set; }
         public DbSet<HomeSectionTranslation> HomeSectionTranslations { get; set; }
         public DbSet<HomeSectionItem> HomeSectionItems { get; set; }
@@ -72,13 +68,9 @@ namespace Edu.Infrastructure.Data
             builder.ApplyConfiguration(new BookingConfiguration());
 
             builder.ApplyConfiguration(new FileResourceConfiguration());
-            builder.ApplyConfiguration(new CourseModerationLogConfiguration());
-            builder.ApplyConfiguration(new BookingModerationLogConfiguration());
             builder.ApplyConfiguration(new ReactiveCourseConfiguration());
             builder.ApplyConfiguration(new SlotConfiguration());
             builder.ApplyConfiguration(new ReactiveEnrollmentConfiguration());
-            builder.ApplyConfiguration(new ReactiveEnrollmentLogConfiguration());
-            builder.ApplyConfiguration(new ReactiveCourseModerationLogConfiguration());
             builder.ApplyConfiguration(new ReactiveEnrollmentMonthPaymentConfiguration());
             builder.ApplyConfiguration(new HomeSectionConfiguration());
             builder.ApplyConfiguration(new HomeSectionTranslationConfiguration());

@@ -51,6 +51,7 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? StudentPhotoUrl { get; set; }
         public string? TeacherFullName { get; set; }
         public DateTime CreatedAtUtc { get; set; }
+        public string? CourseCoverUrl { get; set; }
         public List<AdminEnrollmentMonthVm> Months { get; set; } = new();
     }
     public class AdminEnrollmentMonthVm

@@ -1,4 +1,5 @@
 ﻿@model Edu.Web.Areas.Teacher.ViewModels.PurchaseRequestListVm
+@using Edu.Domain.Entities
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
@@ -39,8 +40,7 @@
                         var sizes = new[] { 5, 10, 20, 50 };
                         foreach (var s in sizes)
                         {
-                            <option value="@s" selected="@(s == Model.PageSize ? "selected" : null)">@s</option>
-                            ;
+                            <option value="@s" selected="@(s == Model.PageSize ? "selected" : null)">@s</option>;
                         }
                     }
                 </select>
@@ -70,27 +70,13 @@
                         <div class="col-12">
                             <div class="card h-100 shadow-sm">
                                 <div class="card-body p-2 d-flex flex-column flex-sm-row gap-2">
-                                    <!-- Image (fixed size) -->
-                                    <div class="d-flex align-items-start">
-                                        @if (!string.IsNullOrEmpty(r.CourseCoverUrl))
-                                        {
-                                            <img src="@r.CourseCoverUrl" alt="@r.CourseTitle" class="thumb-card" />
-                                        }
-                                        else
-                                        {
-                                            <div class="bg-light d-flex align-items-center justify-content-center" style="width:64px;height:44px;border-radius:.25rem;">
-                                                <small class="text-muted">No image</small>
-                                            </div>
-                                        }
-                                    </div>
-
                                     <!-- Main content -->
                                     <div class="flex-grow-1 card-meta min-w-0">
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div class="me-2 min-w-0">
                                                 <div class="fw-semibold text-truncate">@r.CourseTitle</div>
                                                 <div class="small text-muted text-truncate break-anywhere">@r.StudentName </div>
-                                                <div>@r.StudentEmail</div>
+                                                <div class="small text-muted">@r.StudentEmail</div>
                                             </div>
 
                                             <div class="text-end ms-2">
@@ -101,18 +87,26 @@
 
                                         <div class="mt-2 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2">
                                             <div>
-                                                @if (r.Status == PurchaseStatus.Pending)
-                                                {
-                                                    <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+                                                @{
+                                                    var badgeClass = r.Status switch
+                                                    {
+                                                        PurchaseStatus.Pending => "bg-warning text-dark",
+                                                        PurchaseStatus.Completed => "bg-success",
+                                                        PurchaseStatus.Rejected => "bg-danger",
+                                                        PurchaseStatus.Cancelled => "bg-secondary",
+                                                        _ => "bg-secondary"
+                                                    };
+
+                                                    var localized = r.Status switch
+                                                    {
+                                                        PurchaseStatus.Pending => L["Status.Pending"],
+                                                        PurchaseStatus.Completed => L["Status.Completed"],
+                                                        PurchaseStatus.Rejected => L["Status.Rejected"],
+                                                        PurchaseStatus.Cancelled => L["Status.Cancelled"],
+                                                        _ => L["Status.Unknown", r.Status.ToString()]
+                                                    };
                                                 }
-                                                else if (r.Status == PurchaseStatus.Completed)
-                                                {
-                                                    <span class="badge bg-success">@L["Status.Completed"]</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge bg-danger">@L["Status.Rejected"]</span>
-                                                }
+                                                <span class="badge @badgeClass" aria-label="@localized">@localized</span>
                                             </div>
 
                                             <div class="d-flex gap-2 mt-2 mt-sm-0">
@@ -148,13 +142,13 @@
                                 <td class="align-middle">@r.Id</td>
                                 <td class="align-middle">
                                     <div class="d-flex align-items-center gap-2">
-                                        @if (!string.IsNullOrEmpty(r.CourseCoverUrl))
-                                        {
-                                            <img src="@r.CourseCoverUrl" alt="@r.CourseTitle" class="thumb-table rounded" />
-                                        }
                                         <div class="ms-1" style="min-width:0;">
                                             <div class="fw-semibold text-truncate" style="max-width:320px;">@r.CourseTitle</div>
                                             <div class="small text-muted text-truncate">@crop(r.CourseTitle, 60)</div>
+                                            @if (!string.IsNullOrEmpty(r.CategoryName))
+                                            {
+                                                <div class="small text-muted">@r.CategoryName</div>
+                                            }
                                         </div>
                                     </div>
                                 </td>
@@ -167,18 +161,26 @@
                                 <td class="align-middle text-end fw-semibold">@r.AmountLabel</td>
 
                                 <td class="align-middle">
-                                    @if (r.Status == PurchaseStatus.Pending)
-                                    {
-                                        <span class="badge bg-warning text-dark">@L["Status.Pending"]</span>
+                                    @{
+                                        var badgeClass = r.Status switch
+                                        {
+                                            PurchaseStatus.Pending => "bg-warning text-dark",
+                                            PurchaseStatus.Completed => "bg-success",
+                                            PurchaseStatus.Rejected => "bg-danger",
+                                            PurchaseStatus.Cancelled => "bg-secondary",
+                                            _ => "bg-secondary"
+                                        };
+
+                                        var localized = r.Status switch
+                                        {
+                                            PurchaseStatus.Pending => L["Status.Pending"],
+                                            PurchaseStatus.Completed => L["Status.Completed"],
+                                            PurchaseStatus.Rejected => L["Status.Rejected"],
+                                            PurchaseStatus.Cancelled => L["Status.Cancelled"],
+                                            _ => L["Status.Unknown", r.Status.ToString()]
+                                        };
                                     }
-                                    else if (r.Status == PurchaseStatus.Completed)
-                                    {
-                                        <span class="badge bg-success">@L["Status.Completed"]</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-danger">@L["Status.Rejected"]</span>
-                                    }
+                                    <span class="badge @badgeClass" aria-label="@localized">@localized</span>
                                 </td>
 
                                 <td class="align-middle small text-muted">@r.RequestDateUtc.ToLocalTime().ToString("g")</td>
@@ -230,6 +232,8 @@
         </nav>
     </div>
 </div>
+
+
 
 
 

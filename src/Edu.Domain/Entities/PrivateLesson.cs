@@ -12,13 +12,10 @@ namespace Edu.Domain.Entities
         public string? YouTubeVideoId { get; set; }
         public string? VideoUrl { get; set; }
         public int Order { get; set; }
-
         public PrivateCourse? PrivateCourse { get; set; }
         public PrivateModule? PrivateModule { get; set; }
         public ICollection<FileResource> Files { get; set; } = new List<FileResource>();
     }
-
-
     public class PrivateLessonConfiguration : IEntityTypeConfiguration<PrivateLesson>
     {
         public void Configure(EntityTypeBuilder<PrivateLesson> builder)

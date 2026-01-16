@@ -19,7 +19,14 @@
             }
             <div>
                 <h3 class="mb-1">@curriculum.Title</h3>
-                <div class="small text-muted">@L["Admin.Level"]: @LocalizationHelpers.GetLocalizedLevelName(curriculum.Level)</div>
+                @{
+                    var levelMap = ViewBag.LevelDisplayMap as IDictionary<int, string> ?? new Dictionary<int, string>();
+                }
+
+                <div class="small text-muted">
+                    @L["Admin.Level"]:
+                    @(levelMap.TryGetValue(curriculum.LevelId, out var lvl) ? lvl : "—")
+                </div>
                 <p class="mt-2 text-muted">@crop(curriculum.Description, 260)</p>
             </div>
         </div>
@@ -170,13 +177,39 @@
 
                                             @if (lesson.Files != null && lesson.Files.Any())
                                             {
-                                                <div class="mt-2">
+                                                <div class="mt-2 d-flex flex-column gap-1">
                                                     @foreach (var f in lesson.Files)
                                                     {
-                                                        <a asp-controller="FileResources" asp-action="Download" asp-route-id="@f.Id" asp-area="Admin" class="me-2 small">@f.Name</a>
+                                                        <div class="d-flex align-items-center gap-2 small">
+                                                            <a asp-controller="FileResources"
+                                                               asp-action="Download"
+                                                               asp-route-id="@f.Id"
+                                                               asp-area="Admin"
+                                                               class="text-decoration-none">
+                                                                @f.Name
+                                                            </a>
+
+                                                            @* Delete button only for Admin or Teacher *@
+                                                            @if (User.IsInRole("Admin"))
+                                                            {
+                                                                <form asp-controller="FileResources"
+                                                                      asp-action="Delete"
+                                                                      asp-area="Admin"
+                                                                      method="post"
+                                                                      class="d-inline"
+                                                                      onsubmit="return confirm('@L["Admin.ConfirmDeleteFile"]');">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <input type="hidden" name="id" value="@f.Id" />
+                                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded">
+                                                                        @L["Button.Delete"]
+                                                                    </button>
+                                                                </form>
+                                                            }
+                                                        </div>
                                                     }
                                                 </div>
                                             }
+
                                         </div>
                                     </div>
                                 }

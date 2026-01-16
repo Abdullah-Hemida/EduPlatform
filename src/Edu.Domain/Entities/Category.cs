@@ -6,7 +6,10 @@ namespace Edu.Domain.Entities
     public class Category
     {
         public int Id { get; set; }
-        public string Name { get; set; } = null!;
+        // multilingual names
+        public string NameEn { get; set; } = string.Empty;
+        public string NameIt { get; set; } = string.Empty;
+        public string NameAr { get; set; } = string.Empty;
         public ICollection<PrivateCourse>? PrivateCourses { get; set; }
     }
 
@@ -15,7 +18,10 @@ namespace Edu.Domain.Entities
         public void Configure(EntityTypeBuilder<Category> builder)
         {
             builder.HasKey(c => c.Id);
-            builder.Property(c => c.Name).IsRequired().HasMaxLength(150);
+            // multilingual columns limits
+            builder.Property(c => c.NameEn).IsRequired().HasMaxLength(150);
+            builder.Property(c => c.NameIt).IsRequired().HasMaxLength(150);
+            builder.Property(c => c.NameAr).IsRequired().HasMaxLength(150);
         }
     }
 }

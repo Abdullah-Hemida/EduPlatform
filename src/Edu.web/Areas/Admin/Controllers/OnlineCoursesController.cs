@@ -1,4 +1,5 @@
-﻿using Edu.Application.IServices;
+﻿using System.Globalization;
+using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
@@ -9,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -35,22 +36,51 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // GET: Admin/OnlineCourses
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(CancellationToken cancellationToken = default)
         {
             var courses = await _db.OnlineCourses
                 .AsNoTracking()
                 .OrderByDescending(c => c.Id)
-                .ToListAsync();
+                .Select(c => new
+                {
+                    c.Id,
+                    Title = c.Title ?? string.Empty,
+                    c.Description,
+                    c.PricePerMonth,
+                    c.DurationMonths,
+                    c.IsPublished,
+                    CoverImageKey = c.CoverImageKey
+                })
+                .ToListAsync(cancellationToken);
 
-            var vm = courses.Select(c => new OnlineCourseListItemVm
+            // Resolve cover URLs concurrently (best-effort). If key missing, result is null.
+            var coverUrlTasks = courses.Select(c =>
+                string.IsNullOrEmpty(c.CoverImageKey)
+                    ? Task.FromResult<string?>(null)
+                    : _fileStorage.GetPublicUrlAsync(c.CoverImageKey)
+            ).ToArray();
+
+            string?[] coverUrls;
+            try
+            {
+                coverUrls = await Task.WhenAll(coverUrlTasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "One or more cover URL lookups failed in OnlineCourses.Index");
+                // fallback: nulls
+                coverUrls = Enumerable.Range(0, courses.Count).Select(_ => (string?)null).ToArray();
+            }
+
+            var vm = courses.Select((c, idx) => new OnlineCourseListItemVm
             {
                 Id = c.Id,
-                Title = c.Title ?? "",
+                Title = c.Title,
                 Description = c.Description,
                 PricePerMonthLabel = c.PricePerMonth.ToEuro(),
                 DurationMonths = c.DurationMonths,
                 IsPublished = c.IsPublished,
-                CoverPublicUrl = string.IsNullOrEmpty(c.CoverImageKey) ? null : _fileStorage.GetPublicUrlAsync(c.CoverImageKey).Result // small sync use for projection
+                CoverPublicUrl = coverUrls.ElementAtOrDefault(idx)
             }).ToList();
 
             ViewData["ActivePage"] = "OnlineCourses";
@@ -58,12 +88,12 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // GET: Admin/OnlineCourses/Create
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(CancellationToken cancellationToken = default)
         {
             var vm = new OnlineCourseCreateVm
             {
                 DurationMonths = 1,
-                Levels = await LoadLevelsSelectListAsync()
+                Levels = await LoadLevelsSelectListAsync(cancellationToken)
             };
             ViewData["ActivePage"] = "OnlineCourses";
             return View(vm);
@@ -71,17 +101,24 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         // POST: Admin/OnlineCourses/Create
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(OnlineCourseCreateVm vm)
+        public async Task<IActionResult> Create(OnlineCourseCreateVm vm, CancellationToken cancellationToken = default)
         {
-            vm.Levels = await LoadLevelsSelectListAsync();
+            vm.Levels = await LoadLevelsSelectListAsync(cancellationToken);
 
             if (!ModelState.IsValid) return View(vm);
 
             string? coverKey = null;
             if (vm.CoverImage != null && vm.CoverImage.Length > 0)
             {
-                // save image to storage (folder "onlinecourse-covers")
-                coverKey = await _fileStorage.SaveFileAsync(vm.CoverImage, "onlinecourse-covers");
+                try
+                {
+                    coverKey = await _fileStorage.SaveFileAsync(vm.CoverImage, "onlinecourse-covers");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed saving cover image for new online course");
+                    // continue without cover
+                }
             }
 
             var duration = Math.Max(1, vm.DurationMonths);
@@ -101,36 +138,45 @@ namespace Edu.Web.Areas.Admin.Controllers
             };
 
             _db.OnlineCourses.Add(course);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             // create months
-            var months = new List<OnlineCourseMonth>();
-            for (int i = 1; i <= duration; i++)
+            if (duration > 0)
             {
-                months.Add(new OnlineCourseMonth
+                var months = new List<OnlineCourseMonth>(duration);
+                for (int i = 1; i <= duration; i++)
                 {
-                    OnlineCourseId = course.Id,
-                    MonthIndex = i,
-                    MonthStartUtc = null,
-                    MonthEndUtc = null,
-                    IsReadyForPayment = false
-                });
-            }
-            if (months.Any())
-            {
+                    months.Add(new OnlineCourseMonth
+                    {
+                        OnlineCourseId = course.Id,
+                        MonthIndex = i,
+                        MonthStartUtc = null,
+                        MonthEndUtc = null,
+                        IsReadyForPayment = false
+                    });
+                }
                 _db.OnlineCourseMonths.AddRange(months);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
             }
 
-            TempData["Success"] = _L["OnlineCourse.Created"].Value ?? "Course created.";
+            TempData["Success"] = "OnlineCourse.Created";
             return RedirectToAction(nameof(Details), new { id = course.Id });
         }
 
         // GET: Admin/OnlineCourses/Edit/5
-        public async Task<IActionResult> Edit(int id)
+        public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken = default)
         {
-            var c = await _db.OnlineCourses.FirstOrDefaultAsync(x => x.Id == id);
+            var c = await _db.OnlineCourses
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
             if (c == null) return NotFound();
+
+            string? existingCover = null;
+            if (!string.IsNullOrEmpty(c.CoverImageKey))
+            {
+                try { existingCover = await _fileStorage.GetPublicUrlAsync(c.CoverImageKey); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to resolve cover URL for course {CourseId}", id); existingCover = null; }
+            }
 
             var vm = new OnlineCourseEditVm
             {
@@ -143,8 +189,8 @@ namespace Edu.Web.Areas.Admin.Controllers
                 LevelId = c.LevelId,
                 TeacherName = c.TeacherName,
                 IsPublished = c.IsPublished,
-                ExistingCoverPublicUrl = string.IsNullOrEmpty(c.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(c.CoverImageKey),
-                Levels = await LoadLevelsSelectListAsync()
+                ExistingCoverPublicUrl = existingCover,
+                Levels = await LoadLevelsSelectListAsync(cancellationToken)
             };
             ViewData["ActivePage"] = "OnlineCourses";
             return View(vm);
@@ -152,14 +198,14 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         // POST: Admin/OnlineCourses/Edit
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(OnlineCourseEditVm vm)
+        public async Task<IActionResult> Edit(OnlineCourseEditVm vm, CancellationToken cancellationToken = default)
         {
-            vm.Levels = await LoadLevelsSelectListAsync();
+            vm.Levels = await LoadLevelsSelectListAsync(cancellationToken);
             if (!ModelState.IsValid) return View(vm);
 
             var c = await _db.OnlineCourses
                 .Include(x => x.Months)
-                .FirstOrDefaultAsync(x => x.Id == vm.Id);
+                .FirstOrDefaultAsync(x => x.Id == vm.Id, cancellationToken);
 
             if (c == null) return NotFound();
 
@@ -168,9 +214,16 @@ namespace Edu.Web.Areas.Admin.Controllers
             {
                 if (!string.IsNullOrEmpty(c.CoverImageKey))
                 {
-                    try { await _fileStorage.DeleteFileAsync(c.CoverImageKey); } catch { /* swallow */ }
+                    try { await _fileStorage.DeleteFileAsync(c.CoverImageKey); } catch (Exception ex) { _logger.LogWarning(ex, "Failed deleting old cover {Key}", c.CoverImageKey); }
                 }
-                c.CoverImageKey = await _fileStorage.SaveFileAsync(vm.NewCoverImage, "onlinecourse-covers");
+                try
+                {
+                    c.CoverImageKey = await _fileStorage.SaveFileAsync(vm.NewCoverImage, "onlinecourse-covers");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed saving new cover for course {CourseId}", c.Id);
+                }
             }
 
             // update fields
@@ -201,11 +254,11 @@ namespace Edu.Web.Areas.Admin.Controllers
                     var toRemove = c.Months.Where(m => m.MonthIndex > newDuration).ToList();
                     foreach (var m in toRemove)
                     {
-                        var hasLessons = await _db.OnlineCourseLessons.AnyAsync(l => l.OnlineCourseMonthId == m.Id);
-                        var hasPayments = await _db.OnlineEnrollmentMonthPayments.AnyAsync(pm => pm.OnlineCourseMonthId == m.Id);
+                        var hasLessons = await _db.OnlineCourseLessons.AnyAsync(l => l.OnlineCourseMonthId == m.Id, cancellationToken);
+                        var hasPayments = await _db.OnlineEnrollmentMonthPayments.AnyAsync(pm => pm.OnlineCourseMonthId == m.Id, cancellationToken);
                         if (hasLessons || hasPayments)
                         {
-                            ModelState.AddModelError("", _L["CannotShrinkDurationHasData"].Value ?? "Cannot reduce duration because some months contain lessons or payments.");
+                            ModelState.AddModelError(string.Empty, _L["CannotShrinkDurationHasData"].Value ?? "Cannot reduce duration because some months contain lessons or payments.");
                             return View(vm);
                         }
                         _db.OnlineCourseMonths.Remove(m);
@@ -220,90 +273,128 @@ namespace Edu.Web.Areas.Admin.Controllers
             c.IsPublished = vm.IsPublished;
 
             _db.OnlineCourses.Update(c);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
-            TempData["Success"] = _L["OnlineCourse.Updated"].Value ?? "Course updated.";
+            TempData["Success"] = "OnlineCourse.Updated";
             return RedirectToAction(nameof(Details), new { id = c.Id });
         }
 
         // GET: Admin/OnlineCourses/Details/5
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             var course = await _db.OnlineCourses
                 .Include(c => c.Months)
-                .ThenInclude(m => m.MonthPayments)
+                    .ThenInclude(m => m.MonthPayments)
                 .Include(c => c.Lessons)
-                .FirstOrDefaultAsync(c => c.Id == id);
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
             if (course == null) return NotFound();
+
             var lessonIds = course.Lessons.Select(l => l.Id).ToList();
+
             List<FileResource> files = new();
             if (lessonIds.Any())
             {
                 files = await _db.FileResources
-                                 .AsNoTracking()
-                                 .Where(fr => fr.OnlineCourseLessonId != null && lessonIds.Contains(fr.OnlineCourseLessonId.Value))
-                                 .ToListAsync();
+                    .AsNoTracking()
+                    .Where(fr => fr.OnlineCourseLessonId != null && lessonIds.Contains(fr.OnlineCourseLessonId.Value))
+                    .ToListAsync(cancellationToken);
+            }
+
+            // resolve file public URLs concurrently (best-effort)
+            var fileUrlTasks = files.Select(fr =>
+            {
+                if (!string.IsNullOrEmpty(fr.StorageKey))
+                    return _fileStorage.GetPublicUrlAsync(fr.StorageKey);
+                // if no storage key, prefer stored FileUrl (may be null)
+                return Task.FromResult(fr.FileUrl);
+            }).ToArray();
+
+            string?[] fileUrls;
+            try
+            {
+                fileUrls = await Task.WhenAll(fileUrlTasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed resolving some file public URLs for course {CourseId}", id);
+                fileUrls = Enumerable.Range(0, files.Count).Select(_ => (string?)null).ToArray();
+            }
+
+            // Create a map fileId -> url
+            var fileIdToUrl = files.Select((f, idx) => new { f.Id, Url = fileUrls.ElementAtOrDefault(idx) })
+                                   .ToDictionary(x => x.Id, x => x.Url);
+
+            var monthsVm = course.Months.OrderBy(m => m.MonthIndex).Select(m => new OnlineCourseMonthVm
+            {
+                Id = m.Id,
+                MonthIndex = m.MonthIndex,
+                IsReadyForPayment = m.IsReadyForPayment,
+                LessonsCount = course.Lessons.Count(l => l.OnlineCourseMonthId == m.Id),
+            }).ToList();
+
+            var lessonsVm = course.Lessons.OrderBy(l => l.Order).Select(l =>
+            {
+                var attached = files
+                    .Where(f => f.OnlineCourseLessonId == l.Id)
+                    .Select(ff => new OnlineCourseLessonFileVm
+                    {
+                        Id = ff.Id,
+                        FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? string.Empty),
+                        PublicUrl = fileIdToUrl.TryGetValue(ff.Id, out var u) ? u : null
+                    }).ToList();
+
+                return new OnlineCourseLessonVm
+                {
+                    Id = l.Id,
+                    Title = l.Title,
+                    MeetUrl = l.MeetUrl,
+                    RecordedVideoUrl = l.RecordedVideoUrl,
+                    Notes = l.Notes,
+                    ScheduledUtc = l.ScheduledUtc,
+                    Order = l.Order,
+                    OnlineCourseMonthId = l.OnlineCourseMonthId,
+                    Attachments = attached
+                };
+            }).ToList();
+
+            string? coverUrl = null;
+            if (!string.IsNullOrEmpty(course.CoverImageKey))
+            {
+                try { coverUrl = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey); } catch (Exception ex) { _logger.LogWarning(ex, "Failed resolving cover for course {CourseId}", id); }
             }
 
             var vm = new OnlineCourseDetailsVm
             {
                 Id = course.Id,
-                Title = course.Title ?? "",
+                Title = course.Title ?? string.Empty,
                 Description = course.Description,
-                CoverPublicUrl = string.IsNullOrEmpty(course.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(course.CoverImageKey),
+                CoverPublicUrl = coverUrl,
                 IntroductionVideoUrl = course.IntroductionVideoUrl,
                 TeacherName = course.TeacherName,
                 PricePerMonthLabel = course.PricePerMonth.ToEuro(),
                 DurationMonths = course.DurationMonths,
                 LevelId = course.LevelId,
                 IsPublished = course.IsPublished,
-                Months = course.Months.OrderBy(m => m.MonthIndex).Select(m => new OnlineCourseMonthVm
-                {
-                    Id = m.Id,
-                    MonthIndex = m.MonthIndex,
-                    IsReadyForPayment = m.IsReadyForPayment,
-                    LessonsCount = course.Lessons.Count(l => l.OnlineCourseMonthId == m.Id),
-                }).ToList(),
-                Lessons = course.Lessons.OrderBy(l => l.Order).Select(l =>
-                {
-                    var attached = files
-                        .Where(f => f.OnlineCourseLessonId == l.Id)
-                        .Select(ff => new OnlineCourseLessonFileVm
-                        {
-                            Id = ff.Id,
-                            FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
-                            PublicUrl = !string.IsNullOrEmpty(ff.StorageKey) ? _fileStorage.GetPublicUrlAsync(ff.StorageKey).Result
-                                        : (ff.FileUrl ?? null)
-                        }).ToList();
-
-                    return new OnlineCourseLessonVm
-                    {
-                        Id = l.Id,
-                        Title = l.Title,
-                        MeetUrl = l.MeetUrl,
-                        RecordedVideoUrl = l.RecordedVideoUrl,
-                        Notes = l.Notes,
-                        ScheduledUtc = l.ScheduledUtc,
-                        Order = l.Order,
-                        OnlineCourseMonthId = l.OnlineCourseMonthId,
-                        Attachments = attached
-                    };
-                }).ToList()
+                Months = monthsVm,
+                Lessons = lessonsVm
             };
-            var level = await _db.Levels.FindAsync(course.LevelId);
+
+            var level = await _db.Levels.FindAsync(new object[] { course.LevelId }, cancellationToken);
             vm.LevelName = LocalizationHelpers.GetLocalizedLevelName(level);
+
             ViewData["ActivePage"] = "OnlineCourses";
             return View(vm);
         }
 
         // POST: Admin/OnlineCourses/AddMonth
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddMonth(int courseId)
+        public async Task<IActionResult> AddMonth(int courseId, CancellationToken cancellationToken = default)
         {
             var course = await _db.OnlineCourses
                 .Include(c => c.Months)
-                .FirstOrDefaultAsync(c => c.Id == courseId);
+                .FirstOrDefaultAsync(c => c.Id == courseId, cancellationToken);
 
             if (course == null) return NotFound();
 
@@ -315,23 +406,23 @@ namespace Edu.Web.Areas.Admin.Controllers
                 IsReadyForPayment = false
             };
             _db.OnlineCourseMonths.Add(month);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
-            TempData["Success"] = _L["OnlineCourse.MonthAdded"].Value ?? "Month added.";
+            TempData["Success"] = "OnlineCourse.MonthAdded";
             return RedirectToAction(nameof(Details), new { id = courseId });
         }
 
         // POST: Admin/OnlineCourses/AddLesson (supports attachments)
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddLesson(OnlineCourseLessonCreateVm vm)
+        public async Task<IActionResult> AddLesson(OnlineCourseLessonCreateVm vm, CancellationToken cancellationToken = default)
         {
             // server side validation
             if (string.IsNullOrWhiteSpace(vm.Title))
-                return BadRequest(new { success = false, message = _L["ReactiveCourse.Validation.TitleRequired"].Value });
+                return BadRequest(new { success = false, message = _L["ReactiveCourse.Validation.TitleRequired"].Value ?? "Title required." });
 
-            // optional: validate month belongs to course
-            var month = await _db.OnlineCourseMonths.Include(m => m.OnlineCourse).FirstOrDefaultAsync(m => m.Id == vm.OnlineCourseMonthId);
-            if (month == null) return BadRequest(new { success = false, message = _L["ReactiveCourse.MonthNotFound"].Value });
+            // validate month belongs to course
+            var month = await _db.OnlineCourseMonths.Include(m => m.OnlineCourse).FirstOrDefaultAsync(m => m.Id == vm.OnlineCourseMonthId, cancellationToken);
+            if (month == null) return BadRequest(new { success = false, message = _L["ReactiveCourse.MonthNotFound"].Value ?? "Month not found." });
 
             var lesson = new OnlineCourseLesson
             {
@@ -346,7 +437,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             };
 
             _db.OnlineCourseLessons.Add(lesson);
-            await _db.SaveChangesAsync(); // need id for attachments
+            await _db.SaveChangesAsync(cancellationToken); // need id for attachments
 
             // attachments
             if (vm.Attachments != null && vm.Attachments.Any())
@@ -370,10 +461,10 @@ namespace Edu.Web.Areas.Admin.Controllers
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed saving lesson attachment");
+                        _logger.LogWarning(ex, "Failed saving lesson attachment for lesson {LessonTempId}", lesson.Id);
                     }
                 }
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
             }
 
             return Json(new { success = true, lessonId = lesson.Id });
@@ -381,11 +472,11 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         // POST: Admin/OnlineCourses/EditLesson
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditLesson(OnlineCourseLessonEditVm vm)
+        public async Task<IActionResult> EditLesson(OnlineCourseLessonEditVm vm, CancellationToken cancellationToken = default)
         {
-            if (vm == null || vm.Id <= 0) return BadRequest(new { success = false, message = _L["ReactiveCourse.InvalidLessonId"].Value });
+            if (vm == null || vm.Id <= 0) return BadRequest(new { success = false, message = _L["ReactiveCourse.InvalidLessonId"].Value ?? "Invalid lesson id." });
 
-            var lesson = await _db.OnlineCourseLessons.FirstOrDefaultAsync(l => l.Id == vm.Id);
+            var lesson = await _db.OnlineCourseLessons.FirstOrDefaultAsync(l => l.Id == vm.Id, cancellationToken);
             if (lesson == null) return NotFound();
 
             // update fields
@@ -397,7 +488,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             lesson.Order = vm.Order;
 
             _db.OnlineCourseLessons.Update(lesson);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             if (vm.NewAttachments != null && vm.NewAttachments.Any())
             {
@@ -420,10 +511,10 @@ namespace Edu.Web.Areas.Admin.Controllers
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed saving lesson attachment");
+                        _logger.LogWarning(ex, "Failed saving lesson attachment on edit for lesson {LessonId}", lesson.Id);
                     }
                 }
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
             }
 
             return Json(new { success = true });
@@ -431,7 +522,7 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         // POST: Admin/OnlineCourses/DeleteLesson
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteLesson(int lessonId)
+        public async Task<IActionResult> DeleteLesson(int lessonId, CancellationToken cancellationToken = default)
         {
             if (lessonId <= 0)
             {
@@ -443,7 +534,7 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             var lesson = await _db.OnlineCourseLessons
                 .Include(l => l.OnlineCourse)
-                .FirstOrDefaultAsync(l => l.Id == lessonId);
+                .FirstOrDefaultAsync(l => l.Id == lessonId, cancellationToken);
 
             if (lesson == null)
             {
@@ -453,11 +544,11 @@ namespace Edu.Web.Areas.Admin.Controllers
                 return NotFound();
             }
 
-            using var tx = await _db.Database.BeginTransactionAsync();
+            using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
             try
             {
                 // delete attachments from storage and DB
-                var files = await _db.FileResources.Where(f => f.OnlineCourseLessonId == lessonId).ToListAsync();
+                var files = await _db.FileResources.Where(f => f.OnlineCourseLessonId == lessonId).ToListAsync(cancellationToken);
                 foreach (var fr in files)
                 {
                     try
@@ -476,56 +567,58 @@ namespace Edu.Web.Areas.Admin.Controllers
 
                 // then remove the lesson itself
                 _db.OnlineCourseLessons.Remove(lesson);
-                await _db.SaveChangesAsync();
-                await tx.CommitAsync();
+                await _db.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
 
-                // success response
                 if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
                     return Json(new { success = true, lessonId = lessonId });
 
-                TempData["Success"] = _L["OnlineCourse.LessonDeleted"].Value ?? "Lesson deleted.";
+                TempData["Success"] = "OnlineCourse.LessonDeleted";
                 return RedirectToAction(nameof(Details), new { area = "Admin", id = lesson.OnlineCourseId });
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync();
+                await tx.RollbackAsync(cancellationToken);
                 _logger.LogError(ex, "Failed deleting lesson {LessonId}", lessonId);
 
                 if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
                     return Json(new { success = false, message = _L["Admin.OperationFailed"].Value ?? "Operation failed." });
 
-                TempData["Error"] = _L["Admin.OperationFailed"].Value ?? "Operation failed.";
+                TempData["Error"] = "Admin.OperationFailed";
                 return RedirectToAction(nameof(Details), new { area = "Admin", id = lesson.OnlineCourseId });
             }
         }
 
         // POST: Admin/OnlineCourses/SetMonthReady
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> SetMonthReady(int monthId, bool ready)
+        public async Task<IActionResult> SetMonthReady(int monthId, bool ready, CancellationToken cancellationToken = default)
         {
-            var month = await _db.OnlineCourseMonths.Include(m => m.Lessons).FirstOrDefaultAsync(m => m.Id == monthId);
+            var month = await _db.OnlineCourseMonths.Include(m => m.Lessons).FirstOrDefaultAsync(m => m.Id == monthId, cancellationToken);
             if (month == null) return NotFound();
 
             if (ready)
             {
                 var missing = month.Lessons.Any(l => string.IsNullOrEmpty(l.MeetUrl));
-                if (missing) { TempData["Error"] = _L["AllLessonsMustHaveMeetUrlBeforeReady"].Value ?? "All lessons must have Meet URL before marking ready."; return RedirectToAction(nameof(Details), new { id = month.OnlineCourseId }); }
+                if (missing)
+                {
+                    TempData["Error"] = "AllLessonsMustHaveMeetUrlBeforeReady";
+                    return RedirectToAction(nameof(Details), new { id = month.OnlineCourseId });
+                }
             }
 
             month.IsReadyForPayment = ready;
             _db.OnlineCourseMonths.Update(month);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             TempData["Success"] = ready ? _L["OnlineCourse.MonthNowReady"].Value ?? "Month now ready" : _L["OnlineCourse.MonthNoLongerReady"].Value ?? "Month not ready";
             return RedirectToAction(nameof(Details), new { id = month.OnlineCourseId });
         }
 
         // GET: Admin/OnlineCourses/GetCover/5
-        // Redirect to the public URL (so <img src="/Admin/OnlineCourses/GetCover/5"> works)
         [HttpGet]
-        public async Task<IActionResult> GetCover(int id)
+        public async Task<IActionResult> GetCover(int id, CancellationToken cancellationToken = default)
         {
-            var c = await _db.OnlineCourses.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            var c = await _db.OnlineCourses.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
             if (c == null || string.IsNullOrEmpty(c.CoverImageKey)) return NotFound();
             var url = await _fileStorage.GetPublicUrlAsync(c.CoverImageKey);
             if (string.IsNullOrEmpty(url)) return NotFound();
@@ -534,19 +627,19 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         // POST: Admin/OnlineCourses/Delete/5
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken = default)
         {
             var course = await _db.OnlineCourses
                 .Include(c => c.Months)
                 .Include(c => c.Lessons)
-                .FirstOrDefaultAsync(c => c.Id == id);
+                .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
             if (course == null) return NotFound();
 
             // checks: don't delete if payments or enrollments exist (policy same as reactive)
             var monthIds = course.Months.Select(m => m.Id).ToList();
-            var hasPayments = monthIds.Any() && await _db.OnlineEnrollmentMonthPayments.AnyAsync(pm => monthIds.Contains(pm.OnlineCourseMonthId));
-            var hasEnrollments = await _db.OnlineEnrollments.AnyAsync(e => e.OnlineCourseId == id);
+            var hasPayments = monthIds.Any() && await _db.OnlineEnrollmentMonthPayments.AnyAsync(pm => monthIds.Contains(pm.OnlineCourseMonthId), cancellationToken);
+            var hasEnrollments = await _db.OnlineEnrollments.AnyAsync(e => e.OnlineCourseId == id, cancellationToken);
             var hasLessons = course.Lessons.Any();
             var lessonIds = course.Lessons.Select(l => l.Id).ToList();
 
@@ -557,22 +650,22 @@ namespace Edu.Web.Areas.Admin.Controllers
             }
 
             // delete attachments & cover
-            var files = await _db.FileResources.Where(f => f.OnlineCourseLessonId != null && lessonIds.Contains(f.OnlineCourseLessonId.Value)).ToListAsync();
+            var files = await _db.FileResources.Where(f => f.OnlineCourseLessonId != null && lessonIds.Contains(f.OnlineCourseLessonId.Value)).ToListAsync(cancellationToken);
             foreach (var f in files)
             {
-                try { if (!string.IsNullOrEmpty(f.StorageKey)) await _fileStorage.DeleteFileAsync(f.StorageKey); } catch { }
+                try { if (!string.IsNullOrEmpty(f.StorageKey)) await _fileStorage.DeleteFileAsync(f.StorageKey); } catch (Exception ex) { _logger.LogWarning(ex, "Failed deleting file {Key}", f.StorageKey); }
             }
-            _db.FileResources.RemoveRange(files);
+            if (files.Any()) _db.FileResources.RemoveRange(files);
 
             if (!string.IsNullOrEmpty(course.CoverImageKey))
             {
-                try { await _fileStorage.DeleteFileAsync(course.CoverImageKey); } catch { }
+                try { await _fileStorage.DeleteFileAsync(course.CoverImageKey); } catch (Exception ex) { _logger.LogWarning(ex, "Failed deleting cover {Key}", course.CoverImageKey); }
             }
 
             _db.OnlineCourseLessons.RemoveRange(course.Lessons);
             _db.OnlineCourseMonths.RemoveRange(course.Months);
             _db.OnlineCourses.Remove(course);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             TempData["Success"] = _L["OnlineCourse.Deleted"].Value ?? "Course deleted.";
             return RedirectToAction(nameof(Index));
@@ -580,9 +673,9 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         #region Helpers
 
-        private async Task<List<SelectListItem>> LoadLevelsSelectListAsync()
+        private async Task<List<SelectListItem>> LoadLevelsSelectListAsync(CancellationToken cancellationToken = default)
         {
-            var levels = await _db.Levels.AsNoTracking().OrderBy(l => l.Order).ToListAsync();
+            var levels = await _db.Levels.AsNoTracking().OrderBy(l => l.Order).ToListAsync(cancellationToken);
             var list = levels.Select(l => new SelectListItem
             {
                 Value = l.Id.ToString(),
@@ -594,5 +687,6 @@ namespace Edu.Web.Areas.Admin.Controllers
         #endregion
     }
 }
+
 
 

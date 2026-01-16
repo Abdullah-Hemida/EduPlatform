@@ -11,7 +11,7 @@ public class Booking
     public string? TeacherId { get; set; }
     public int? SlotId { get; set; }         
     public DateTime RequestedDateUtc { get; set; } = DateTime.UtcNow;
-    public DateTime? PaidAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? PaidAtUtc { get; set; }
     public string? MeetUrl { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.Pending;
     public string? Notes { get; set; }
@@ -19,7 +19,6 @@ public class Booking
     public Student? Student { get; set; }
     public Teacher? Teacher { get; set; }
     public Slot? Slot { get; set; }
-    public ICollection<BookingModerationLog> ModerationLogs { get; set; } = new List<BookingModerationLog>();
 }
 
 public class BookingConfiguration : IEntityTypeConfiguration<Booking>
@@ -31,7 +30,6 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         b.HasOne(x => x.Teacher).WithMany(t => t.Bookings).HasForeignKey(x => x.TeacherId);
         b.HasOne(x => x.Slot).WithMany(s => s.Bookings).HasForeignKey(x => x.SlotId).OnDelete(DeleteBehavior.SetNull);
         b.Property(x => x.Price).HasColumnType("decimal(18,2)");
-        b.Property(x => x.PaidAtUtc).HasColumnType("datetime2");
     }
 }
 

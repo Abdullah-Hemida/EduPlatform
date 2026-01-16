@@ -22,11 +22,11 @@
 
     <!-- Filters Form -->
     <div class="col-12 col-md-8 col-lg-6">
-        <form method="get" asp-controller="PrivateCourses" asp-action="Index" class="w-100">
+        <form method="get" asp-controller="PrivateCourses" asp-action="Index" class="w-100" id="courseFilterForm">
 
             <!-- Toggle button (only on small screens) -->
             <div class="d-md-none mb-2">
-                <button class="btn btn-outline-secondary btn-sm w-100" 
+                <button class="btn btn-outline-secondary btn-sm w-100"
                         type="button"
                         data-bs-toggle="collapse"
                         data-bs-target="#courseFilters"
@@ -38,18 +38,33 @@
             <!-- Collapsible Filters -->
             <div class="collapse d-md-block" id="courseFilters">
                 <div class="row gx-2 gy-2">
-                    
+
                     <!-- Category -->
                     <div class="col-12 col-sm-auto">
-                        <select name="categoryId" class="form-select form-select-sm">
+                        <select id="categoryId" name="categoryId" class="form-select form-select-sm" aria-label="@L["Category"]"
+                                onchange="document.getElementById('courseFilterForm').submit()">
+                            @* First: All option *@
+                            @if (!Model.SelectedCategoryId.HasValue)
+                            {
+                                <option value="" selected>@L["All"]</option>
+                            }
+                            else
+                            {
+                                <option value="">@L["All"]</option>
+                            }
+
+                            @* Then category items (selected only when equals) *@
                             @foreach (var cat in Model.Categories)
                             {
-                                var selected = Model.SelectedCategoryId == cat.Id ? "selected" : "";
-                                <option value="@cat.Id" selected="@selected">
-                                    @cat.Name
-                                </option>
+                                if (Model.SelectedCategoryId.HasValue && Model.SelectedCategoryId.Value == cat.Id)
+                                {
+                                    <option value="@cat.Id" selected>@cat.Name</option>
+                                }
+                                else
+                                {
+                                    <option value="@cat.Id">@cat.Name</option>
+                                }
                             }
-                            <option value="">@L["All"]</option>
                         </select>
                     </div>
 
@@ -61,14 +76,13 @@
                                value="@q" />
                     </div>
 
-                   <!-- Audience select (All / For children / For adults) -->
+                    <!-- Audience select (All / For children / For adults) -->
                     @{
-                        // Build options and set Selected based on Model.ForChildrenOnly (bool?)
                         var audienceOptions = new List<SelectListItem>
                                         {
-                                        new SelectListItem { Text = L["All"].Value,               Value = "",    Selected = Model.ForChildrenOnly == null },
-                                        new SelectListItem { Text = L["Teacher.ForChildren"].Value, Value = "true",  Selected = Model.ForChildrenOnly == true },
-                                        new SelectListItem { Text = L["Teacher.ForAdults"].Value,   Value = "false", Selected = Model.ForChildrenOnly == false }
+                                        new SelectListItem { Text = L["All"].Value, Value = "", Selected = Model.ForChildrenOnly == null },
+                                        new SelectListItem { Text = L["Teacher.ForChildren"].Value, Value = "true", Selected = Model.ForChildrenOnly == true },
+                                        new SelectListItem { Text = L["Teacher.ForAdults"].Value, Value = "false", Selected = Model.ForChildrenOnly == false }
                                         };
                     }
 
@@ -78,7 +92,6 @@
                                 aria-label="@L["Teacher.ForChildren"]">
                         </select>
                     </div>
-
 
                     <!-- Search Button -->
                     <div class="col-12 col-sm-auto">
@@ -93,7 +106,6 @@
         </form>
     </div>
 </div>
-
 
 @if (!Model.Courses.Any())
 {
@@ -137,7 +149,8 @@ else
                             <div class="d-flex align-items-center justify-content-between gap-2">
                                 <div class="fw-semibold">@c.PriceLabel</div>
 
-                                @if (User.Identity?.IsAuthenticated ?? true)
+                                @* show details to authenticated users, otherwise show register button *@
+                                @if (User.Identity?.IsAuthenticated ?? false)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
                                        asp-action="Details"

@@ -47,27 +47,39 @@ namespace Edu.Web.Areas.Admin.Controllers
         // GET: Admin/OnlineEnrollments
         // supports ?q=search&page=1&pageSize=20
         [HttpGet]
-        public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
         {
             if (page < 1) page = 1;
             if (pageSize <= 0) pageSize = 20;
 
+            // Base query (no tracking)
             var baseQuery = _db.OnlineEnrollments
                 .AsNoTracking()
                 .Include(e => e.OnlineCourse)
                 .AsQueryable();
 
+            // If search provided, resolve matched user ids once to avoid correlated subqueries
             if (!string.IsNullOrWhiteSpace(q))
             {
-                q = q.Trim();
+                var term = q.Trim();
+                var like = $"%{term}%";
+
+                // Find users matching name or email (single query)
+                var matchedUserIds = await _db.Users
+                    .AsNoTracking()
+                    .Where(u => EF.Functions.Like(u.FullName, like) || EF.Functions.Like(u.Email, like))
+                    .Select(u => u.Id)
+                    .ToListAsync(cancellationToken);
+
+                // Filter by course title OR student id in matched users OR teacher name like
                 baseQuery = baseQuery.Where(e =>
-                    EF.Functions.Like(e.OnlineCourse.Title, $"%{q}%") ||
-                    (e.StudentId != null && _db.Users.Any(u => u.Id == e.StudentId && (EF.Functions.Like(u.FullName, $"%{q}%") || EF.Functions.Like(u.Email, $"%{q}%")))) ||
-                    (e.OnlineCourse != null && e.OnlineCourse.TeacherName != null && EF.Functions.Like(e.OnlineCourse.TeacherName, $"%{q}%"))
+                    EF.Functions.Like(e.OnlineCourse.Title!, like) ||
+                    (e.StudentId != null && matchedUserIds.Contains(e.StudentId)) ||
+                    (e.OnlineCourse != null && e.OnlineCourse.TeacherName != null && EF.Functions.Like(e.OnlineCourse.TeacherName, like))
                 );
             }
 
-            var totalCount = await baseQuery.CountAsync();
+            var totalCount = await baseQuery.CountAsync(cancellationToken);
 
             var items = await baseQuery
                 .OrderByDescending(e => e.CreatedAtUtc)
@@ -84,22 +96,39 @@ namespace Edu.Web.Areas.Admin.Controllers
                     PaidCount = e.MonthPayments.Count(m => m.Status == OnlineEnrollmentMonthPaymentStatus.Paid),
                     PendingCount = e.MonthPayments.Count(m => m.Status == OnlineEnrollmentMonthPaymentStatus.Pending)
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
+            // Batch fetch users (students)
             var studentIds = items.Select(i => i.StudentId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
 
-            var users = await _db.Users
-                .AsNoTracking()
-                .Where(u => studentIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.PhotoStorageKey, u.PhotoUrl })
-                .ToListAsync();
+            var usersDict = new Dictionary<string, (string? FullName, string? Email, string? Phone, string? PhotoKey, string? PhotoUrl)>(StringComparer.OrdinalIgnoreCase);
+            if (studentIds.Any())
+            {
+                var users = await _db.Users
+                    .AsNoTracking()
+                    .Where(u => studentIds.Contains(u.Id))
+                    .Select(u => new { u.Id, u.FullName, u.Email, Phone = u.PhoneNumber, u.PhotoStorageKey, u.PhotoUrl })
+                    .ToListAsync(cancellationToken);
 
-            var students = await _db.Students
-                .AsNoTracking()
-                .Where(s => studentIds.Contains(s.Id))
-                .Select(s => new { s.Id, s.GuardianPhoneNumber })
-                .ToListAsync();
-            // compute default region from admin UI culture (fallback to IT)
+                usersDict = users.ToDictionary(
+                    x => x.Id,
+                    x => ((string?)x.FullName, (string?)x.Email, (string?)x.Phone, (string?)x.PhotoStorageKey, (string?)x.PhotoUrl),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+
+            var studentsDict = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (studentIds.Any())
+            {
+                var studs = await _db.Students
+                    .AsNoTracking()
+                    .Where(s => studentIds.Contains(s.Id))
+                    .Select(s => new { s.Id, s.GuardianPhoneNumber })
+                    .ToListAsync(cancellationToken);
+
+                studentsDict = studs.ToDictionary(x => x.Id, x => x.GuardianPhoneNumber, StringComparer.OrdinalIgnoreCase);
+            }
+
+            // compute default region once
             string defaultRegion = "IT";
             try
             {
@@ -107,25 +136,26 @@ namespace Edu.Web.Areas.Admin.Controllers
                 if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
                     defaultRegion = regionInfo.TwoLetterISORegionName;
             }
-            catch
-            {
-                defaultRegion = "IT";
-            }
+            catch { defaultRegion = "IT"; }
+
+            // Map to VMs using dictionary lookups (O(1))
             var list = items.Select(i =>
             {
-                var stu = users.FirstOrDefault(u => u.Id == i.StudentId);
+                usersDict.TryGetValue(i.StudentId ?? string.Empty, out var stu);
+                studentsDict.TryGetValue(i.StudentId ?? string.Empty, out var guardianPhone);
+
                 return new SchoolEnrollmentListItemVm
                 {
                     EnrollmentId = i.Id,
                     CourseId = i.CourseId,
                     CourseTitle = i.CourseTitle,
                     StudentId = i.StudentId,
-                    StudentFullName = stu?.FullName ?? i.StudentId,
-                    StudentEmail = stu?.Email,
-                    StudentPhone = stu?.PhoneNumber,
-                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(stu?.PhoneNumber, defaultRegion),
-                    GuardianPhoneNumber = students.FirstOrDefault(s => s.Id == i.StudentId)?.GuardianPhoneNumber,
-                    PhotoStorageKey = stu?.PhotoStorageKey,
+                    StudentFullName = !string.IsNullOrEmpty(stu.FullName) ? stu.FullName! : (i.StudentId ?? string.Empty),
+                    StudentEmail = stu.Email,
+                    StudentPhone = stu.Phone,
+                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(stu.Phone, defaultRegion),
+                    GuardianPhoneNumber = guardianPhone,
+                    PhotoStorageKey = stu.PhotoKey,
                     TeacherFullName = i.TeacherName,
                     CreatedAtUtc = i.CreatedAtUtc,
                     PaidMonthsCount = i.PaidCount,
@@ -133,16 +163,17 @@ namespace Edu.Web.Areas.Admin.Controllers
                 };
             }).ToList();
 
+            // Batch resolve photo public URLs
             var keys = list.Select(x => x.PhotoStorageKey).Where(k => !string.IsNullOrEmpty(k)).Distinct().ToList();
             var keyToUrl = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-
             if (keys.Any())
             {
                 var tasks = keys.Select(async key =>
                 {
-                    try { keyToUrl[key!] = await _fileStorage.GetPublicUrlAsync(key!); }
+                    try { keyToUrl[key!] = await _fileStorage.GetPublicUrlAsync(key!, TimeSpan.FromHours(1)); }
                     catch { keyToUrl[key!] = null; }
-                });
+                }).ToArray();
+
                 await Task.WhenAll(tasks);
             }
 
@@ -167,12 +198,12 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         // GET: Admin/OnlineEnrollments/Details/5
         [HttpGet]
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             var enrollment = await _db.OnlineEnrollments
                 .AsNoTracking()
                 .Include(e => e.OnlineCourse)
-                .FirstOrDefaultAsync(e => e.Id == id);
+                .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
             if (enrollment == null)
             {
@@ -183,14 +214,14 @@ namespace Edu.Web.Areas.Admin.Controllers
             var payments = await _db.OnlineEnrollmentMonthPayments
                 .AsNoTracking()
                 .Where(p => p.OnlineEnrollmentId == id)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             var months = await _db.OnlineCourseMonths
                 .AsNoTracking()
                 .Where(m => m.OnlineCourseId == enrollment.OnlineCourseId)
                 .OrderBy(m => m.MonthIndex)
                 .Select(m => new { m.Id, m.MonthIndex })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             var monthIds = months.Select(m => m.Id).ToList();
             Dictionary<int, int> lessonCounts = new();
@@ -201,7 +232,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                     .Where(l => l.OnlineCourseMonthId != null && monthIds.Contains(l.OnlineCourseMonthId.Value))
                     .GroupBy(l => l.OnlineCourseMonthId!.Value)
                     .Select(g => new { MonthId = g.Key, Count = g.Count() })
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
                 lessonCounts = grouped.ToDictionary(x => x.MonthId, x => x.Count);
                 _logger.LogDebug("Online lesson groups: {Groups}", string.Join(" | ", grouped.Select(x => $"{x.MonthId}:{x.Count}")));
@@ -211,23 +242,12 @@ namespace Edu.Web.Areas.Admin.Controllers
             Domain.Entities.Student? student = null;
             if (!string.IsNullOrEmpty(enrollment.StudentId))
             {
-                studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId);
-                student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == enrollment.StudentId);
+                studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId, cancellationToken);
+                student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == enrollment.StudentId, cancellationToken);
             }
 
-            string? teacherFullName = null;
-            var teacherIdProp = enrollment.OnlineCourse?.GetType().GetProperty("TeacherId");
-            if (teacherIdProp != null)
-            {
-                var teacherId = teacherIdProp.GetValue(enrollment.OnlineCourse) as string;
-                if (!string.IsNullOrEmpty(teacherId))
-                {
-                    var teacherUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == teacherId);
-                    teacherFullName = teacherUser?.FullName;
-                }
-            }
-            if (string.IsNullOrEmpty(teacherFullName) && !string.IsNullOrEmpty(enrollment.OnlineCourse?.TeacherName))
-                teacherFullName = enrollment.OnlineCourse!.TeacherName;
+            // Prefer teacher name stored on OnlineCourse; if you have TeacherId you can resolve it similarly.
+            string? teacherFullName = enrollment.OnlineCourse?.TeacherName;
 
             var monthsVm = months.Select(m => new SchoolEnrollmentMonthVm
             {
@@ -254,11 +274,12 @@ namespace Edu.Web.Areas.Admin.Controllers
             string? studentPhotoUrl = null;
             if (studentUser != null && !string.IsNullOrEmpty(studentUser.PhotoStorageKey))
             {
-                try { studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey); }
+                try { studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey, TimeSpan.FromHours(1)); }
                 catch { studentPhotoUrl = studentUser.PhotoUrl ?? studentUser.PhotoStorageKey; }
             }
             else studentPhotoUrl = studentUser?.PhotoUrl;
-            // compute default region from admin UI culture (fallback to IT)
+
+            // compute default region once
             string defaultRegion = "IT";
             try
             {
@@ -266,10 +287,8 @@ namespace Edu.Web.Areas.Admin.Controllers
                 if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
                     defaultRegion = regionInfo.TwoLetterISORegionName;
             }
-            catch
-            {
-                defaultRegion = "IT";
-            }
+            catch { defaultRegion = "IT"; }
+
             var vm = new SchoolEnrollmentDetailsVm
             {
                 EnrollmentId = enrollment.Id,
@@ -296,32 +315,27 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/OnlineEnrollments/MarkPaymentPaid
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> MarkPaymentPaid([FromForm] int paymentId)
+        public async Task<IActionResult> MarkPaymentPaid([FromForm] int paymentId, CancellationToken cancellationToken = default)
         {
             var p = await _db.OnlineEnrollmentMonthPayments
                 .Include(x => x.OnlineEnrollment)
-                .FirstOrDefaultAsync(x => x.Id == paymentId);
+                .FirstOrDefaultAsync(x => x.Id == paymentId, cancellationToken);
 
             if (p == null) return Json(new { success = false, message = _localizer["Admin.PaymentNotFound"].Value ?? "Payment not found" });
 
-            // if your enum types are different, adapt here
             if (p.Status == OnlineEnrollmentMonthPaymentStatus.Paid)
                 return Json(new { success = false, message = _localizer["Admin.PaymentAlreadyPaid"].Value ?? "Payment already marked as paid" });
 
             p.Status = OnlineEnrollmentMonthPaymentStatus.Paid;
             p.PaidAtUtc = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-
-            // optional log table (if you have it)
-            // _db.OnlineEnrollmentLogs.Add(...)
-            // await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             try
             {
                 var studentId = p.OnlineEnrollment?.StudentId;
                 if (!string.IsNullOrEmpty(studentId))
                 {
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId);
+                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
                     if (user?.Email != null)
                     {
                         await NotifyFireAndForgetAsync(async () =>
@@ -331,7 +345,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                                 "Notify.PaymentMarkedPaid.Subject",
                                 "Notify.PaymentMarkedPaid.Body",
                                 p.Amount.ToString("C"),
-                                (object)(await TryGetMonthIndexLabelAsync(p.OnlineCourseMonthId) ?? p.OnlineCourseMonthId.ToString())
+                                (object)(await TryGetMonthIndexLabelAsync(p.OnlineCourseMonthId, cancellationToken) ?? p.OnlineCourseMonthId.ToString())
                             );
                         });
                     }
@@ -348,11 +362,11 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/OnlineEnrollments/RejectPayment
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RejectPayment([FromForm] int paymentId, [FromForm] string? adminNote)
+        public async Task<IActionResult> RejectPayment([FromForm] int paymentId, [FromForm] string? adminNote, CancellationToken cancellationToken = default)
         {
             var p = await _db.OnlineEnrollmentMonthPayments
                 .Include(x => x.OnlineEnrollment)
-                .FirstOrDefaultAsync(x => x.Id == paymentId);
+                .FirstOrDefaultAsync(x => x.Id == paymentId, cancellationToken);
 
             if (p == null) return Json(new { success = false, message = _localizer["Admin.PaymentNotFound"].Value ?? "Payment not found" });
 
@@ -361,14 +375,14 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             p.Status = OnlineEnrollmentMonthPaymentStatus.Rejected;
             p.AdminNote = adminNote;
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             try
             {
                 var studentId = p.OnlineEnrollment?.StudentId;
                 if (!string.IsNullOrEmpty(studentId))
                 {
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId);
+                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
                     if (user?.Email != null)
                     {
                         await NotifyFireAndForgetAsync(async () =>
@@ -395,20 +409,19 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/OnlineEnrollments/Delete
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete([FromForm] int enrollmentId)
+        public async Task<IActionResult> Delete([FromForm] int enrollmentId, CancellationToken cancellationToken = default)
         {
             var enr = await _db.OnlineEnrollments
                 .Include(e => e.MonthPayments)
-                .FirstOrDefaultAsync(e => e.Id == enrollmentId);
+                .FirstOrDefaultAsync(e => e.Id == enrollmentId, cancellationToken);
 
             if (enr == null) return Json(new { success = false, message = _localizer["Admin.NotFound"].Value ?? "Not found" });
 
             try
             {
-                // Optional: notify student
                 try
                 {
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == enr.StudentId);
+                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == enr.StudentId, cancellationToken);
                     if (user != null && !string.IsNullOrEmpty(user.Email))
                     {
                         await NotifyFireAndForgetAsync(async () =>
@@ -425,7 +438,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                 catch (Exception ex) { _logger.LogWarning(ex, "Notification when deleting enrollment failed"); }
 
                 _db.OnlineEnrollments.Remove(enr);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
                 return Json(new { success = true, message = _localizer["Admin.DeleteSuccess"].Value ?? "Deleted" });
             }
             catch (Exception ex)
@@ -438,21 +451,21 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/OnlineEnrollments/DeleteOld
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteOld([FromForm] DateTime olderThanUtc)
+        public async Task<IActionResult> DeleteOld([FromForm] DateTime olderThanUtc, CancellationToken cancellationToken = default)
         {
             try
             {
                 var toDelete = await _db.OnlineEnrollments
                     .Where(e => e.CreatedAtUtc < olderThanUtc)
                     .Where(e => !e.MonthPayments.Any(p => p.Status == OnlineEnrollmentMonthPaymentStatus.Paid))
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
                 if (!toDelete.Any())
                     return Json(new { success = true, deleted = 0, message = _localizer["Admin.DeleteOldNoMatching"].Value ?? "No matching enrollments" });
 
                 var count = toDelete.Count;
                 _db.OnlineEnrollments.RemoveRange(toDelete);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
 
                 return Json(new { success = true, deleted = count, message = _localizer["Admin.DeleteOldSuccess"].Value ?? "Deleted old enrollments" });
             }
@@ -464,12 +477,12 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // try to get MonthIndex string for a given OnlineCourseMonthId
-        private async Task<string?> TryGetMonthIndexLabelAsync(int onlineCourseMonthId)
+        private async Task<string?> TryGetMonthIndexLabelAsync(int onlineCourseMonthId, CancellationToken cancellationToken = default)
         {
             try
             {
                 var month = await _db.OnlineCourseMonths.AsNoTracking()
-                    .FirstOrDefaultAsync(m => m.Id == onlineCourseMonthId);
+                    .FirstOrDefaultAsync(m => m.Id == onlineCourseMonthId, cancellationToken);
                 if (month != null) return month.MonthIndex.ToString();
             }
             catch
@@ -501,4 +514,5 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
     }
 }
+
 

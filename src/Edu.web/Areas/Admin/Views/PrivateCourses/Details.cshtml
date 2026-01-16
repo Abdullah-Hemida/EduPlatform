@@ -185,61 +185,6 @@
                 <div class="small text-muted">@Model.Teacher?.Email</div>
             </div>
         </div>
-
-        <div class="card mb-3 shadow-sm border-0">
-            <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center">
-                <strong class="m-0">@L["Admin.Notes"]</strong>
-                <small class="text-muted">@(Model.ModerationLogs?.Count ?? 0)</small>
-            </div>
-
-            <div class="card-body p-2">
-                @if (Model.ModerationLogs == null || !Model.ModerationLogs.Any())
-                {
-                    <div class="text-muted small">@L["Admin.NoNotes"]</div>
-                }
-                else
-                {
-                    <ul class="list-group list-group-flush">
-                        @foreach (var log in Model.ModerationLogs.OrderByDescending(l => l.CreatedAtUtc))
-                        {
-                            var actionKey = $"Admin.Action.{log.Action}";
-                            var actionLabel = L[actionKey].ResourceNotFound ? L["Admin.Action.Unknown"].Value : L[actionKey].Value;
-
-                            <li class="list-group-item py-2 px-2 border-0 mb-1 rounded bg-light-subtle">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="d-flex  flex-column gap-2">
-                                        <span class="badge bg-primary text-white rounded-pill px-2 py-1" style="font-size: 0.7rem; min-width: 100px;">
-                                            @actionLabel
-                                        </span>
-                                        <div>
-                                            <div class="small text-muted lh-sm">
-                                                @log.CreatedAtUtc.ToLocalTime().ToString("g")
-                                            </div>
-
-                                            @if (!string.IsNullOrWhiteSpace(log.Note))
-                                            {
-                                                <div class="small mt-1 lh-sm">@Html.Raw(log.Note)</div>
-                                            }
-                                    </div>
-                                </div>
-
-                                <div class="text-end small text-muted lh-sm">
-                                    @(
-                                                                    !string.IsNullOrEmpty(log.AdminName)
-                                                                    ? log.AdminName
-                                                                    : !string.IsNullOrEmpty(log.AdminEmail)
-                                                                    ? log.AdminEmail
-                                                                    : log.AdminId
-                                                                    )
-                                </div>
-                            </div>
-                        </li>
-                                        }
-                    </ul>
-                }
-            </div>
-        </div>
-
     </aside>
 </div>
 

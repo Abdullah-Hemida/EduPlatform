@@ -1,9 +1,10 @@
 ﻿@model Edu.Web.Areas.Admin.ViewModels.PurchaseRequestsIndexViewModel
+@using Edu.Domain.Entities
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
     ViewData["Title"] = L["Admin.PurchaseRequests"];
-    var status = Model.Status?.ToString() ?? "All";
+    int? selectedStatus = Model.Status;
 }
 
 <!-- Header: Title + Status Filters -->
@@ -19,23 +20,27 @@
     <div class="d-flex align-items-center">
         <div class="overflow-auto" style="-webkit-overflow-scrolling: touch;">
             <div class="btn-group btn-group-sm" role="group" aria-label="Status filters">
-                <a class="btn @(status == "All" ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
+                <a class="btn @(selectedStatus == null ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
                    href="@Url.Action("Index", new { status = (int?)null, search = Model.Search })">
                     @L["Common.All"]
                 </a>
-                <a class="btn @(Model.Status == 0 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
+
+                <a class="btn @(selectedStatus == 0 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
                    href="@Url.Action("Index", new { status = 0, search = Model.Search })">
                     @L["Status.Pending"]
                 </a>
-                <a class="btn @(Model.Status == 1 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
+
+                <a class="btn @(selectedStatus == 1 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
                    href="@Url.Action("Index", new { status = 1, search = Model.Search })">
                     @L["Status.Completed"]
                 </a>
-                <a class="btn @(Model.Status == 2 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
+
+                <a class="btn @(selectedStatus == 2 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
                    href="@Url.Action("Index", new { status = 2, search = Model.Search })">
                     @L["Status.Rejected"]
                 </a>
-                <a class="btn @(Model.Status == 3 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
+
+                <a class="btn @(selectedStatus == 3 ? "btn-primary" : "btn-outline-secondary") me-1 mb-1"
                    href="@Url.Action("Index", new { status = 3, search = Model.Search })">
                     @L["Status.Cancelled"]
                 </a>
@@ -90,6 +95,25 @@
                         @foreach (var r in Model.Items)
                         {
                             idx++;
+
+                            // badge class + localized text (use enum)
+                            var badgeClass = r.Status switch
+                            {
+                                PurchaseStatus.Completed => "bg-success",
+                                PurchaseStatus.Rejected => "bg-danger",
+                                PurchaseStatus.Pending => "bg-warning text-dark",
+                                PurchaseStatus.Cancelled => "bg-secondary",
+                                _ => "bg-secondary"
+                            };
+
+                            var localizedStatus = r.Status switch
+                            {
+                                PurchaseStatus.Completed => L["Status.Completed"],
+                                PurchaseStatus.Rejected => L["Status.Rejected"],
+                                PurchaseStatus.Pending => L["Status.Pending"],
+                                PurchaseStatus.Cancelled => L["Status.Cancelled"],
+                                _ => L["Status.Unknown", r.Status.ToString()]
+                            };
                             <tr>
                                 <td class="small text-muted">@idx</td>
                                 <td>
@@ -102,7 +126,7 @@
                                                 {
                                                     @await Html.PartialAsync("~/Views/Shared/_WhatsAppChatButton.cshtml", r.PhoneWhatsapp)
                                                 }
-                                        </span>
+                                            </span>
                                         </span>
                                     </div>
                                 </td>
@@ -113,14 +137,8 @@
                                 <td class="fw-semibold">@r.AmountLabel</td>
                                 <td class="small">@r.RequestDateUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
                                 <td>
-                                    <span class="badge
-                                                  @(r.Status == "Completed" ? "bg-success" :
-                                                                                      r.Status == "Rejected" ? "bg-danger" :
-                                                                                      r.Status == "Pending" ? "bg-warning text-dark" :
-                                                                                      "bg-secondary")">
-                                @r.Status
-                            </span>
-                        </td>
+                                    <span class="badge @badgeClass" aria-label="@localizedStatus">@localizedStatus</span>
+                                </td>
 
                                 <!-- Actions: inline, wrap prevented on small screens with scroll -->
                                 <td class="text-end">
@@ -129,25 +147,25 @@
                                             @L["Button.View"]
                                         </a>
 
-                                @if (r.Status == "Pending")
+                                        @if (r.Status == PurchaseStatus.Pending)
                                         {
-                                            <form method="post" asp-action="Complete" class="d-inline-block">
+                                            <form method="post" asp-action="Complete" class="d-inline-block" asp-area="Admin">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="id" value="@r.Id" />
                                                 <button class="btn btn-success btn-sm">@L["Purchase.MarkCompleted"]</button>
                                             </form>
 
-                                            <form method="post" asp-action="Reject" class="d-inline-block">
+                                            <form method="post" asp-action="Reject" class="d-inline-block" asp-area="Admin">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="id" value="@r.Id" />
                                                 <button class="btn btn-warning btn-sm text-dark">@L["Button.Reject"]</button>
                                             </form>
                                         }
 
-                                        @if (r.Status != "Completed")
+                                        @if (r.Status != PurchaseStatus.Completed)
                                         {
                                             <form method="post" asp-action="Delete" class="d-inline-block"
-                                                  onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');">
+                                                  onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');" asp-area="Admin">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="id" value="@r.Id" />
                                                 <button class="btn btn-danger btn-sm">@L["Button.Delete"]</button>
@@ -170,6 +188,24 @@
                     @foreach (var r in Model.Items)
                     {
                         cidx++;
+
+                        var rsBadgeClass = r.Status switch
+                        {
+                            PurchaseStatus.Completed => "bg-success",
+                            PurchaseStatus.Rejected => "bg-danger",
+                            PurchaseStatus.Pending => "bg-warning text-dark",
+                            PurchaseStatus.Cancelled => "bg-secondary",
+                            _ => "bg-secondary"
+                        };
+
+                        var rsLocalized = r.Status switch
+                        {
+                            PurchaseStatus.Completed => L["Status.Completed"],
+                            PurchaseStatus.Rejected => L["Status.Rejected"],
+                            PurchaseStatus.Pending => L["Status.Pending"],
+                            PurchaseStatus.Cancelled => L["Status.Cancelled"],
+                            _ => L["Status.Unknown", r.Status.ToString()]
+                        };
                         <div class="col-12">
                             <div class="card shadow-sm">
                                 <div class="card-body">
@@ -214,17 +250,11 @@
                                         <div class="text-end">
                                             <div class="small text-muted">@L["Purchase.Status"]</div>
                                             <div>
-                                                <span class="badge
-                                                              @(r.Status == "Completed" ? "bg-success" :
-                                                                                                              r.Status == "Rejected" ? "bg-danger" :
-                                                                                                              r.Status == "Pending" ? "bg-warning text-dark" :
-                                                                                                              "bg-secondary")">
-                                            @r.Status
-                                        </span>
+                                                <span class="badge @rsBadgeClass">@rsLocalized</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
                                 <!-- footer: single line actions, scrollable if tight -->
                                 <div class="card-footer bg-white d-flex flex-nowrap gap-2 overflow-auto">
@@ -232,25 +262,25 @@
                                         @L["Button.View"]
                                     </a>
 
-                            @if (r.Status == "Pending")
+                                    @if (r.Status == PurchaseStatus.Pending)
                                     {
-                                        <form method="post" asp-action="Complete" class="m-0 d-inline-block">
+                                        <form method="post" asp-action="Complete" class="m-0 d-inline-block" asp-area="Admin">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="id" value="@r.Id" />
-                                            <button class="btn btn-sm btn-success">@L["Purchase.MarkCompleted"]</button>
+                                            <button class="btn btn-sm btn-success text-nowrap">@L["Purchase.MarkCompleted"]</button>
                                         </form>
 
-                                        <form method="post" asp-action="Reject" class="m-0 d-inline-block">
+                                        <form method="post" asp-action="Reject" class="m-0 d-inline-block" asp-area="Admin">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="id" value="@r.Id" />
                                             <button class="btn btn-sm btn-warning text-dark">@L["Button.Reject"]</button>
                                         </form>
                                     }
 
-                                    @if (r.Status != "Completed")
+                                    @if (r.Status != PurchaseStatus.Completed)
                                     {
                                         <form method="post" asp-action="Delete" class="m-0 d-inline-block"
-                                              onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');">
+                                              onsubmit="return confirm('@(L["ConfirmDelete"] ?? "Are you sure?")');" asp-area="Admin">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="id" value="@r.Id" />
                                             <button class="btn btn-sm btn-danger">@L["Button.Delete"]</button>
@@ -295,6 +325,7 @@
         }
     </div>
 </div>
+
 
 
 

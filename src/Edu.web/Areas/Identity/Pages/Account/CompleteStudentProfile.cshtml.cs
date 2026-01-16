@@ -297,7 +297,6 @@ namespace Edu.Web.Areas.Identity.Pages.Account
             TempData["ProfileSaved"] = _localizer["ProfileSaved"] ?? "Profile saved";
             return RedirectToAction("Index", "Home", new { area = "" });
         }
-
     }
 }
 

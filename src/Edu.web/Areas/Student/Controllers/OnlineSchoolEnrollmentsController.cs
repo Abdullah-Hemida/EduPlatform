@@ -1,4 +1,5 @@
-﻿using Edu.Application.IServices;
+﻿// File: Areas/Student/Controllers/OnlineSchoolEnrollmentsController.cs
+using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
@@ -185,6 +186,31 @@ namespace Edu.Web.Areas.Student.Controllers
                     })
                     .ToListAsync();
 
+                // Collect all storage keys that need resolution (avoid per-file DB calls)
+                var keysToResolve = lessons
+                    .SelectMany(l => l.Files)
+                    .Where(ff => !string.IsNullOrEmpty(ff.StorageKey))
+                    .Select(ff => ff.StorageKey!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var keyToPublicUrl = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                if (keysToResolve.Any())
+                {
+                    try
+                    {
+                        var tasks = keysToResolve.Select(k => _fileStorage.GetPublicUrlAsync(k)).ToArray();
+                        var urls = await Task.WhenAll(tasks);
+                        keyToPublicUrl = keysToResolve.Zip(urls, (k, u) => (k, u))
+                                                      .ToDictionary(x => x.k, x => x.u, StringComparer.OrdinalIgnoreCase);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed resolving some file storage keys for course {CourseId}", course.Id);
+                        // fallback: leave empty map entries (we'll use FileUrl/FileKey later)
+                    }
+                }
+
                 // map lessons -> month VMs
                 foreach (var monthVm in monthsBase.Where(m => paidMonthIds.Contains(m.Id)))
                 {
@@ -200,43 +226,19 @@ namespace Edu.Web.Areas.Student.Controllers
                             RecordedVideoUrl = x.RecordedVideoUrl,
                             Notes = x.Notes,
                             OnlineCourseMonthId = x.OnlineCourseMonthId,
-                            Files = x.Files.Select(ff => new OnlineStudentCourseFileVm
+                            Files = x.Files.Select(ff =>
                             {
-                                Id = ff.Id,
-                                FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
-                                PublicUrl = string.IsNullOrEmpty(ff.StorageKey) ? ff.FileUrl : null // resolve below async if necessary
+                                var publicUrl = !string.IsNullOrEmpty(ff.StorageKey) && keyToPublicUrl.TryGetValue(ff.StorageKey!, out var resolved) ? resolved : ff.FileUrl;
+                                if (string.IsNullOrEmpty(publicUrl) && !string.IsNullOrEmpty(ff.StorageKey))
+                                    publicUrl = ff.StorageKey; // fallback
+                                return new OnlineStudentCourseFileVm
+                                {
+                                    Id = ff.Id,
+                                    FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
+                                    PublicUrl = publicUrl
+                                };
                             }).ToList()
                         }).ToList();
-
-                    // resolve file storage urls where needed (avoid blocking EF)
-                    foreach (var lessonVm in lessonsForMonth)
-                    {
-                        foreach (var f in lessonVm.Files)
-                        {
-                            if (string.IsNullOrEmpty(f.PublicUrl))
-                            {
-                                try
-                                {
-                                    var fr = _db.FileResources.AsNoTracking().FirstOrDefault(x => x.Id == f.Id);
-                                    if (fr != null && !string.IsNullOrEmpty(fr.StorageKey))
-                                    {
-                                        try
-                                        {
-                                            f.PublicUrl = _fileStorage.GetPublicUrlAsync(fr.StorageKey).GetAwaiter().GetResult();
-                                        }
-                                        catch
-                                        {
-                                            f.PublicUrl = fr.FileUrl ?? fr.StorageKey;
-                                        }
-                                    }
-                                }
-                                catch
-                                {
-                                    // swallow - file link will be null or whatever DB has
-                                }
-                            }
-                        }
-                    }
 
                     monthVm.Lessons = lessonsForMonth;
                 }
@@ -293,6 +295,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 var existing = await _db.OnlineEnrollments.FirstOrDefaultAsync(e => e.OnlineCourseId == courseId && e.StudentId == studentId);
                 if (existing != null)
                 {
+                    await tx.CommitAsync();
                     return Json(new { success = true, alreadyEnrolled = true, enrollmentId = existing.Id });
                 }
 
@@ -306,13 +309,9 @@ namespace Edu.Web.Areas.Student.Controllers
                 _db.OnlineEnrollments.Add(enr);
                 await _db.SaveChangesAsync();
 
-                // Optional: add Enrollment log table if you have one (not included in entities snippet)
-                // _db.OnlineEnrollmentLogs.Add(...)
-
-                await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                // Notify admins that a new enrollment was requested
+                // Notify admins that a new enrollment was requested (fire-and-forget)
                 await NotifyFireAndForgetAsync(async () =>
                 {
                     await NotifyAdminsOfEnrollmentRequestAsync(course.Title, studentId);
@@ -360,15 +359,11 @@ namespace Edu.Web.Areas.Student.Controllers
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Remove non-paid month payments
+                // Remove non-paid month payments and enrollment, then save once
                 var nonPaid = enr.MonthPayments.Where(m => m.Status != OnlineEnrollmentMonthPaymentStatus.Paid).ToList();
                 if (nonPaid.Any())
-                {
                     _db.OnlineEnrollmentMonthPayments.RemoveRange(nonPaid);
-                    await _db.SaveChangesAsync();
-                }
 
-                // Remove enrollment
                 _db.OnlineEnrollments.Remove(enr);
                 await _db.SaveChangesAsync();
 
@@ -431,8 +426,6 @@ namespace Edu.Web.Areas.Student.Controllers
                     };
                     _db.OnlineEnrollments.Add(enrollment);
                     await _db.SaveChangesAsync();
-
-                    // optional: log
                 }
 
                 // duplicate pending guard
@@ -457,9 +450,6 @@ namespace Edu.Web.Areas.Student.Controllers
                 _db.OnlineEnrollmentMonthPayments.Add(payment);
                 await _db.SaveChangesAsync();
 
-                // optional: log entry
-
-                await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
                 // notify admins about payment request
@@ -622,3 +612,5 @@ namespace Edu.Web.Areas.Student.Controllers
         }
     }
 }
+
+

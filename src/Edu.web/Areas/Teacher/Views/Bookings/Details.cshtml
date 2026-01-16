@@ -115,29 +115,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- moderation logs -->
-        <h5 class="mb-2">@L["Admin.Notes"]</h5>
-        <ul class="list-group mb-3">
-            @if (Model.ModerationLogs == null || !Model.ModerationLogs.Any())
-            {
-                <li class="list-group-item text-muted">@L["Admin.NoRecords"]</li>
-            }
-            else
-            {
-                @foreach (var log in Model.ModerationLogs)
-                {
-                    <li class="list-group-item">
-                        <div class="d-flex flex-column justify-content-center align-items-center">
-                            <div class="small text-muted">@log.CreatedAtUtc.ToLocalTime()</div>
-                            <div class="small text-muted">@log.ActorName</div>
-                        </div>
-                        <div class="mt-1"><strong>@log.Action</strong></div>
-                        <div class="small text-muted">@log.Note</div>
-                    </li>
-                }
-            }
-        </ul>
     </div>
 </div>
 

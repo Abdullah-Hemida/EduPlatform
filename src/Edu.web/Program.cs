@@ -7,13 +7,13 @@ using Edu.Infrastructure.Persistence;
 using Edu.Infrastructure.Services;
 using Edu.Web.Helpers;
 using Edu.Web.Views.Shared.Components.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using System.Globalization;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,7 +70,6 @@ builder.Services.AddControllersWithViews()
 builder.Services.AddRazorPages();
 
 builder.Services.AddAuthentication();
-// using Microsoft.AspNetCore.Authorization;
 
 builder.Services.AddScoped<IAuthorizationHandler, TeacherApprovedHandler>();
 

@@ -21,15 +21,17 @@ namespace Edu.Web.Controllers
 
         // default page size for listing
         private const int DefaultPageSize = 12;
+        private const int MinPageSize = 6;
+        private const int MaxPageSize = 48;
 
         public TeachersController(ApplicationDbContext db,
                                   UserManager<ApplicationUser> userManager,
                                   IFileStorageService fileStorage,
                                   IStringLocalizer<SharedResource> localizer)
         {
-            _db = db;
-            _userManager = userManager;
-            _fileStorage = fileStorage;
+            _db = db ?? throw new ArgumentNullException(nameof(db));
+            _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+            _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
             _L = localizer;
         }
 
@@ -38,51 +40,61 @@ namespace Edu.Web.Controllers
         public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = DefaultPageSize)
         {
             page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 6, 48);
+            pageSize = Math.Clamp(pageSize, MinPageSize, MaxPageSize);
 
             var baseQuery = _db.Teachers
                                .AsNoTracking()
                                .Include(t => t.User)
-                               .Where(t => t.Status == TeacherStatus.Approved); // show only approved teachers
+                               .Where(t => t.Status == TeacherStatus.Approved);
 
             if (!string.IsNullOrWhiteSpace(q))
             {
-                var normalized = q.Trim().ToLowerInvariant();
+                // server-side LIKE pattern (avoids client eval)
+                var term = q.Trim();
+                var pattern = $"%{term}%";
+
                 baseQuery = baseQuery.Where(t =>
-                    (t.User != null && (t.User.FullName!.ToLower().Contains(normalized) || t.User.UserName!.ToLower().Contains(normalized)))
-                    || t.JobTitle.ToLower().Contains(normalized)
-                    || (t.ShortBio != null && t.ShortBio.ToLower().Contains(normalized))
+                    EF.Functions.Like((t.User!.FullName ?? ""), pattern) ||
+                    EF.Functions.Like((t.User!.UserName ?? ""), pattern) ||
+                    EF.Functions.Like((t.JobTitle ?? ""), pattern) ||
+                    EF.Functions.Like((t.ShortBio ?? ""), pattern)
                 );
             }
 
             var total = await baseQuery.CountAsync();
 
             var teachers = await baseQuery
-                .OrderByDescending(t => t.User!.FullName)
+                // prefer FullName, fallback to UserName for ordering
+                .OrderByDescending(t => (t.User!.FullName ?? t.User!.UserName))
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
             // Pre-fetch counts in batch for better perf:
-            var teacherIds = teachers.Select(t => t.Id).ToList();
+            var teacherIds = teachers.Select(t => t.Id).Where(id => !string.IsNullOrEmpty(id)).ToList();
 
-            var privateCourseCounts = await _db.PrivateCourses
-                .AsNoTracking()
-                .Where(c => c.TeacherId != null && teacherIds.Contains(c.TeacherId))
-                .GroupBy(c => c.TeacherId)
-                .Select(g => new { TeacherId = g.Key!, Count = g.Count() })
-                .ToListAsync();
+            var privateMap = new Dictionary<string, int>(StringComparer.Ordinal);
+            var reactiveMap = new Dictionary<string, int>(StringComparer.Ordinal);
 
-            var reactiveCourseCounts = await _db.ReactiveCourses
-                .AsNoTracking()
-                .Where(r => r.TeacherId != null && teacherIds.Contains(r.TeacherId) && !r.IsArchived)
-                .GroupBy(r => r.TeacherId)
-                .Select(g => new { TeacherId = g.Key!, Count = g.Count() })
-                .ToListAsync();
+            if (teacherIds.Any())
+            {
+                var privateCourseCounts = await _db.PrivateCourses
+                    .AsNoTracking()
+                    .Where(c => c.TeacherId != null && teacherIds.Contains(c.TeacherId!))
+                    .GroupBy(c => c.TeacherId)
+                    .Select(g => new { TeacherId = g.Key!, Count = g.Count() })
+                    .ToListAsync();
 
-            // map counts to dictionary
-            var privateMap = privateCourseCounts.ToDictionary(x => x.TeacherId, x => x.Count);
-            var reactiveMap = reactiveCourseCounts.ToDictionary(x => x.TeacherId, x => x.Count);
+                var reactiveCourseCounts = await _db.ReactiveCourses
+                    .AsNoTracking()
+                    .Where(r => r.TeacherId != null && teacherIds.Contains(r.TeacherId!) && !r.IsArchived)
+                    .GroupBy(r => r.TeacherId)
+                    .Select(g => new { TeacherId = g.Key!, Count = g.Count() })
+                    .ToListAsync();
+
+                privateMap = privateCourseCounts.ToDictionary(x => x.TeacherId, x => x.Count);
+                reactiveMap = reactiveCourseCounts.ToDictionary(x => x.TeacherId, x => x.Count);
+            }
 
             // Prepare culture for euro formatting (IT format)
             var euroCulture = CultureInfo.GetCultureInfo("it-IT");
@@ -96,15 +108,35 @@ namespace Edu.Web.Controllers
                 Teachers = new List<TeacherCardVm>()
             };
 
+            // Collect distinct photo keys to resolve in batch
+            var photoKeys = teachers.Select(t => t.User?.PhotoStorageKey)
+                                   .Where(k => !string.IsNullOrEmpty(k))
+                                   .Distinct(StringComparer.OrdinalIgnoreCase)
+                                   .ToList();
+
+            var photoMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (photoKeys.Any())
+            {
+                var tasks = photoKeys.Select(k => SafeGetPublicUrlAsync(k!)).ToArray();
+                var results = await Task.WhenAll(tasks);
+                for (int i = 0; i < photoKeys.Count; i++) photoMap[photoKeys[i]!] = results[i];
+            }
+
             foreach (var t in teachers)
             {
-                // Resolve photo public url (prefer storage key, then PhotoUrl, else default)
+                // Resolve photo public url (prefer storage key, then PhotoUrl, else fallback)
                 string photo = Url.Content("~/uploads/images/pngtree-character-default-avatar-image_2237203.jpg");
+
                 if (!string.IsNullOrEmpty(t.User?.PhotoStorageKey))
                 {
-                    var resolved = await SafeGetPublicUrlAsync(t.User.PhotoStorageKey);
-                    if (!string.IsNullOrEmpty(resolved)) photo = resolved;
-                    else if (!string.IsNullOrEmpty(t.User.PhotoUrl)) photo = t.User.PhotoUrl!;
+                    if (photoMap.TryGetValue(t.User.PhotoStorageKey!, out var resolved) && !string.IsNullOrEmpty(resolved))
+                    {
+                        photo = resolved;
+                    }
+                    else if (!string.IsNullOrEmpty(t.User.PhotoUrl))
+                    {
+                        photo = t.User.PhotoUrl!;
+                    }
                 }
                 else if (!string.IsNullOrEmpty(t.User?.PhotoUrl))
                 {
@@ -127,8 +159,8 @@ namespace Edu.Web.Controllers
                 });
             }
 
-            // compute total pages
-            vm.TotalPages = (int)Math.Ceiling(vm.TotalCount / (double)vm.PageSize);
+            // compute total pages (defensive: avoid division by zero)
+            vm.TotalPages = vm.PageSize > 0 ? (int)Math.Ceiling(vm.TotalCount / (double)vm.PageSize) : 0;
 
             return View(vm);
         }
@@ -145,7 +177,7 @@ namespace Edu.Web.Controllers
 
             if (teacher == null) return NotFound();
 
-            // Resolve photo (unchanged)
+            // Resolve photo (prefer storage key then PhotoUrl then default)
             string photo = Url.Content("~/images/default-avatar.png");
             if (!string.IsNullOrEmpty(teacher.User?.PhotoStorageKey))
             {
@@ -163,12 +195,12 @@ namespace Edu.Web.Controllers
             var slots = await _db.Slots
                 .AsNoTracking()
                 .Where(s => s.TeacherId == id && s.EndUtc >= now)
+                .Include(s => s.Bookings)
                 .OrderBy(s => s.StartUtc)
-                .Include(s => s.Bookings) // include bookings
                 .ToListAsync();
 
             // get current user id (may be null/anonymous)
-            var currentUserId = _userManager?.GetUserId(User); // ensure _userManager is available on controller
+            var currentUserId = _userManager?.GetUserId(User);
 
             var slotVms = slots.Select(s =>
             {
@@ -204,20 +236,27 @@ namespace Edu.Web.Controllers
                 };
             }).ToList();
 
-            // Reactive courses (unchanged - keep your existing logic)
+            // Reactive courses
             var reactiveCourses = await _db.ReactiveCourses
                 .AsNoTracking()
                 .Where(r => r.TeacherId == id && !r.IsArchived)
                 .OrderByDescending(r => r.StartDate)
-                .Include(r => r.Months)
                 .ToListAsync();
+
+            // Batch resolve reactive covers
+            var reactiveCoverKeys = reactiveCourses.Select(rc => rc.CoverImageKey).Where(k => !string.IsNullOrEmpty(k)).Distinct().ToList();
+            var reactiveMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (reactiveCoverKeys.Any())
+            {
+                var tasks = reactiveCoverKeys.Select(k => SafeGetPublicUrlAsync(k!)).ToArray();
+                var results = await Task.WhenAll(tasks);
+                for (int i = 0; i < reactiveCoverKeys.Count; i++) reactiveMap[reactiveCoverKeys[i]!] = results[i];
+            }
 
             var reactiveVms = new List<ReactiveCourseCardVm>();
             foreach (var rc in reactiveCourses)
             {
-                var coverUrl = await SafeGetPublicUrlAsync(rc.CoverImageKey ?? rc.CoverImageKey);
-                if (string.IsNullOrEmpty(coverUrl) && !string.IsNullOrEmpty(rc.CoverImageKey))
-                    coverUrl = await SafeGetPublicUrlAsync(rc.CoverImageKey);
+                reactiveMap.TryGetValue(rc.CoverImageKey ?? string.Empty, out var coverUrl);
 
                 reactiveVms.Add(new ReactiveCourseCardVm
                 {
@@ -234,17 +273,26 @@ namespace Edu.Web.Controllers
                 });
             }
 
-            // Private courses (unchanged)
+            // Private courses
             var privateCourses = await _db.PrivateCourses
                 .AsNoTracking()
                 .Where(pc => pc.TeacherId == id && pc.IsPublished)
                 .OrderByDescending(pc => pc.Id)
                 .ToListAsync();
 
+            var privateCoverKeys = privateCourses.Select(pc => pc.CoverImageKey).Where(k => !string.IsNullOrEmpty(k)).Distinct().ToList();
+            var privateMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (privateCoverKeys.Any())
+            {
+                var tasks = privateCoverKeys.Select(k => SafeGetPublicUrlAsync(k!)).ToArray();
+                var results = await Task.WhenAll(tasks);
+                for (int i = 0; i < privateCoverKeys.Count; i++) privateMap[privateCoverKeys[i]!] = results[i];
+            }
+
             var privateVms = new List<PrivateCourseCardVm>();
             foreach (var pc in privateCourses)
             {
-                var cover = await SafeGetPublicUrlAsync(pc.CoverImageKey ?? pc.CoverImageUrl);
+                privateMap.TryGetValue(pc.CoverImageKey ?? string.Empty, out var cover);
                 privateVms.Add(new PrivateCourseCardVm
                 {
                     Id = pc.Id,
@@ -283,7 +331,7 @@ namespace Edu.Web.Controllers
             try
             {
                 var u = await _fileStorage.GetPublicUrlAsync(keyOrUrl);
-                return u;
+                return string.IsNullOrWhiteSpace(u) ? null : u;
             }
             catch
             {
@@ -291,6 +339,8 @@ namespace Edu.Web.Controllers
                 return null;
             }
         }
+
         #endregion
     }
 }
+

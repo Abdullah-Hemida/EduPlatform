@@ -18,8 +18,8 @@ namespace Edu.Web.Areas.Admin.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly ILogger<PurchaseRequestsController> _logger;
-        private const int PageSize = 10;
         private readonly IStringLocalizer<SharedResource> _localizer;
+        private const int PageSize = 10;
 
         public PurchaseRequestsController(ApplicationDbContext db, ILogger<PurchaseRequestsController> logger, IStringLocalizer<SharedResource> localizer)
         {
@@ -29,31 +29,37 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // GET: Admin/PurchaseRequests
-        public async Task<IActionResult> Index(int? status, string? search, int page = 1)
+        public async Task<IActionResult> Index(int? status, string? search, int page = 1, CancellationToken cancellationToken = default)
         {
-            var stopwatch = Stopwatch.StartNew();
+            var sw = Stopwatch.StartNew();
             _logger.LogInformation("PurchaseRequests.Index start - status={Status}, search={Search}, page={Page}", status, search, page);
 
-            // ✅ Base query (no Include)
+            // base query (no Include; projection later)
             var query = _db.PurchaseRequests
                 .AsNoTracking()
                 .OrderByDescending(p => p.RequestDateUtc)
                 .AsQueryable();
 
-            // ✅ Filtering
             if (status.HasValue)
                 query = query.Where(p => p.Status == (PurchaseStatus)status.Value);
 
             if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                var like = $"%{term}%";
+                // EF will translate navigation property access in projection; using Like here for DB-side filtering
                 query = query.Where(p =>
-                    p.PrivateCourse.Title.Contains(search) ||
-                    p.Student.User.FullName.Contains(search) ||
-                    p.Student.User.PhoneNumber.Contains(search));
+                    EF.Functions.Like(p.PrivateCourse!.Title!, like) ||
+                    EF.Functions.Like(p.Student!.User!.FullName!, like) ||
+                    EF.Functions.Like(p.Student!.User!.PhoneNumber!, like));
+            }
 
-            // ✅ Pagination calculation
-            var totalCount = await query.CountAsync();
-            var skip = (page - 1) * PageSize;
-            // compute default region from admin UI culture (fallback to IT)
+            // total for pagination
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var skip = Math.Max(0, (page - 1)) * PageSize;
+
+            // compute default region once
             string defaultRegion = "IT";
             try
             {
@@ -65,7 +71,8 @@ namespace Edu.Web.Areas.Admin.Controllers
             {
                 defaultRegion = "IT";
             }
-            // ✅ Main query with projection
+
+            // projection: only required fields (no Include)
             var items = await query
                 .Skip(skip)
                 .Take(PageSize)
@@ -73,23 +80,24 @@ namespace Edu.Web.Areas.Admin.Controllers
                 {
                     Id = p.Id,
                     StudentId = p.StudentId,
-                    StudentName = p.Student.User.FullName,
-                    StudentPhone = p.Student.User.PhoneNumber,
-                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(p.Student.User.PhoneNumber, defaultRegion),
+                    StudentName = p.Student!.User!.FullName,
+                    StudentPhone = p.Student!.User!.PhoneNumber,
+                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(p.Student!.User!.PhoneNumber, defaultRegion),
                     PrivateCourseId = p.PrivateCourseId,
-                    CourseTitle = p.PrivateCourse.Title,
-                    TeacherName = p.PrivateCourse.Teacher.User.FullName,
+                    CourseTitle = p.PrivateCourse!.Title,
+                    TeacherName = p.PrivateCourse!.Teacher!.User!.FullName,
                     RequestDateUtc = p.RequestDateUtc,
-                    Status = p.Status.ToString(),
+                    // <-- assign enum (NOT string)
+                    Status = p.Status,
                     Amount = p.Amount,
-                    AmountLabel = p.Amount.ToEuro(), // ✅ Converts decimal → formatted string
+                    AmountLabel = p.Amount.ToEuro(),
                     AdminNote = p.AdminNote
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
-            stopwatch.Stop();
+            sw.Stop();
             _logger.LogInformation("PurchaseRequests.Index finished in {Elapsed} ms (totalCount={Total}, pageItems={Count})",
-                stopwatch.ElapsedMilliseconds, totalCount, items.Count);
+                sw.ElapsedMilliseconds, totalCount, items.Count);
 
             var model = new PurchaseRequestsIndexViewModel
             {
@@ -100,53 +108,70 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Status = status,
                 Search = search
             };
-            // localized label for the WA button (used by the partial)
+
             ViewBag.WhatsAppLabel = _localizer["WhatsApp"].Value ?? "WhatsApp";
             ViewData["ActivePage"] = "PurchaseRequests";
             return View(model);
         }
 
         // POST: Admin/PurchaseRequests/Complete/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Complete(int id)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Complete(int id, CancellationToken cancellationToken = default)
         {
-            var pr = await _db.PurchaseRequests.FindAsync(id);
+            var pr = await _db.PurchaseRequests.FindAsync(new object[] { id }, cancellationToken);
             if (pr == null) return NotFound();
 
             pr.Status = PurchaseStatus.Completed;
             _db.PurchaseRequests.Update(pr);
-            await _db.SaveChangesAsync();
-            TempData["Success"] = "Purchase request marked completed.";
+            await _db.SaveChangesAsync(cancellationToken);
+
+            // set TempData to the key name (centralized alert will localize)
+            TempData["Success"] = "PurchaseRequest.Completed";
             return RedirectToAction(nameof(Index));
         }
 
         // POST: Admin/PurchaseRequests/Reject/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Reject(int id)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Reject(int id, CancellationToken cancellationToken = default)
         {
-            var pr = await _db.PurchaseRequests.FindAsync(id);
+            var pr = await _db.PurchaseRequests.FindAsync(new object[] { id }, cancellationToken);
             if (pr == null) return NotFound();
 
             pr.Status = PurchaseStatus.Rejected;
             _db.PurchaseRequests.Update(pr);
-            await _db.SaveChangesAsync();
-            TempData["Success"] = "Purchase request rejected.";
+            await _db.SaveChangesAsync(cancellationToken);
+
+            TempData["Success"] = "PurchaseRequest.Rejected";
             return RedirectToAction(nameof(Index));
         }
 
-        // Optional: Details
-        public async Task<IActionResult> Details(int id)
+        // GET: Admin/PurchaseRequests/Details/5
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             var pr = await _db.PurchaseRequests
-                .Include(p => p.Student).ThenInclude(s => s.User)
-                .Include(p => p.PrivateCourse).ThenInclude(pc => pc.Teacher).ThenInclude(t => t.User)
                 .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == id);
+                .Where(p => p.Id == id)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.StudentId,
+                    StudentFullName = p.Student!.User!.FullName,
+                    StudentPhone = p.Student!.User!.PhoneNumber,
+                    p.Student!.GuardianPhoneNumber,
+                    PrivateCourseId = p.PrivateCourseId,
+                    CourseTitle = p.PrivateCourse!.Title,
+                    TeacherName = p.PrivateCourse!.Teacher!.User!.FullName,
+                    p.RequestDateUtc,
+                    // <-- enum value
+                    Status = p.Status,
+                    Amount = p.Amount,
+                    AdminNote = p.AdminNote
+                })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (pr == null) return NotFound();
-            // compute default region from admin UI culture (fallback to IT)
+
+            // region calculation
             string defaultRegion = "IT";
             try
             {
@@ -154,64 +179,64 @@ namespace Edu.Web.Areas.Admin.Controllers
                 if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
                     defaultRegion = regionInfo.TwoLetterISORegionName;
             }
-            catch
-            {
-                defaultRegion = "IT";
-            }
+            catch { defaultRegion = "IT"; }
+
             var vm = new PurchaseRequestListItemVm
             {
                 Id = pr.Id,
                 StudentId = pr.StudentId,
-                StudentName = pr.Student?.User?.FullName,
-                StudentPhone = pr.Student?.User?.PhoneNumber,
-                PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(pr.Student?.User?.PhoneNumber, defaultRegion),
-                GuardianPhoneNumber = pr.Student?.GuardianPhoneNumber,
-                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(pr.Student?.GuardianPhoneNumber, defaultRegion),
+                StudentName = pr.StudentFullName,
+                StudentPhone = pr.StudentPhone,
+                PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(pr.StudentPhone, defaultRegion),
+                GuardianPhoneNumber = pr.GuardianPhoneNumber,
+                GuardianWhatsapp = PhoneHelpers.ToWhatsappDigits(pr.GuardianPhoneNumber, defaultRegion),
                 PrivateCourseId = pr.PrivateCourseId,
-                CourseTitle = pr.PrivateCourse?.Title,
-                TeacherName = pr.PrivateCourse?.Teacher?.User?.FullName,
+                CourseTitle = pr.CourseTitle,
+                TeacherName = pr.TeacherName,
                 RequestDateUtc = pr.RequestDateUtc,
-                Status = pr.Status.ToString(),
+                // <-- assign enum directly
+                Status = pr.Status,
                 AmountLabel = pr.Amount.ToEuro(),
                 AdminNote = pr.AdminNote
             };
-            // localized label for the WA button (used by the partial)
+
             ViewBag.WhatsAppLabel = _localizer["WhatsApp"].Value ?? "WhatsApp";
             ViewData["ActivePage"] = "PurchaseRequests";
             return View(vm);
         }
+
         // POST: Admin/PurchaseRequests/Delete/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken = default)
         {
-            var pr = await _db.PurchaseRequests.FindAsync(id);
+            var pr = await _db.PurchaseRequests.FindAsync(new object[] { id }, cancellationToken);
             if (pr == null) return NotFound();
 
             if (pr.Status == PurchaseStatus.Completed)
             {
-                TempData["Error"] = "Cannot delete a completed purchase request.";
+                // set key, not localized string
+                TempData["Error"] = "PurchaseRequest.CannotDeleteCompleted";
                 return RedirectToAction(nameof(Index));
             }
 
             try
             {
-                // optionally: log who deleted it
                 _logger.LogInformation("Admin {User} deleting PurchaseRequest {Id} (Status: {Status})", User?.Identity?.Name, pr.Id, pr.Status);
-
                 _db.PurchaseRequests.Remove(pr);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
 
-                TempData["Success"] = "Purchase request deleted.";
+                TempData["Success"] = "PurchaseRequest.Deleted";
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to delete PurchaseRequest {Id}", pr.Id);
-                TempData["Error"] = "Failed to delete purchase request.";
+                TempData["Error"] = "PurchaseRequest.DeleteFailed";
             }
 
             return RedirectToAction(nameof(Index));
         }
     }
 }
+
+
 

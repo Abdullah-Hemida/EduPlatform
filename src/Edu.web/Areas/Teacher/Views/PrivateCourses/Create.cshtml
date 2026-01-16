@@ -1,16 +1,16 @@
-﻿@model Edu.Web.Areas.Teacher.ViewModels.TeacherCourseCreateVm
+﻿@* File: Areas/Teacher/Views/PrivateCourses/Create.cshtml *@
+@model Edu.Web.Areas.Teacher.ViewModels.TeacherCourseCreateVm
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<SharedResource> L
 
 @{
     ViewData["Title"] = L["Admin.Create"] + " - " + L["Nav.TeacherDashboard"];
-    var categories = ViewBag.CategorySelect as SelectList;
 }
 
 <div class="d-flex align-items-center justify-content-between mb-3 mt-3">
-     <h4 class="mb-0">@L["Course.CreateNew"]</h4>
-     <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-outline-secondary btn-sm ps-3 pe-3 ">@L["Admin.BackToList"]</a>
+    <h4 class="mb-0">@L["Course.CreateNew"]</h4>
+    <a asp-area="Teacher" asp-controller="PrivateCourses" asp-action="Index" class="btn btn-outline-secondary btn-sm ps-3 pe-3 ">@L["Admin.BackToList"]</a>
 </div>
 
 <div class="card">

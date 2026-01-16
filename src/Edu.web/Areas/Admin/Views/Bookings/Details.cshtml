@@ -17,7 +17,8 @@
         <a asp-action="Index" class="btn btn-secondary btn-sm ps-3 pe-3">
             <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
             <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
-            @L["Common.Back"]</a>
+            @L["Common.Back"]
+        </a>
     </div>
 </div>
 
@@ -47,10 +48,27 @@
                         </div>
                     </div>
 
-
                     <div class="col-md-6">
                         <h6 class="text-muted">@L["Booking.Teacher"]</h6>
                         <div class="fw-semibold">@(Model.TeacherName ?? "—")</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="text-muted">@L["Slots.Times"]</h6>
+                        <div class="fw-semibold">
+                            @{
+                                if (Model.SlotStartUtc.HasValue && Model.SlotEndUtc.HasValue)
+                                {
+                                    var start = Model.SlotStartUtc.Value.ToLocalTime().ToString("g");
+                                    var end = Model.SlotEndUtc.Value.ToLocalTime().ToString("g");
+                                    @($"{start} - {end}")
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            }
+                        </div>
                     </div>
 
                     <div class="col-md-6">
@@ -61,7 +79,9 @@
                     <div class="col-md-6">
                         <h6 class="text-muted">@L["Booking.Status"]</h6>
                         <div>
-                            <span class="badge booking-status-badge @(Model.Status == BookingStatus.Paid ? "bg-primary" : "bg-secondary")">@Model.Status</span>
+                            <span id="status-badge" class="badge booking-status-badge @(Model.Status == BookingStatus.Paid ? "bg-success" : "bg-secondary")">
+                                @(L[$"Booking.Status.{Model.Status}"] ?? Model.Status.ToString())
+                            </span>
                         </div>
                     </div>
 
@@ -110,11 +130,9 @@
         (function ($) {
             var texts = {
                 confirmMarkPaid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.ConfirmMarkPaid"].Value ?? "Mark this booking as paid?")),
-                promptAmount: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptAmount"].Value ?? "Optional: enter amount (leave empty to keep current)")),
-                promptPaymentRef: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptPaymentRef"].Value ?? "Optional: payment reference / note:")),
                 operationFailed: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.OperationFailed"].Value ?? "Operation failed")),
                 serverError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ServerError"].Value ?? "Server error, try again.")),
-                paidLabel: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.MarkedPaidLabel"].Value ?? "Paid")),
+                paidLabel: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.Paid"].Value ?? "Paid")),
                 bookingStatusPaid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.Status.Paid"].Value ?? "Paid"))
             };
 
@@ -133,40 +151,36 @@
 
                     if (!confirm(texts.confirmMarkPaid)) return;
 
-                    var amountRaw = prompt(texts.promptAmount + ":");
-                    var amount = null;
-                    if (amountRaw !== null && amountRaw.trim() !== '') {
-                        var parsed = parseFloat(amountRaw.replace(',', '.'));
-                        if (!isNaN(parsed)) amount = parsed;
-                        else {
-                            alert(texts.operationFailed);
-                        }
-                    }
-
-                    var paymentRef = prompt(texts.promptPaymentRef);
-
-                    var payload = { Id: id, Amount: amount, PaymentRef: paymentRef };
-
                     $markBtn.prop('disabled', true).addClass('disabled');
 
+                    var baseUrl = '@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })';
+                    var url = baseUrl + '/' + id;
+
                     $.ajax({
-                        url: '@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })',
+                        url: url,
                         type: 'POST',
-                        contentType: 'application/json; charset=utf-8',
-                        data: JSON.stringify(payload),
                         headers: {
                             'RequestVerificationToken': getAntiForgeryToken()
                         }
                     }).done(function (data) {
                         if (data && data.success) {
-                            // update badge(s) on page
-                            var $badge = $('.booking-status-badge');
-                            if ($badge && $badge.length) {
-                                $badge.removeClass().addClass('booking-status-badge badge bg-success');
-                                $badge.text(texts.bookingStatusPaid);
+                            // update status badge
+                            var $badge = $('#status-badge');
+                            $badge.removeClass().addClass('badge booking-status-badge bg-success').text(texts.bookingStatusPaid);
+
+                            // update paid-at display (server returns paidAtUtc)
+                            if (data.paidAtUtc) {
+                                try {
+                                    var paidAt = new Date(data.paidAtUtc);
+                                    if (!isNaN(paidAt.getTime())) {
+                                        $('#paid-at').text(paidAt.toLocaleString());
+                                    }
+                                } catch (err) {
+                                    // ignore parse errors
+                                }
                             }
 
-                            // change button to success state
+                            // update button to disabled Paid
                             $markBtn.removeClass('btn-outline-primary').addClass('btn-success').text(texts.paidLabel).prop('disabled', true);
                         } else {
                             alert(data && data.error ? data.error : texts.operationFailed);
@@ -181,6 +195,7 @@
         })(jQuery);
     </script>
 }
+
 
 
 

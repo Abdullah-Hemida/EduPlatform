@@ -22,6 +22,7 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public int PrivateCourseId { get; set; }
         public string? CourseTitle { get; set; }
         public string? CourseCoverUrl { get; set; }
+        public string? CategoryName { get; set; }
         public string? StudentName { get; set; }
         public string? StudentEmail { get; set; }
         public DateTime RequestDateUtc { get; set; }

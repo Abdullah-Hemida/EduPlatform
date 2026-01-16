@@ -20,7 +20,6 @@ namespace Edu.Web.Areas.Admin.Controllers
             _db = db;
             _localizer = localizer;
         }
-
         public async Task<IActionResult> Index(string culture = "it")
         {
             ViewData["ActivePage"] = "FooterContacts";
@@ -31,7 +30,6 @@ namespace Edu.Web.Areas.Admin.Controllers
                 .ToListAsync();
             return View(list);
         }
-
         public IActionResult Create(string culture = "it")
         {
             ViewData["ActivePage"] = "FooterContacts";

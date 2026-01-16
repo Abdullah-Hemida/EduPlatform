@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Edu.Domain.Entities;
-
 public class Level
 {
     public int Id { get; set; }

@@ -291,10 +291,24 @@
             </div>
         </div>
     }
+    @* Feedback (TempData) *@
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+    else if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+    else if (TempData["Info"] != null)
+    {
+        <div class="alert alert-info">@TempData["Info"]</div>
+    }
     <!-- Hero Section (outside main container) -->
     @RenderSection("Hero", required: false)
 
     <main role="main" class="container py-4">
+
         @RenderBody()
     </main>
     @await Component.InvokeAsync("Footer")

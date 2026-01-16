@@ -86,7 +86,20 @@ else
                 @foreach (var b in Model.Bookings)
                 {
                     <tr>
-                        <td>@(b.SlotTimes ?? "-")</td>
+                        <td>
+                            @{
+                                if (b.SlotStartUtc.HasValue && b.SlotEndUtc.HasValue)
+                                {
+                                    var s = b.SlotStartUtc.Value.ToLocalTime().ToString("g");
+                                    var e = b.SlotEndUtc.Value.ToLocalTime().ToString("g");
+                                    @($"{s} - {e}")
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            }
+                        </td>
                         <td>
                             <div class="fw-semibold">@(!string.IsNullOrEmpty(b.StudentName) ? b.StudentName : "-")</div>
                             <div class="small text-muted">@b.StudentEmail</div>
@@ -148,7 +161,20 @@ else
                             <div class="d-flex justify-content-between mb-2 align-items-start">
                                 <div>
                                     <div class="small text-muted">@L["Slots.Times"]</div>
-                                    <div class="fw-semibold">@(b.SlotTimes ?? "-")</div>
+                                    <div class="fw-semibold">
+                                        @{
+                                            if (b.SlotStartUtc.HasValue && b.SlotEndUtc.HasValue)
+                                            {
+                                                var s = b.SlotStartUtc.Value.ToLocalTime().ToString("g");
+                                                var e = b.SlotEndUtc.Value.ToLocalTime().ToString("g");
+                                                @($"{s} - {e}")
+                                            }
+                                            else
+                                            {
+                                                <text>-</text>
+                                            }
+                                        }
+                                    </div>
                                 </div>
 
                                 <div class="text-end">
@@ -243,11 +269,8 @@ else
 @section Scripts {
     <script>
         (function ($) {
-            // sterilized localized texts (serialized JSON from server)
             var texts = {
                 confirmMarkPaid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.ConfirmMarkPaid"].Value ?? "Mark this booking as paid?")),
-                promptAmount: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptAmount"].Value ?? "Optional: enter amount (leave empty to keep current)")),
-                promptPaymentRef: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.PromptPaymentRef"].Value ?? "Optional: payment reference / note:")),
                 invalidAmount: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Booking.InvalidAmount"].Value ?? "Invalid amount — will be ignored.")),
                 operationFailed: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.OperationFailed"].Value ?? "Operation failed")),
                 serverError: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["Admin.ServerError"].Value ?? "Server error, try again.")),
@@ -260,9 +283,7 @@ else
             }
 
             function showMessage(msg) {
-                // try to use bootstrap toast or alert fallback
                 if (typeof bootstrap !== 'undefined') {
-                    // basic toast fallback; for simplicity use alert here
                     alert(msg);
                 } else {
                     alert(msg);
@@ -277,51 +298,39 @@ else
 
                 if (!confirm(texts.confirmMarkPaid)) return;
 
-                var amountRaw = prompt(texts.promptAmount + ":");
-                var amount = null;
-                if (amountRaw !== null && amountRaw.trim() !== '') {
-                    // parse decimal (allow comma)
-                    var parsed = parseFloat(amountRaw.replace(',', '.'));
-                    if (!isNaN(parsed)) amount = parsed;
-                    else {
-                        showMessage(texts.invalidAmount);
-                    }
-                }
-                var paymentRef = prompt(texts.promptPaymentRef);
-
-                var payload = { Id: id, Amount: amount, PaymentRef: paymentRef };
-
                 $btn.prop('disabled', true).addClass('disabled');
 
+                var baseUrl = '@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })';
+                var url = baseUrl + '/' + id;
+
                 $.ajax({
-                    url: '@Url.Action("MarkPaid", "Bookings", new { area = "Admin" })',
+                    url: url,
                     type: 'POST',
-                    contentType: 'application/json; charset=utf-8',
-                    data: JSON.stringify(payload),
                     headers: {
                         'RequestVerificationToken': getAntiForgeryToken()
                     }
                 }).done(function (data) {
                     if (data && data.success) {
-                        // update UI
+                        // update badge
                         var badge = $('#badge-' + id);
                         if (badge && badge.length) {
                             badge.removeClass().addClass('badge bg-success');
                             badge.text(texts.bookingStatusPaid);
                         }
 
-                        var priceEl = $('#price-' + id);
-                        if (priceEl && priceEl.length) {
-                            priceEl.text(data.priceLabel || data.price || priceEl.text());
-                        }
-
-                        // replace button with disabled Paid button
-                        var newBtn = $('<button/>', {
+                        // update button to disabled Paid
+                        var $newBtn = $('<button/>', {
                             'class': 'btn btn-sm btn-success ms-1',
                             disabled: true,
                             text: texts.paidLabel
                         });
-                        $btn.replaceWith(newBtn);
+                        $btn.replaceWith($newBtn);
+
+                        // if price label present in response update it
+                        var priceEl = $('#price-' + id);
+                        if (priceEl && priceEl.length && (data.priceLabel || data.price)) {
+                            priceEl.text(data.priceLabel || data.price);
+                        }
                     } else {
                         showMessage(data && data.error ? data.error : texts.operationFailed);
                         $btn.prop('disabled', false).removeClass('disabled');
@@ -335,6 +344,7 @@ else
         })(jQuery);
     </script>
 }
+
 
 
 

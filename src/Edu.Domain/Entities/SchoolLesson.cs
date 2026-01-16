@@ -18,7 +18,6 @@ namespace Edu.Domain.Entities
 
         public Curriculum? Curriculum { get; set; }
         public SchoolModule? SchoolModule { get; set; }
-
         public ICollection<FileResource>? Files { get; set; } = new List<FileResource>();
     }
 

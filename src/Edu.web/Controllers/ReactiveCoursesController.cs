@@ -36,44 +36,80 @@ namespace Edu.Web.Controllers
         [HttpGet("Index")]
         public async Task<IActionResult> Index(string? q = null)
         {
-            var query = _db.ReactiveCourses
+            // base query: active/upcoming, not archived
+            var baseQuery = _db.ReactiveCourses
                 .AsNoTracking()
-                .Include(c => c.Teacher).ThenInclude(t => t.User)
-                .Where(c => c.EndDate >= DateTime.UtcNow && !c.IsArchived) // optional: show active/upcoming courses only
-                .AsQueryable();
+                .Where(c => c.EndDate >= DateTime.UtcNow && !c.IsArchived);
 
             if (!string.IsNullOrWhiteSpace(q))
             {
-                var t = q.Trim();
-                query = query.Where(c => EF.Functions.Like(c.Title!, $"%{t}%") ||
-                                         EF.Functions.Like(c.Description!, $"%{t}%") ||
-                                         (c.Teacher != null && EF.Functions.Like(c.Teacher.User!.FullName!, $"%{t}%")));
+                var term = q.Trim();
+                // project only what we need (avoid loading related graph)
+                baseQuery = baseQuery.Where(c =>
+                    EF.Functions.Like(c.Title ?? "", $"%{term}%") ||
+                    EF.Functions.Like(c.Description ?? "", $"%{term}%") ||
+                    // teacher's full name may be null; use left join projection below
+                    false
+                );
             }
 
-            var list = await query.OrderByDescending(c => c.Id).ToListAsync();
+            // Project to a light shape that includes teacher name to avoid Include() heavy loads
+            var projected = baseQuery
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Title,
+                    c.Description,
+                    c.CoverImageKey,
+                    IntroVideoUrl = c.IntroVideoUrl,
+                    c.DurationMonths,
+                    c.PricePerMonth,
+                    c.Capacity,
+                    c.StartDate,
+                    c.EndDate,
+                    TeacherName = c.Teacher != null && c.Teacher.User != null ? c.Teacher.User.FullName : null
+                })
+                .OrderByDescending(c => c.Id);
+
+            var list = await projected.ToListAsync();
+
+            // Resolve distinct cover keys in batch (best-effort)
+            var keys = list.Select(x => x.CoverImageKey).Where(k => !string.IsNullOrEmpty(k)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var coverMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (keys.Any())
+            {
+                var resolveTasks = keys.Select(async k =>
+                {
+                    try
+                    {
+                        var url = await _fileStorage.GetPublicUrlAsync(k!);
+                        return (Key: k!, Url: string.IsNullOrEmpty(url) ? null : url);
+                    }
+                    catch
+                    {
+                        return (Key: k!, Url: (string?)null);
+                    }
+                }).ToArray();
+
+                var results = await Task.WhenAll(resolveTasks);
+                foreach (var r in results)
+                {
+                    if (!coverMap.ContainsKey(r.Key))
+                        coverMap[r.Key] = r.Url;
+                }
+            }
 
             var vm = new ReactiveCourseIndexVm
             {
                 Query = q,
-                Courses = new List<ReactiveCourseListItemVm>()
-            };
-
-            foreach (var c in list)
-            {
-                var coverKeyOrUrl = !string.IsNullOrEmpty(c.CoverImageKey) ? c.CoverImageKey : c.CoverImageKey; // prefer Key (if stored); if you store URL in CoverImageKey adapt accordingly
-                string? coverPublicUrl = null;
-                if (!string.IsNullOrEmpty(c.CoverImageKey))
-                {
-                    coverPublicUrl = await _fileStorage.GetPublicUrlAsync(c.CoverImageKey);
-                }
-                // fallback to null (view will gracefully handle)
-                vm.Courses.Add(new ReactiveCourseListItemVm
+                Courses = list.Select(c => new ReactiveCourseListItemVm
                 {
                     Id = c.Id,
                     Title = c.Title,
-                    ShortDescription = c.Description?.Length > 240 ? c.Description.Substring(0, 240) + "…" : c.Description,
-                    CoverPublicUrl = coverPublicUrl,
-                    TeacherName = c.Teacher?.User?.FullName,
+                    ShortDescription = string.IsNullOrEmpty(c.Description) ? null :
+                        (c.Description.Length > 240 ? c.Description.Substring(0, 240) + "…" : c.Description),
+                    CoverPublicUrl = !string.IsNullOrEmpty(c.CoverImageKey) && coverMap.TryGetValue(c.CoverImageKey!, out var pub) ? pub : null,
+                    TeacherName = c.TeacherName,
                     DurationMonths = c.DurationMonths,
                     PricePerMonthLabel = c.PricePerMonth.ToEuro(),
                     Capacity = c.Capacity,
@@ -81,8 +117,8 @@ namespace Edu.Web.Controllers
                     EndDateUtc = c.EndDate,
                     MonthsCount = c.DurationMonths,
                     IntroVideoUrl = c.IntroVideoUrl
-                });
-            }
+                }).ToList()
+            };
 
             return View(vm);
         }
@@ -99,10 +135,21 @@ namespace Edu.Web.Controllers
 
             if (course == null) return NotFound();
 
+            // resolve cover public url (best-effort)
             string? coverPublicUrl = null;
             if (!string.IsNullOrEmpty(course.CoverImageKey))
-                coverPublicUrl = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey);
+            {
+                try
+                {
+                    coverPublicUrl = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey);
+                }
+                catch
+                {
+                    coverPublicUrl = null;
+                }
+            }
 
+            // student / enrollment info
             var userId = _userManager.GetUserId(User);
             bool isEnrolled = false;
             bool isPaidEnrollment = false;
@@ -123,18 +170,34 @@ namespace Edu.Web.Controllers
                 }
             }
 
-            var monthsVm = course.Months
-                .OrderBy(m => m.MonthIndex)
-                .Select(m => new ReactiveCourseMonthVm
-                {
-                    Id = m.Id,
-                    MonthIndex = m.MonthIndex,
-                    MonthStartUtc = m.MonthStartUtc,
-                    MonthEndUtc = m.MonthEndUtc,
-                    IsReadyForPayment = m.IsReadyForPayment,
-                    LessonsCount = m.Lessons?.Count ?? 0,
-                    MonthPaymentsCount = m.MonthPayments?.Count ?? 0
-                }).ToList();
+            // prepare months VMs
+            var months = course.Months.OrderBy(m => m.MonthIndex).ToList();
+            var monthIds = months.Select(m => m.Id).Where(i => i > 0).ToList();
+
+            // Get payments count per month in one query (avoid N+1)
+            var paymentsCountMap = new Dictionary<int, int>();
+            if (monthIds.Any())
+            {
+                var grouped = await _db.ReactiveEnrollmentMonthPayments
+                    .AsNoTracking()
+                    .Where(pm => monthIds.Contains(pm.ReactiveCourseMonthId))
+                    .GroupBy(pm => pm.ReactiveCourseMonthId)
+                    .Select(g => new { MonthId = g.Key, Count = g.Count() })
+                    .ToListAsync();
+
+                paymentsCountMap = grouped.ToDictionary(x => x.MonthId, x => x.Count);
+            }
+
+            var monthsVm = months.Select(m => new ReactiveCourseMonthVm
+            {
+                Id = m.Id,
+                MonthIndex = m.MonthIndex,
+                MonthStartUtc = m.MonthStartUtc,
+                MonthEndUtc = m.MonthEndUtc,
+                IsReadyForPayment = m.IsReadyForPayment,
+                LessonsCount = m.Lessons?.Count ?? 0,
+                MonthPaymentsCount = paymentsCountMap.TryGetValue(m.Id, out var ct) ? ct : 0
+            }).ToList();
 
             var vm = new ReactiveCourseDetailsVm
             {
@@ -152,14 +215,13 @@ namespace Edu.Web.Controllers
                 Months = monthsVm,
                 IsEnrolled = isEnrolled,
                 IsPaidEnrollment = isPaidEnrollment,
-                HasPendingEnrollment = hasPendingEnrollment
+                HasPendingEnrollment = hasPendingEnrollment,
+                IntroYouTubeId = YouTubeHelper.ExtractYouTubeId(course.IntroVideoUrl)
             };
-
-            // **Use the helper here** to parse the YouTube id (null if none)
-            vm.IntroYouTubeId = YouTubeHelper.ExtractYouTubeId(course.IntroVideoUrl);
 
             return View(vm);
         }
     }
 }
+
 

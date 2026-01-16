@@ -48,21 +48,45 @@
 <body class="bg-light">
     <!-- Global Alerts -->
     <div class="container mt-3 global-alert" style="z-index:12000;">
-        @if (TempData["Success"] != null)
+        @{
+            string? successKey = TempData["Success"]?.ToString();
+            string? errorKey = TempData["Error"]?.ToString();
+
+            // Helper: resolve a TempData value either as a localization key or literal
+            string ResolveTempData(string? val)
+            {
+                if (string.IsNullOrEmpty(val)) return string.Empty;
+
+                // Try localizer lookup — returns LocalizedString with ResourceNotFound flag
+                var localized = L[val];
+                if (!localized.ResourceNotFound)
+                {
+                    return localized.Value ?? string.Empty;
+                }
+
+                // Not a known key, so return the provided value as-is (already localized or literal)
+                return val;
+            }
+        }
+
+        @if (!string.IsNullOrEmpty(successKey))
         {
+            var message = ResolveTempData(successKey);
             <div class="alert alert-success alert-dismissible fade show text-center" role="alert">
-                @TempData["Success"]
+                @message
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         }
-        else if (TempData["Error"] != null)
+        else if (!string.IsNullOrEmpty(errorKey))
         {
+            var message = ResolveTempData(errorKey);
             <div class="alert alert-danger alert-dismissible fade show text-center" role="alert">
-                @TempData["Error"]
+                @message
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         }
     </div>
+
     <div aria-live="polite" aria-atomic="true"
          class="position-fixed top-0 end-0 p-3"
          style="z-index: 2000;">
@@ -192,7 +216,7 @@
 
                     <li class="nav-item">
                         <a asp-area="Admin" asp-controller="PrivateCourses" asp-action="Index"
-                           class="nav-link d-flex align-items-center gap-2 @active("Private Courses")" title="@Localizer["Nav.PrivateCourses"]">
+                           class="nav-link d-flex align-items-center gap-2 @active("PrivateCourses")" title="@Localizer["Nav.PrivateCourses"]">
                             <i class="fas fa-user-lock nav-icon"></i>
                             <span class="nav-text ms-2">@Localizer["Nav.RecordedCourses"]</span>
                         </a>

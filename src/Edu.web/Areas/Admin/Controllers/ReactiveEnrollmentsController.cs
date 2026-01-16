@@ -52,32 +52,46 @@ namespace Edu.Web.Areas.Admin.Controllers
         // GET: Admin/ReactiveEnrollments
         // supports ?q=search&page=1&pageSize=20
         [HttpGet]
-        public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
         {
             if (page < 1) page = 1;
             if (pageSize <= 0) pageSize = 20;
 
+            // Base query (no tracking)
             var baseQuery = _db.ReactiveEnrollments
                 .AsNoTracking()
-                .Include(e => e.ReactiveCourse)
+                .Include(e => e.ReactiveCourse) // project reactive course fields later
                 .AsQueryable();
 
+            // Search optimization:
+            // If search term provided, first resolve matching user ids (single query),
+            // then filter enrollments using Contains on those ids (translated to SQL IN (...))
             if (!string.IsNullOrWhiteSpace(q))
             {
-                q = q.Trim();
+                var term = q.Trim();
+                var like = $"%{term}%";
+
+                // single DB scan for users matching name/email (students or teachers)
+                var matchedUserIds = await _db.Users
+                    .AsNoTracking()
+                    .Where(u => EF.Functions.Like(u.FullName, like) || EF.Functions.Like(u.Email, like))
+                    .Select(u => u.Id)
+                    .ToListAsync(cancellationToken);
+
+                // filter by course title OR student id OR teacher id
                 baseQuery = baseQuery.Where(e =>
-                    EF.Functions.Like(e.ReactiveCourse.Title, $"%{q}%") ||
-                    (e.StudentId != null && _db.Users.Any(u => u.Id == e.StudentId && (EF.Functions.Like(u.FullName, $"%{q}%") || EF.Functions.Like(u.Email, $"%{q}%")))) ||
-                    (e.ReactiveCourse.TeacherId != null && _db.Users.Any(t => t.Id == e.ReactiveCourse.TeacherId && EF.Functions.Like(t.FullName, $"%{q}%")))
-                );
+                    EF.Functions.Like(e.ReactiveCourse.Title!, like) ||
+                    (e.StudentId != null && matchedUserIds.Contains(e.StudentId)) ||
+                    (e.ReactiveCourse.TeacherId != null && matchedUserIds.Contains(e.ReactiveCourse.TeacherId)));
             }
 
-            var totalCount = await baseQuery.CountAsync();
+            var totalCount = await baseQuery.CountAsync(cancellationToken);
 
-            var items = await baseQuery
+            var pageItems = await baseQuery
                 .OrderByDescending(e => e.CreatedAtUtc)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                // projection keeps query translation efficient: count of month payments is a subquery
                 .Select(e => new
                 {
                     e.Id,
@@ -89,23 +103,54 @@ namespace Edu.Web.Areas.Admin.Controllers
                     PaidCount = e.MonthPayments.Count(m => m.Status == EnrollmentMonthPaymentStatus.Paid),
                     PendingCount = e.MonthPayments.Count(m => m.Status == EnrollmentMonthPaymentStatus.Pending)
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
-            var studentIds = items.Select(i => i.StudentId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
-            var teacherIds = items.Select(i => i.TeacherId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+            // Collect unique user ids to fetch user info in one query
+            var studentIds = pageItems.Select(i => i.StudentId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+            var teacherIds = pageItems.Select(i => i.TeacherId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
 
-            var users = await _db.Users
-                .AsNoTracking()
-                .Where(u => studentIds.Contains(u.Id) || teacherIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.PhotoStorageKey, u.PhotoUrl })
-                .ToListAsync();
+            var userIds = studentIds.Concat(teacherIds).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
 
-            var students = await _db.Students
-                .AsNoTracking()
-                .Where(s => studentIds.Contains(s.Id))
-                .Select(s => new { s.Id, s.GuardianPhoneNumber })
-                .ToListAsync();
-            // compute default region from admin UI culture (fallback to IT)
+            // load users once and build dictionary for O(1) lookup
+            // dictionary: userId -> (FullName, Email, Phone, PhotoStorageKey, PhotoUrl)
+            var usersDict = new Dictionary<string, (string? FullName, string? Email, string? Phone, string? PhotoKey, string? PhotoUrl)>(StringComparer.OrdinalIgnoreCase);
+            if (userIds.Any())
+            {
+                var usersList = await _db.Users
+                    .AsNoTracking()
+                    .Where(u => userIds.Contains(u.Id))
+                    .Select(u => new
+                    {
+                        u.Id,
+                        u.FullName,
+                        u.Email,
+                        Phone = u.PhoneNumber,
+                        PhotoKey = u.PhotoStorageKey,
+                        PhotoUrl = u.PhotoUrl
+                    })
+                    .ToListAsync(cancellationToken);
+
+                // convert to dictionary
+                usersDict = usersList.ToDictionary(
+                    x => x.Id,
+                    x => (x.FullName, x.Email, x.Phone, x.PhotoKey, x.PhotoUrl),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+
+            // small student info (guardian phone) as dictionary
+            var studentsDict = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (studentIds.Any())
+            {
+                var studentList = await _db.Students
+                    .AsNoTracking()
+                    .Where(s => studentIds.Contains(s.Id))
+                    .Select(s => new { s.Id, s.GuardianPhoneNumber })
+                    .ToListAsync(cancellationToken);
+
+                studentsDict = studentList.ToDictionary(x => x.Id, x => x.GuardianPhoneNumber, StringComparer.OrdinalIgnoreCase);
+            }
+
+            // default region once
             string defaultRegion = "IT";
             try
             {
@@ -113,67 +158,63 @@ namespace Edu.Web.Areas.Admin.Controllers
                 if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
                     defaultRegion = regionInfo.TwoLetterISORegionName;
             }
-            catch
+            catch { defaultRegion = "IT"; }
+
+            // --- later: mapping pageItems into VMs (replace earlier FirstOrDefault lookups)
+            var list = pageItems.Select(i =>
             {
-                defaultRegion = "IT";
-            }
-            // Build DTOs first, collect keys
-            var list = items.Select(i =>
-            {
-                var stu = users.FirstOrDefault(u => u.Id == i.StudentId);
-                var tch = users.FirstOrDefault(u => u.Id == i.TeacherId);
+                // safe lookup helpers
+                usersDict.TryGetValue(i.StudentId ?? string.Empty, out var stu);
+                usersDict.TryGetValue(i.TeacherId ?? string.Empty, out var tch);
+                studentsDict.TryGetValue(i.StudentId ?? string.Empty, out var guardianPhone);
+
                 return new AdminEnrollmentListItemVm
                 {
                     EnrollmentId = i.Id,
                     CourseId = i.CourseId,
                     CourseTitle = i.CourseTitle,
                     StudentId = i.StudentId,
-                    StudentFullName = stu?.FullName ?? i.StudentId,
-                    StudentEmail = stu?.Email,
-                    StudentPhone = stu?.PhoneNumber,
-                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(stu?.PhoneNumber, defaultRegion),
-                    GuardianPhoneNumber = students.FirstOrDefault(s => s.Id == i.StudentId)?.GuardianPhoneNumber,
-                    PhotoStorageKey = stu?.PhotoStorageKey,
-                    PhotoFileUrlFallback = stu?.PhotoUrl,
-                    TeacherFullName = tch?.FullName,
+                    StudentFullName = !string.IsNullOrEmpty(stu.FullName) ? stu.FullName! : (i.StudentId ?? string.Empty),
+                    StudentEmail = stu.Email,
+                    StudentPhone = stu.Phone,
+                    PhoneWhatsapp = PhoneHelpers.ToWhatsappDigits(stu.Phone, defaultRegion),
+                    GuardianPhoneNumber = guardianPhone,
+                    PhotoStorageKey = stu.PhotoKey,
+                    PhotoFileUrlFallback = stu.PhotoUrl,
+                    TeacherFullName = tch.FullName,
                     CreatedAtUtc = i.CreatedAtUtc,
                     PaidMonthsCount = i.PaidCount,
                     PendingMonthsCount = i.PendingCount
                 };
             }).ToList();
 
-            // Resolve unique keys
+            // resolve student photo urls in batch (non-blocking)
             var keys = list.Select(x => x.PhotoStorageKey).Where(k => !string.IsNullOrEmpty(k)).Distinct().ToList();
             var keyToUrl = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-
             if (keys.Any())
             {
-                var tasks = keys.Select(async key =>
+                var tasks = keys.Select(async k =>
                 {
                     try
                     {
-                        var url = await _fileStorage.GetPublicUrlAsync(key!);
-                        keyToUrl[key!] = url;
+                        var u = await _fileStorage.GetPublicUrlAsync(k!, TimeSpan.FromHours(1));
+                        keyToUrl[k!] = u;
                     }
                     catch
                     {
-                        keyToUrl[key!] = null;
+                        keyToUrl[k!] = null;
                     }
-                });
+                }).ToArray();
+
                 await Task.WhenAll(tasks);
             }
 
-            // Apply resolved urls
             foreach (var it in list)
             {
                 if (!string.IsNullOrEmpty(it.PhotoStorageKey) && keyToUrl.TryGetValue(it.PhotoStorageKey!, out var publicUrl))
-                {
                     it.StudentPhotoUrl = publicUrl ?? it.PhotoFileUrlFallback ?? it.PhotoStorageKey;
-                }
                 else
-                {
                     it.StudentPhotoUrl = it.PhotoFileUrlFallback;
-                }
             }
 
             var vm = new AdminEnrollmentIndexVm
@@ -191,13 +232,12 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         // GET: Admin/ReactiveEnrollments/Details/5
         [HttpGet]
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
-
             var enrollment = await _db.ReactiveEnrollments
                 .AsNoTracking()
                 .Include(e => e.ReactiveCourse)
-                .FirstOrDefaultAsync(e => e.Id == id);
+                .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
             if (enrollment == null)
             {
@@ -205,21 +245,20 @@ namespace Edu.Web.Areas.Admin.Controllers
                 return NotFound();
             }
 
-            // 1) load payments
             var payments = await _db.ReactiveEnrollmentMonthPayments
                 .AsNoTracking()
                 .Where(p => p.ReactiveEnrollmentId == id)
-                .ToListAsync();
-            // 2) load months (id + index)
+                .ToListAsync(cancellationToken);
+
             var months = await _db.ReactiveCourseMonths
                 .AsNoTracking()
                 .Where(m => m.ReactiveCourseId == enrollment.ReactiveCourseId)
                 .OrderBy(m => m.MonthIndex)
                 .Select(m => new { m.Id, m.MonthIndex })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             var monthIds = months.Select(m => m.Id).ToList();
-            // 3) compute lesson counts grouped by month id
+
             Dictionary<int, int> lessonCounts = new();
             if (monthIds.Any())
             {
@@ -228,32 +267,25 @@ namespace Edu.Web.Areas.Admin.Controllers
                     .Where(l => monthIds.Contains(l.ReactiveCourseMonthId))
                     .GroupBy(l => l.ReactiveCourseMonthId)
                     .Select(g => new { MonthId = g.Key, Count = g.Count() })
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
                 lessonCounts = grouped.ToDictionary(x => x.MonthId, x => x.Count);
             }
-            else
-            {
-                _logger.LogDebug("No months found for course {CourseId}", enrollment.ReactiveCourseId);
-            }
 
-            // 4) load student/user records
             ApplicationUser? studentUser = null;
             Domain.Entities.Student? student = null;
             if (!string.IsNullOrEmpty(enrollment.StudentId))
             {
-                studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId);
-                student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == enrollment.StudentId);
+                studentUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.StudentId, cancellationToken);
+                student = await _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == enrollment.StudentId, cancellationToken);
             }
 
-            // 5) teacher
             ApplicationUser? teacherUser = null;
             if (!string.IsNullOrEmpty(enrollment.ReactiveCourse?.TeacherId))
             {
-                teacherUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.ReactiveCourse.TeacherId);
+                teacherUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == enrollment.ReactiveCourse.TeacherId, cancellationToken);
             }
 
-            // 6) build month VMs (explicitly set LessonsCount from the grouped dictionary)
             var monthsVm = months.Select(m => new AdminEnrollmentMonthVm
             {
                 MonthId = m.Id,
@@ -275,15 +307,16 @@ namespace Edu.Web.Areas.Admin.Controllers
                     }).ToList()
             }).ToList();
 
-            // 8) resolve student photo URL (best-effort)
+            // resolve student photo url (best-effort)
             string? studentPhotoUrl = null;
             if (studentUser != null && !string.IsNullOrEmpty(studentUser.PhotoStorageKey))
             {
-                try { studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey); }
+                try { studentPhotoUrl = await _fileStorage.GetPublicUrlAsync(studentUser.PhotoStorageKey, TimeSpan.FromHours(1)); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Failed resolving student photo storage key"); studentPhotoUrl = studentUser.PhotoUrl ?? studentUser.PhotoStorageKey; }
             }
             else studentPhotoUrl = studentUser?.PhotoUrl;
-            // compute default region from admin UI culture (fallback to IT)
+
+            // default region
             string defaultRegion = "IT";
             try
             {
@@ -291,11 +324,8 @@ namespace Edu.Web.Areas.Admin.Controllers
                 if (!string.IsNullOrEmpty(regionInfo.TwoLetterISORegionName))
                     defaultRegion = regionInfo.TwoLetterISORegionName;
             }
-            catch
-            {
-                defaultRegion = "IT";
-            }
-            // 9) build VM
+            catch { defaultRegion = "IT"; }
+
             var vm = new AdminEnrollmentDetailsVm
             {
                 EnrollmentId = enrollment.Id,
@@ -322,11 +352,11 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/ReactiveEnrollments/MarkPaymentPaid 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> MarkPaymentPaid([FromForm] int paymentId)
+        public async Task<IActionResult> MarkPaymentPaid([FromForm] int paymentId, CancellationToken cancellationToken = default)
         {
             var p = await _db.ReactiveEnrollmentMonthPayments
                 .Include(x => x.ReactiveEnrollment)
-                .FirstOrDefaultAsync(x => x.Id == paymentId);
+                .FirstOrDefaultAsync(x => x.Id == paymentId, cancellationToken);
 
             if (p == null) return Json(new { success = false, message = _localizer["Admin.PaymentNotFound"].Value });
 
@@ -335,36 +365,25 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             p.Status = EnrollmentMonthPaymentStatus.Paid;
             p.PaidAtUtc = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
 
-            _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
-            {
-                ReactiveCourseId = p.ReactiveEnrollment.ReactiveCourseId,
-                EnrollmentId = p.ReactiveEnrollmentId,
-                ActorId = User?.Identity?.Name,
-                ActorName = User?.Identity?.Name,
-                Action = "AdminMarkedPaymentPaid",
-                Note = $"PaymentId={paymentId}",
-                CreatedAtUtc = DateTime.UtcNow
-            });
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
+            // notify (fire-and-forget where appropriate)
             try
             {
                 var studentId = p.ReactiveEnrollment.StudentId;
                 if (!string.IsNullOrEmpty(studentId))
                 {
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId);
+                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
                     if (user?.Email != null)
                     {
-                        // placeholders: {0}=amount, {1}=monthIndex
                         await NotifyFireAndForgetAsync(async () =>
                             await _notifier.SendLocalizedEmailAsync(
                                 user,
                                 "Notify.PaymentMarkedPaid.Subject",
                                 "Notify.PaymentMarkedPaid.Body",
                                 p.Amount.ToString("C"),
-                                (object)(await TryGetMonthIndexLabelAsync(p.ReactiveCourseMonthId) ?? p.ReactiveCourseMonthId.ToString())
+                                (object)(await TryGetMonthIndexLabelAsync(p.ReactiveCourseMonthId, cancellationToken) ?? p.ReactiveCourseMonthId.ToString())
                             )
                         );
                     }
@@ -381,11 +400,11 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/ReactiveEnrollments/RejectPayment
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RejectPayment([FromForm] int paymentId, [FromForm] string? adminNote)
+        public async Task<IActionResult> RejectPayment([FromForm] int paymentId, [FromForm] string? adminNote, CancellationToken cancellationToken = default)
         {
             var p = await _db.ReactiveEnrollmentMonthPayments
                 .Include(x => x.ReactiveEnrollment)
-                .FirstOrDefaultAsync(x => x.Id == paymentId);
+                .FirstOrDefaultAsync(x => x.Id == paymentId, cancellationToken);
 
             if (p == null) return Json(new { success = false, message = _localizer["Admin.PaymentNotFound"].Value });
 
@@ -394,29 +413,17 @@ namespace Edu.Web.Areas.Admin.Controllers
 
             p.Status = EnrollmentMonthPaymentStatus.Rejected;
             p.AdminNote = adminNote;
-            await _db.SaveChangesAsync();
 
-            _db.ReactiveEnrollmentLogs.Add(new ReactiveEnrollmentLog
-            {
-                ReactiveCourseId = p.ReactiveEnrollment.ReactiveCourseId,
-                EnrollmentId = p.ReactiveEnrollmentId,
-                ActorId = User?.Identity?.Name,
-                ActorName = User?.Identity?.Name,
-                Action = "AdminRejectedPayment",
-                Note = $"PaymentId={paymentId}; Note={adminNote}",
-                CreatedAtUtc = DateTime.UtcNow
-            });
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             try
             {
                 var studentId = p.ReactiveEnrollment.StudentId;
                 if (!string.IsNullOrEmpty(studentId))
                 {
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId);
+                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
                     if (user?.Email != null)
                     {
-                        // placeholders: {0}=amount, {1}=adminNote
                         await NotifyFireAndForgetAsync(async () =>
                             await _notifier.SendLocalizedEmailAsync(
                                 user,
@@ -440,20 +447,20 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/ReactiveEnrollments/Delete
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete([FromForm] int enrollmentId)
+        public async Task<IActionResult> Delete([FromForm] int enrollmentId, CancellationToken cancellationToken = default)
         {
             var enr = await _db.ReactiveEnrollments
                 .Include(e => e.MonthPayments)
-                .FirstOrDefaultAsync(e => e.Id == enrollmentId);
+                .FirstOrDefaultAsync(e => e.Id == enrollmentId, cancellationToken);
 
             if (enr == null) return Json(new { success = false, message = _localizer["Admin.NotFound"].Value });
 
             try
             {
-                // optionally notify student
+                // best-effort notify
                 try
                 {
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == enr.StudentId);
+                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == enr.StudentId, cancellationToken);
                     if (user != null && !string.IsNullOrEmpty(user.Email))
                     {
                         await NotifyFireAndForgetAsync(async () =>
@@ -469,7 +476,7 @@ namespace Edu.Web.Areas.Admin.Controllers
                 catch (Exception ex) { _logger.LogWarning(ex, "Notification when deleting enrollment failed"); }
 
                 _db.ReactiveEnrollments.Remove(enr);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
                 return Json(new { success = true, message = _localizer["Admin.DeleteSuccess"].Value });
             }
             catch (Exception ex)
@@ -482,21 +489,21 @@ namespace Edu.Web.Areas.Admin.Controllers
         // POST: Admin/ReactiveEnrollments/DeleteOld
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteOld([FromForm] DateTime olderThanUtc)
+        public async Task<IActionResult> DeleteOld([FromForm] DateTime olderThanUtc, CancellationToken cancellationToken = default)
         {
             try
             {
                 var toDelete = await _db.ReactiveEnrollments
                     .Where(e => e.CreatedAtUtc < olderThanUtc)
                     .Where(e => !e.MonthPayments.Any(p => p.Status == EnrollmentMonthPaymentStatus.Paid))
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
                 if (!toDelete.Any())
                     return Json(new { success = true, deleted = 0, message = _localizer["Admin.DeleteOldNoMatching"].Value });
 
                 var count = toDelete.Count;
                 _db.ReactiveEnrollments.RemoveRange(toDelete);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
 
                 return Json(new { success = true, deleted = count, message = _localizer["Admin.DeleteOldSuccess"].Value });
             }
@@ -508,12 +515,11 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
 
         // attempt to get MonthIndex for a given monthId (returns string or null)
-        private async Task<string?> TryGetMonthIndexLabelAsync(int reactiveCourseMonthId)
+        private async Task<string?> TryGetMonthIndexLabelAsync(int reactiveCourseMonthId, CancellationToken cancellationToken = default)
         {
             try
             {
-                var month = await _db.ReactiveCourseMonths.AsNoTracking()
-                    .FirstOrDefaultAsync(m => m.Id == reactiveCourseMonthId);
+                var month = await _db.ReactiveCourseMonths.AsNoTracking().FirstOrDefaultAsync(m => m.Id == reactiveCourseMonthId, cancellationToken);
                 if (month != null) return month.MonthIndex.ToString();
             }
             catch
@@ -545,6 +551,7 @@ namespace Edu.Web.Areas.Admin.Controllers
         }
     }
 }
+
 
 
 

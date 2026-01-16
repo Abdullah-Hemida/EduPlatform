@@ -21,9 +21,9 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
         public SlotsController(ApplicationDbContext db, UserManager<ApplicationUser> um, IStringLocalizer<SharedResource> localizer)
         {
-            _db = db;
-            _um = um;
-            _localizer = localizer;
+            _db = db ?? throw new ArgumentNullException(nameof(db));
+            _um = um ?? throw new ArgumentNullException(nameof(um));
+            _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
         }
 
         // GET: Teacher/Slots
@@ -31,22 +31,36 @@ namespace Edu.Web.Areas.Teacher.Controllers
         {
             var teacherId = _um.GetUserId(User);
             var nowUtc = DateTime.UtcNow;
-            var slots = await _db.Slots
+
+            // Project only the fields we need (avoid pulling full Booking entities)
+            var slotsProjection = await _db.Slots
+                .AsNoTracking()
                 .Where(s => s.TeacherId == teacherId && s.EndUtc >= nowUtc)
-                .Include(s => s.Bookings)
                 .OrderBy(s => s.StartUtc)
+                .Select(s => new
+                {
+                    s.Id,
+                    s.StartUtc,
+                    s.EndUtc,
+                    s.Capacity,
+                    s.Price,
+                    s.LocationUrl,
+                    // Count bookings that consume seats (Pending or Paid — adjust policy if needed)
+                    OccupiedSeats = s.Bookings.Count(b => b.Status == BookingStatus.Pending || b.Status == BookingStatus.Paid)
+                })
                 .ToListAsync();
 
-            var vm = slots.Select(s => new SlotListItemVm
+            var vm = slotsProjection.Select(s => new SlotListItemVm
             {
                 Id = s.Id,
                 StartLocal = s.StartUtc.ToLocalTime(),
                 EndLocal = s.EndUtc.ToLocalTime(),
                 Capacity = s.Capacity,
-                AvailableSeats = s.Capacity,
+                AvailableSeats = Math.Max(0, s.Capacity - s.OccupiedSeats),
                 PriceLabel = s.Price.ToEuro(),
                 LocationUrl = s.LocationUrl
             }).ToList();
+
             ViewData["ActivePage"] = "Slots";
             return View(vm);
         }
@@ -71,7 +85,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             if (vm.EndLocal <= vm.StartLocal)
             {
-                ModelState.AddModelError("", _localizer["Slots.StartEndInvalid"] ?? "End must be after start");
+                ModelState.AddModelError("", _localizer["Slots.StartEndInvalid"].Value ?? "End must be after start");
                 return View(vm);
             }
 
@@ -90,7 +104,8 @@ namespace Edu.Web.Areas.Teacher.Controllers
             _db.Slots.Add(slot);
             await _db.SaveChangesAsync();
 
-            TempData["Success"] = _localizer["Slots.Created"] ?? "Slot created.";
+            // store resource key (not localized string)
+            TempData["Success"] = "Slots.Created";
             return RedirectToAction(nameof(Index));
         }
 
@@ -123,7 +138,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             if (vm.EndLocal <= vm.StartLocal)
             {
-                ModelState.AddModelError("", _localizer["Slots.StartEndInvalid"] ?? "End must be after start");
+                ModelState.AddModelError("", _localizer["Slots.StartEndInvalid"].Value ?? "End must be after start");
                 return View(vm);
             }
 
@@ -132,10 +147,10 @@ namespace Edu.Web.Areas.Teacher.Controllers
 
             if (slot == null) return NotFound();
 
-            // concurrency: check RowVersion
+            // concurrency: check RowVersion (byte[]), show localized message on conflict
             if (vm.RowVersion != null && slot.RowVersion != null && !vm.RowVersion.SequenceEqual(slot.RowVersion))
             {
-                ModelState.AddModelError("", _localizer["ConcurrencyError"]);
+                ModelState.AddModelError("", _localizer["ConcurrencyError"].Value ?? "The record was changed by someone else.");
                 return View(vm);
             }
 
@@ -148,7 +163,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
             _db.Slots.Update(slot);
             await _db.SaveChangesAsync();
 
-            TempData["Success"] = _localizer["Slots.Updated"] ?? "Slot updated.";
+            TempData["Success"] = "Slots.Updated";
             return RedirectToAction(nameof(Index));
         }
 
@@ -157,24 +172,30 @@ namespace Edu.Web.Areas.Teacher.Controllers
         public async Task<IActionResult> Delete(int id)
         {
             var teacherId = _um.GetUserId(User);
-            var slot = await _db.Slots.Include(s => s.Bookings).FirstOrDefaultAsync(s => s.Id == id && s.TeacherId == teacherId);
-            if (slot == null) return NotFound();
 
-            // don't allow delete if there are accepted (or pending?) bookings depending on policy
-            var activeBookings = slot.Bookings.Count(b => b.Status == BookingStatus.Pending);
+            // count active bookings directly (avoid loading bookings collection)
+            var activeBookings = await _db.Bookings
+                .AsNoTracking()
+                .CountAsync(b => b.SlotId == id && (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Paid));
+
             if (activeBookings > 0)
             {
-                TempData["Error"] = _localizer["Slot.DeleteHasAcceptedBookings"] ?? "Cannot delete slot with accepted or pending bookings.";
+                TempData["Error"] = "Slot.DeleteHasAcceptedBookings";
                 return RedirectToAction(nameof(Index));
             }
+
+            var slot = await _db.Slots.FirstOrDefaultAsync(s => s.Id == id && s.TeacherId == teacherId);
+            if (slot == null) return NotFound();
 
             _db.Slots.Remove(slot);
             await _db.SaveChangesAsync();
 
-            TempData["Success"] = _localizer["Slots.Deleted"] ?? "Slot deleted.";
+            TempData["Success"] = "Slots.Deleted";
             return RedirectToAction(nameof(Index));
         }
     }
 }
 
 
+
+//https://www.youtube.com/shorts/a5Xg1R7tLH0?feature=share

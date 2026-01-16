@@ -25,6 +25,12 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public int Id { get; set; }
         public string? Title { get; set; }
         public int? CategoryId { get; set; }
+        // projected from DB
+        public string? CategoryNameEn { get; set; }
+        public string? CategoryNameIt { get; set; }
+        public string? CategoryNameAr { get; set; }
+
+        // used by views (localized)
         public string? CategoryName { get; set; }
         public decimal Price { get; set; }
         public string? PriceLabel { get; set; }
@@ -42,16 +48,20 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public int Id { get; set; }
         public string? Title { get; set; }
         public string? Description { get; set; }
-        public string? CategoryName { get; set; }
+        // Category projected fields
         public int CategoryId { get; set; }
+        public string? CategoryNameEn { get; set; }
+        public string? CategoryNameIt { get; set; }
+        public string? CategoryNameAr { get; set; }
 
-        // keep numeric price for potential admin edits/validation and a formatted label for display
+        // localized name for view
+        public string? CategoryName { get; set; }
         public decimal? Price { get; set; }
         public string? PriceLabel { get; set; }
 
         public bool IsPublished { get; set; }
         public string? CoverImageKey { get; set; }
-        public string? PublicCoverUrl { get; set; }  // resolved public URL
+        public string? PublicCoverUrl { get; set; }
         public TeacherVm? Teacher { get; set; }
         public List<PrivateModuleVm> Modules { get; set; } = new();
         public List<PrivateLessonVm> StandaloneLessons { get; set; } = new();
@@ -122,7 +132,5 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public int Order { get; set; }
         public List<PrivateLessonVm> Lessons { get; set; } = new();
     }
-
-
 }
 

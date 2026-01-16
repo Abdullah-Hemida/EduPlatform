@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
 
 namespace Edu.Web.Areas.Admin.Controllers
 {
@@ -19,128 +20,141 @@ namespace Edu.Web.Areas.Admin.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IStringLocalizer<SharedResource> _localizer;
         private readonly IFileStorageService _fileStorage;
+        private readonly ILogger<DashboardController> _logger;
 
         public DashboardController(
             ApplicationDbContext db,
             UserManager<ApplicationUser> userManager,
             IStringLocalizer<SharedResource> localizer,
-            IFileStorageService fileStorage)
+            IFileStorageService fileStorage,
+            ILogger<DashboardController> logger)
         {
             _db = db;
             _userManager = userManager;
             _localizer = localizer;
             _fileStorage = fileStorage;
+            _logger = logger;
         }
 
         // GET: Admin/Dashboard
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(CancellationToken cancellationToken = default)
         {
-            // summary counts
-            var totalUsers = await _db.Users.CountAsync();
-            var totalTeachers = await _db.Teachers.CountAsync();
-            var totalStudents = await _db.Students.CountAsync();
-            var pendingTeacherApplications = await _db.Teachers.CountAsync(t => t.Status == TeacherStatus.Pending);
-
-            var totalPrivateCourses = await _db.PrivateCourses.CountAsync();
-            var totalCurricula = await _db.Curricula.CountAsync();
-
-            var totalReactiveCourses = await _db.ReactiveCourses.CountAsync();
-            var pendingPurchaseRequests = await _db.PurchaseRequests.CountAsync(p => p.Status == PurchaseStatus.Pending);
-            var pendingReactiveEnrollments = await _db.ReactiveEnrollments.CountAsync(e => !e.IsApproved);
-            var pendingBookings = await _db.Bookings.CountAsync(b => b.Status == BookingStatus.Pending);
-
-            // recent items (take most recent 6)
-            var recentBookings = await _db.Bookings
-                .AsNoTracking()
-                .Include(b => b.Student).ThenInclude(s => s.User)
-                .Include(b => b.Teacher).ThenInclude(t => t.User)
-                .OrderByDescending(b => b.RequestedDateUtc)
-                .Take(6)
-                .ToListAsync();
-
-            var recentPurchaseRequests = await _db.PurchaseRequests
-                .AsNoTracking()
-                .Include(p => p.PrivateCourse).ThenInclude(c => c.Teacher).ThenInclude(t => t.User)
-                .Include(p => p.Student).ThenInclude(s => s.User)
-                .OrderByDescending(p => p.RequestDateUtc)
-                .Take(6)
-                .ToListAsync();
-
-            var recentReactiveEnrollments = await _db.ReactiveEnrollments
-                .AsNoTracking()
-                .Include(e => e.ReactiveCourse).ThenInclude(rc => rc.Teacher).ThenInclude(t => t.User)
-                .Include(e => e.Student).ThenInclude(s => s.User)
-                .OrderByDescending(e => e.CreatedAtUtc)
-                .Take(6)
-                .ToListAsync();
-
-            // recent teacher applications (last 6)
-            var recentTeachers = await _db.Teachers
-                .AsNoTracking()
-                .Include(t => t.User)
-                .OrderByDescending(t => t.Id) // assumes Id roughly correlates to creation time; if you have createdAt use it
-                .Take(6)
-                .ToListAsync();
-
-            // Map to VM
-            var vm = new AdminDashboardVm
+            try
             {
-                TotalUsers = totalUsers,
-                TotalTeachers = totalTeachers,
-                TotalStudents = totalStudents,
-                PendingTeacherApplications = pendingTeacherApplications,
-                TotalPrivateCourses = totalPrivateCourses,
-                TotalCurricula = totalCurricula,
-                TotalReactiveCourses = totalReactiveCourses,
-                PendingPurchaseRequests = pendingPurchaseRequests,
-                PendingReactiveEnrollments = pendingReactiveEnrollments,
-                PendingBookings = pendingBookings
-            };
+                // summary counts (CountAsync is efficient; it doesn't track)
+                var totalUsers = await _db.Users.CountAsync(cancellationToken);
+                var totalTeachers = await _db.Teachers.CountAsync(cancellationToken);
+                var totalStudents = await _db.Students.CountAsync(cancellationToken);
+                var pendingTeacherApplications = await _db.Teachers.CountAsync(t => t.Status == TeacherStatus.Pending, cancellationToken);
 
-            vm.RecentBookings = recentBookings.Select(b => new BookingSummaryVm
+                var totalPrivateCourses = await _db.PrivateCourses.CountAsync(cancellationToken);
+                var totalCurricula = await _db.Curricula.CountAsync(cancellationToken);
+
+                var totalReactiveCourses = await _db.ReactiveCourses.CountAsync(cancellationToken);
+                var pendingPurchaseRequests = await _db.PurchaseRequests.CountAsync(p => p.Status == PurchaseStatus.Pending, cancellationToken);
+                var pendingReactiveEnrollments = await _db.ReactiveEnrollments.CountAsync(e => !e.IsApproved, cancellationToken);
+                var pendingBookings = await _db.Bookings.CountAsync(b => b.Status == BookingStatus.Pending, cancellationToken);
+
+                // recent items — project directly to summary VMs to avoid materializing full entities
+                var recentBookings = await _db.Bookings
+                    .AsNoTracking()
+                    .OrderByDescending(b => b.RequestedDateUtc)
+                    .Take(6)
+                    .Select(b => new BookingSummaryVm
+                    {
+                        Id = b.Id,
+                        RequestedDateUtc = b.RequestedDateUtc,
+                        StudentName = b.Student != null && b.Student.User != null ? (b.Student.User.FullName ?? b.Student.User.UserName) : null,
+                        TeacherName = b.Teacher != null && b.Teacher.User != null ? (b.Teacher.User.FullName ?? b.Teacher.User.UserName) : null,
+                        Status = b.Status.ToString(),
+                        MeetUrl = b.MeetUrl
+                    })
+                    .ToListAsync(cancellationToken);
+
+                var recentPurchaseRequests = await _db.PurchaseRequests
+                    .AsNoTracking()
+                    .OrderByDescending(p => p.RequestDateUtc)
+                    .Take(6)
+                    .Select(p => new PurchaseRequestSummaryVm
+                    {
+                        Id = p.Id,
+                        PrivateCourseId = p.PrivateCourseId,
+                        CourseTitle = p.PrivateCourse != null ? p.PrivateCourse.Title : null,
+                        StudentName = p.Student != null && p.Student.User != null ? (p.Student.User.FullName ?? p.Student.User.UserName) : null,
+                        TeacherName = p.PrivateCourse != null && p.PrivateCourse.Teacher != null && p.PrivateCourse.Teacher.User != null ? (p.PrivateCourse.Teacher.User.FullName ?? p.PrivateCourse.Teacher.User.UserName) : null,
+                        RequestDateUtc = p.RequestDateUtc,
+                        Status = p.Status.ToString(),
+                        Amount = p.Amount
+                    })
+                    .ToListAsync(cancellationToken);
+
+                var recentReactiveEnrollments = await _db.ReactiveEnrollments
+                    .AsNoTracking()
+                    .OrderByDescending(e => e.CreatedAtUtc)
+                    .Take(6)
+                    .Select(e => new ReactiveEnrollmentSummaryVm
+                    {
+                        Id = e.Id,
+                        ReactiveCourseId = e.ReactiveCourseId,
+                        CourseTitle = e.ReactiveCourse != null ? e.ReactiveCourse.Title : null,
+                        StudentName = e.Student != null && e.Student.User != null ? (e.Student.User.FullName ?? e.Student.User.UserName) : null,
+                        CreatedAtUtc = e.CreatedAtUtc,
+                        IsApproved = e.IsApproved,
+                        IsPaid = e.IsPaid
+                    })
+                    .ToListAsync(cancellationToken);
+
+                // recent teacher applications (take last 6 by created/Id)
+                var recentTeachers = await _db.Teachers
+                    .AsNoTracking()
+                    .OrderByDescending(t => t.Id) // replace with CreatedAt if you have it
+                    .Take(6)
+                    .Select(t => new TeacherSummaryVm
+                    {
+                        Id = t.Id,
+                        FullName = t.User != null ? (t.User.FullName ?? t.User.UserName) : string.Empty,
+                        Email = t.User != null ? t.User.Email : string.Empty,
+                        Status = t.Status.ToString()
+                    })
+                    .ToListAsync(cancellationToken);
+
+                // Map to VM
+                var vm = new AdminDashboardVm
+                {
+                    TotalUsers = totalUsers,
+                    TotalTeachers = totalTeachers,
+                    TotalStudents = totalStudents,
+                    PendingTeacherApplications = pendingTeacherApplications,
+                    TotalPrivateCourses = totalPrivateCourses,
+                    TotalCurricula = totalCurricula,
+                    TotalReactiveCourses = totalReactiveCourses,
+                    PendingPurchaseRequests = pendingPurchaseRequests,
+                    PendingReactiveEnrollments = pendingReactiveEnrollments,
+                    PendingBookings = pendingBookings,
+
+                    RecentBookings = recentBookings,
+                    RecentPurchaseRequests = recentPurchaseRequests,
+                    RecentReactiveEnrollments = recentReactiveEnrollments,
+                    RecentTeacherApplications = recentTeachers
+                };
+
+                ViewData["ActivePage"] = "AdminDashboard";
+                return View(vm);
+            }
+            catch (OperationCanceledException) // request was cancelled
             {
-                Id = b.Id,
-                RequestedDateUtc = b.RequestedDateUtc,
-                StudentName = b.Student?.User?.FullName ?? b.Student?.User?.UserName,
-                TeacherName = b.Teacher?.User?.FullName ?? b.Teacher?.User?.UserName,
-                Status = b.Status.ToString(),
-                MeetUrl = b.MeetUrl
-            }).ToList();
-
-            vm.RecentPurchaseRequests = recentPurchaseRequests.Select(p => new PurchaseRequestSummaryVm
+                _logger.LogInformation("Dashboard Index cancelled by client.");
+                return new StatusCodeResult(499); // client closed request (non-standard) / or just return NoContent()
+            }
+            catch (Exception ex)
             {
-                Id = p.Id,
-                PrivateCourseId = p.PrivateCourseId,
-                CourseTitle = p.PrivateCourse?.Title,
-                StudentName = p.Student?.User?.FullName ?? p.Student?.User?.UserName,
-                TeacherName = p.PrivateCourse?.Teacher?.User?.FullName,
-                RequestDateUtc = p.RequestDateUtc,
-                Status = p.Status.ToString(),
-                Amount = p.Amount
-            }).ToList();
-
-            vm.RecentReactiveEnrollments = recentReactiveEnrollments.Select(e => new ReactiveEnrollmentSummaryVm
-            {
-                Id = e.Id,
-                ReactiveCourseId = e.ReactiveCourseId,
-                CourseTitle = e.ReactiveCourse?.Title,
-                StudentName = e.Student?.User?.FullName ?? e.Student?.User?.UserName,
-                CreatedAtUtc = e.CreatedAtUtc,
-                IsApproved = e.IsApproved,
-                IsPaid = e.IsPaid
-            }).ToList();
-
-            vm.RecentTeacherApplications = recentTeachers.Select(t => new TeacherSummaryVm
-            {
-                Id = t.Id,
-                FullName = t.User?.FullName ?? t.Id,
-                Email = t.User?.Email,
-                Status = t.Status.ToString()
-            }).ToList();
-
-            ViewData["ActivePage"] = "AdminDashboard";
-            return View(vm);
+                // unexpected error: log and show minimal friendly message
+                _logger.LogError(ex, "Failed to build admin dashboard");
+                TempData["Error"] = "Admin.DashboardError";
+                return View(new AdminDashboardVm()); // return an empty VM so view renders gracefully
+            }
         }
     }
 }
+
 

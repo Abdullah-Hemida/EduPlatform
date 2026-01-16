@@ -9,7 +9,7 @@ namespace Edu.Web.Controllers
         [HttpGet]
         public IActionResult SetLanguage(string culture, string? returnUrl = "/")
         {
-            if (string.IsNullOrEmpty(culture)) culture = "en";
+            if (string.IsNullOrEmpty(culture)) culture = "it";
             var cookieValue = CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture));
             Response.Cookies.Append(
                 CookieRequestCultureProvider.DefaultCookieName,

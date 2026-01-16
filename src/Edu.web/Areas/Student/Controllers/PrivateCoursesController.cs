@@ -1,5 +1,4 @@
-﻿// File: Areas/Student/Controllers/PrivateCoursesController.cs
-using Edu.Application.IServices;
+﻿using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Helpers;
@@ -26,99 +25,302 @@ namespace Edu.Web.Areas.Student.Controllers
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<PrivateCoursesController> _logger;
 
-        public PrivateCoursesController(ApplicationDbContext db, IFileStorageService fileStorage, UserManager<ApplicationUser> userManager, IStringLocalizer<SharedResource> localizer, INotificationService notifier, IWebHostEnvironment env, ILogger<PrivateCoursesController> logger)
+        public PrivateCoursesController(
+            ApplicationDbContext db,
+            IFileStorageService fileStorage,
+            UserManager<ApplicationUser> userManager,
+            IStringLocalizer<SharedResource> localizer,
+            INotificationService notifier,
+            IWebHostEnvironment env,
+            ILogger<PrivateCoursesController> logger)
         {
-            _db = db; _fileStorage = fileStorage; _userManager = userManager; _localizer = localizer; _notifier = notifier; _env = env; _logger = logger;
+            _db = db;
+            _fileStorage = fileStorage;
+            _userManager = userManager;
+            _localizer = localizer;
+            _notifier = notifier;
+            _env = env;
+            _logger = logger;
         }
 
         // GET: Student/PrivateCourses/Details/5
-        public async Task<IActionResult> Details(int id)
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
-            var course = await _db.PrivateCourses
-                .Include(c => c.Teacher).ThenInclude(t => t.User)
-                .Include(c => c.Category)
-                .Include(c => c.PrivateModules).ThenInclude(m => m.PrivateLessons).ThenInclude(l => l.Files)
-                .FirstOrDefaultAsync(c => c.Id == id);
+            // lightweight projection including category localized parts (avoid loading big graph)
+            var courseBasic = await _db.PrivateCourses
+                .AsNoTracking()
+                .Where(c => c.Id == id)
+                .Select(pc => new
+                {
+                    pc.Id,
+                    pc.Title,
+                    pc.Description,
+                    pc.CategoryId,
+                    CategoryNameEn = pc.Category != null ? pc.Category.NameEn : null,
+                    CategoryNameIt = pc.Category != null ? pc.Category.NameIt : null,
+                    CategoryNameAr = pc.Category != null ? pc.Category.NameAr : null,
+                    pc.Price,
+                    pc.IsPublished,
+                    pc.CoverImageKey,
+                    pc.TeacherId,
+                    TeacherFullName = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.FullName : null,
+                    TeacherEmail = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.Email : null
+                })
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (course == null) return NotFound();
+            if (courseBasic == null) return NotFound();
 
             var userId = _userManager.GetUserId(User);
-            var purchase = await _db.PurchaseRequests.FirstOrDefaultAsync(p => p.PrivateCourseId == id && p.StudentId == userId && p.Status == PurchaseStatus.Completed);
 
-            var vm = new PrivateCourseDetailsVm
+            // determine if current (authenticated Student) purchased the course
+            var isPurchased = false;
+            if (!string.IsNullOrEmpty(userId))
             {
-                Id = course.Id,
-                Title = course.Title,
-                Description = course.Description,
-                CoverPublicUrl = !string.IsNullOrEmpty(course.CoverImageUrl) ? await _fileStorage.GetPublicUrlAsync(course.CoverImageUrl) : null,
-                TeacherName = course.Teacher?.User?.FullName,
-                CategoryName = course.Category?.Name,
-                PriceLabel = course.Price.ToEuro(),
-                IsPublished = course.IsPublished,
-                IsPurchased = purchase != null,
-                TotalLessons = course.PrivateModules?.Sum(m => m.PrivateLessons.Count) ?? 0,
-                Modules = course.PrivateModules.OrderBy(m => m.Order).Select(m => new PrivateModuleVm
+                isPurchased = await _db.PurchaseRequests
+                    .AsNoTracking()
+                    .AnyAsync(pr => pr.PrivateCourseId == id && pr.StudentId == userId && pr.Status == PurchaseStatus.Completed, cancellationToken);
+            }
+
+            var courseVm = new PrivateCourseDetailsVm
+            {
+                Id = courseBasic.Id,
+                Title = courseBasic.Title,
+                Description = courseBasic.Description,
+                CategoryId = courseBasic.CategoryId,
+                CategoryNameEn = courseBasic.CategoryNameEn,
+                CategoryNameIt = courseBasic.CategoryNameIt,
+                CategoryNameAr = courseBasic.CategoryNameAr,
+                PriceLabel = courseBasic.Price.ToEuro(),
+                Price = courseBasic.Price,
+                IsPublished = courseBasic.IsPublished,
+                CoverImageKey = courseBasic.CoverImageKey,
+                Teacher = new PrivateCourseTeacherVm
+                {
+                    Id = courseBasic.TeacherId,
+                    FullName = courseBasic.TeacherFullName,
+                    Email = courseBasic.TeacherEmail
+                },
+                IsPurchased = isPurchased
+            };
+
+            // set localized CategoryName
+            courseVm.CategoryName = LocalizationHelpers.GetLocalizedCategoryName(new Edu.Domain.Entities.Category
+            {
+                NameEn = courseVm.CategoryNameEn ?? string.Empty,
+                NameIt = courseVm.CategoryNameIt ?? string.Empty,
+                NameAr = courseVm.CategoryNameAr ?? string.Empty
+            });
+
+            // resolve cover public url (best-effort)
+            if (!string.IsNullOrEmpty(courseVm.CoverImageKey))
+            {
+                try
+                {
+                    courseVm.CoverPublicUrl = await _fileStorage.GetPublicUrlAsync(courseVm.CoverImageKey, TimeSpan.FromHours(1));
+                }
+                catch
+                {
+                    courseVm.CoverPublicUrl = null;
+                }
+            }
+
+            // load modules + lessons + files in 2 queries (modules + lessons-with-files)
+            var modules = await _db.PrivateModules
+                .AsNoTracking()
+                .Where(m => m.PrivateCourseId == id)
+                .OrderBy(m => m.Order)
+                .ToListAsync(cancellationToken);
+
+            var lessonsWithFiles = await _db.PrivateLessons
+                .AsNoTracking()
+                .Where(l => l.PrivateCourseId == id)
+                .Include(l => l.Files)
+                .ToListAsync(cancellationToken);
+
+            // group lessons by module id
+            var lessonsByModule = lessonsWithFiles.GroupBy(l => l.PrivateModuleId ?? 0)
+                .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Order).ToList());
+
+            // map modules & lessons to VMs
+            var fileKeys = new List<string?>();
+            foreach (var m in modules)
+            {
+                var moduleVm = new PrivateModuleVm
                 {
                     Id = m.Id,
                     Title = m.Title,
-                    Lessons = m.PrivateLessons.OrderBy(l => l.Order).Select(l => new PrivateLessonVm
+                    Order = m.Order,
+                    LessonCount = lessonsWithFiles.Count(l => l.PrivateModuleId == m.Id)
+                };
+
+                if (lessonsByModule.TryGetValue(m.Id, out var lessonsForModule))
+                {
+                    foreach (var l in lessonsForModule)
+                    {
+                        var lessonVm = new PrivateLessonVm
+                        {
+                            Id = l.Id,
+                            Title = l.Title,
+                            YouTubeVideoId = l.YouTubeVideoId,
+                            VideoUrl = l.VideoUrl,
+                            PrivateModuleId = l.PrivateModuleId,
+                            PrivateCourseId = l.PrivateCourseId,
+                            Order = l.Order
+                        };
+
+                        if (l.Files != null)
+                        {
+                            foreach (var f in l.Files)
+                            {
+                                lessonVm.Files.Add(new FileResourceVm
+                                {
+                                    Id = f.Id,
+                                    Name = f.Name,
+                                    StorageKey = f.StorageKey,
+                                    FileUrl = f.FileUrl,
+                                    FileType = f.FileType
+                                });
+                                if (!string.IsNullOrEmpty(f.StorageKey ?? f.FileUrl))
+                                    fileKeys.Add(f.StorageKey ?? f.FileUrl);
+                            }
+                        }
+
+                        moduleVm.Lessons.Add(lessonVm);
+                    }
+                }
+
+                courseVm.Modules.Add(moduleVm);
+            }
+
+            // standalone lessons (moduleId == null -> key 0)
+            if (lessonsByModule.TryGetValue(0, out var standalone))
+            {
+                foreach (var l in standalone)
+                {
+                    var lvm = new PrivateLessonVm
                     {
                         Id = l.Id,
                         Title = l.Title,
                         YouTubeVideoId = l.YouTubeVideoId,
                         VideoUrl = l.VideoUrl,
-                        Files = l.Files.Select(f => new FileResourceVm
-                        {
-                            Id = f.Id,
-                            Name = f.Name,
-                            FileType = f.FileType,
-                            PublicUrl = string.IsNullOrEmpty(f.StorageKey) ? f.FileUrl : null // will fill public url below
-                        }).ToList()
-                    }).ToList()
-                }).ToList()
-            };
+                        PrivateModuleId = l.PrivateModuleId,
+                        PrivateCourseId = l.PrivateCourseId,
+                        Order = l.Order
+                    };
 
-            // Resolve file public URLs (async)
-            foreach (var module in vm.Modules)
-            {
-                foreach (var lesson in module.Lessons)
-                {
-                    for (int i = 0; i < lesson.Files.Count; i++)
+                    if (l.Files != null)
                     {
-                        var fr = lesson.Files[i];
-                        if (string.IsNullOrEmpty(fr.PublicUrl) && !string.IsNullOrEmpty(fr.Name))
+                        foreach (var f in l.Files)
                         {
-                            var fileEntity = course.PrivateModules.SelectMany(mm => mm.PrivateLessons).SelectMany(ll => ll.Files).FirstOrDefault(x => x.Id == fr.Id);
-                            if (fileEntity != null && !string.IsNullOrEmpty(fileEntity.StorageKey))
+                            lvm.Files.Add(new FileResourceVm
                             {
-                                fr.PublicUrl = await _fileStorage.GetPublicUrlAsync(fileEntity.StorageKey);
-                            }
-                            else if (!string.IsNullOrEmpty(fileEntity?.FileUrl))
+                                Id = f.Id,
+                                Name = f.Name,
+                                StorageKey = f.StorageKey,
+                                FileUrl = f.FileUrl,
+                                FileType = f.FileType
+                            });
+                            if (!string.IsNullOrEmpty(f.StorageKey ?? f.FileUrl))
+                                fileKeys.Add(f.StorageKey ?? f.FileUrl);
+                        }
+                    }
+
+                    courseVm.StandaloneLessons.Add(lvm);
+                }
+            }
+
+            // Resolve distinct file keys -> public urls (parallel)
+            var distinctKeys = fileKeys.Where(k => !string.IsNullOrEmpty(k)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (distinctKeys.Any())
+            {
+                try
+                {
+                    var urlTasks = distinctKeys.Select(k => _fileStorage.GetPublicUrlAsync(k!)).ToArray();
+                    var urls = await Task.WhenAll(urlTasks);
+                    var map = distinctKeys.Select((k, i) => new { Key = k, Url = urls[i] }).ToDictionary(x => x.Key!, x => x.Url);
+
+                    // assign PublicUrl
+                    foreach (var m in courseVm.Modules)
+                    {
+                        foreach (var l in m.Lessons)
+                        {
+                            foreach (var f in l.Files)
                             {
-                                fr.PublicUrl = fileEntity.FileUrl;
+                                var key = f.StorageKey ?? f.FileUrl;
+                                if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu))
+                                    f.PublicUrl = pu;
+                                else
+                                    f.PublicUrl = key;
                             }
                         }
                     }
+
+                    foreach (var l in courseVm.StandaloneLessons)
+                    {
+                        foreach (var f in l.Files)
+                        {
+                            var key = f.StorageKey ?? f.FileUrl;
+                            if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu))
+                                f.PublicUrl = pu;
+                            else
+                                f.PublicUrl = key;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Some file public URL lookups failed for course {CourseId}", id);
+                    // fallback: leave PublicUrl null or set to fileUrl/storageKey where possible
+                    foreach (var m in courseVm.Modules)
+                        foreach (var l in m.Lessons)
+                            foreach (var f in l.Files)
+                                if (string.IsNullOrEmpty(f.PublicUrl)) f.PublicUrl = f.FileUrl ?? f.StorageKey;
+
+                    foreach (var l in courseVm.StandaloneLessons)
+                        foreach (var f in l.Files)
+                            if (string.IsNullOrEmpty(f.PublicUrl)) f.PublicUrl = f.FileUrl ?? f.StorageKey;
                 }
             }
+
             ViewData["ActivePage"] = "MyPurchaseRequests";
-            return View(vm);
+            return View(courseVm);
         }
 
         // POST: Student/PrivateCourses/RequestPurchase
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> RequestPurchase(int PrivateCourseId)
         {
-            var user = await _userManager.GetUserAsync(User); if (user == null) return Challenge();
-            var course = await _db.PrivateCourses.AsNoTracking().FirstOrDefaultAsync(c => c.Id == PrivateCourseId && c.IsPublished); if (course == null) return NotFound();
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Challenge();
 
-            var existsCompleted = await _db.PurchaseRequests.AsNoTracking().AnyAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Completed);
-            if (existsCompleted) { TempData["Info"] = _localizer["Purchase.AlreadyCompleted"].Value; return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId }); }
+            var course = await _db.PrivateCourses.AsNoTracking().FirstOrDefaultAsync(c => c.Id == PrivateCourseId && c.IsPublished);
+            if (course == null) return NotFound();
+
+            var existsCompleted = await _db.PurchaseRequests.AsNoTracking()
+                .AnyAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Completed);
+            if (existsCompleted)
+            {
+                TempData["Info"] = "Purchase.AlreadyCompleted";
+                return RedirectToAction("Details", new { id = PrivateCourseId });
+            }
 
             var pending = await _db.PurchaseRequests.FirstOrDefaultAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Pending);
-            if (pending != null) { TempData["Info"] = _localizer["Purchase.AlreadyPending"].Value; return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId }); }
+            if (pending != null)
+            {
+                TempData["Info"] = "Purchase.AlreadyPending";
+                return RedirectToAction("Details", new { id = PrivateCourseId });
+            }
 
-            _db.PurchaseRequests.Add(new PurchaseRequest { PrivateCourseId = PrivateCourseId, StudentId = user.Id, Amount = course.Price, RequestDateUtc = DateTime.UtcNow, Status = PurchaseStatus.Pending });
+            _db.PurchaseRequests.Add(new PurchaseRequest
+            {
+                PrivateCourseId = PrivateCourseId,
+                StudentId = user.Id,
+                Amount = course.Price,
+                RequestDateUtc = DateTime.UtcNow,
+                Status = PurchaseStatus.Pending
+            });
             await _db.SaveChangesAsync();
 
             // notify admins (fire-and-forget / awaited in dev)
@@ -131,18 +333,27 @@ namespace Edu.Web.Areas.Student.Controllers
                 );
             });
 
-            TempData["Success"] = _localizer["Purchase.RequestSent"].Value;
-            return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId });
+            TempData["Success"] = "Purchase.RequestSent";
+            return RedirectToAction("Details", new { id = PrivateCourseId });
         }
 
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> CancelPurchase(int PrivateCourseId)
         {
-            var user = await _userManager.GetUserAsync(User); if (user == null) return Challenge();
-            var pending = await _db.PurchaseRequests.FirstOrDefaultAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Pending);
-            if (pending == null) { TempData["Error"] = _localizer["Purchase.NoPending"].Value; return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId }); }
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Challenge();
 
-            pending.Status = PurchaseStatus.Cancelled; pending.RequestDateUtc = DateTime.UtcNow; _db.PurchaseRequests.Update(pending); await _db.SaveChangesAsync();
+            var pending = await _db.PurchaseRequests.FirstOrDefaultAsync(p => p.PrivateCourseId == PrivateCourseId && p.StudentId == user.Id && p.Status == PurchaseStatus.Pending);
+            if (pending == null)
+            {
+                TempData["Error"] = "Purchase.NoPending";
+                return RedirectToAction("Details", new { id = PrivateCourseId });
+            }
+
+            pending.Status = PurchaseStatus.Cancelled;
+            pending.RequestDateUtc = DateTime.UtcNow;
+            _db.PurchaseRequests.Update(pending);
+            await _db.SaveChangesAsync();
 
             // notify admins
             await NotifyFireAndForgetAsync(async () =>
@@ -154,15 +365,17 @@ namespace Edu.Web.Areas.Student.Controllers
                 );
             });
 
-            TempData["Success"] = _localizer["Purchase.Cancelled"].Value;
-            return RedirectToAction("Details", "PrivateCourses", new { area = "", id = PrivateCourseId });
+            TempData["Success"] = "Purchase.Cancelled";
+            return RedirectToAction("Details", new { id = PrivateCourseId });
         }
 
         // GET: Student/PrivateCourses/MyPurchases
         public async Task<IActionResult> MyPurchases()
         {
             var userId = _userManager.GetUserId(User);
+
             var purchases = await _db.PurchaseRequests
+                .AsNoTracking()
                 .Where(p => p.StudentId == userId)
                 .Include(p => p.PrivateCourse).ThenInclude(c => c.Teacher).ThenInclude(t => t.User)
                 .OrderByDescending(p => p.RequestDateUtc)
@@ -178,9 +391,43 @@ namespace Edu.Web.Areas.Student.Controllers
                     RequestDateUtc = p.RequestDateUtc,
                     Status = p.Status,
                     TeacherName = p.PrivateCourse?.Teacher?.User?.FullName,
-                    CoverPublicUrl = string.IsNullOrEmpty(p.PrivateCourse?.CoverImageUrl) ? null : _fileStorage.GetPublicUrlAsync(p.PrivateCourse.CoverImageUrl).Result
+                    Amount = p.Amount,
+                    AmountLabel = p.Amount.ToEuro(),
+                    // CoverImageKey will be resolved below
+                    CoverPublicUrl = null
                 }).ToList()
             };
+
+            // resolve cover public urls in batch (avoid blocking calls)
+            var coverKeys = purchases
+                .Select(p => p.PrivateCourse?.CoverImageKey)
+                .Where(k => !string.IsNullOrEmpty(k))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (coverKeys.Any())
+            {
+                try
+                {
+                    var tasks = coverKeys.Select(k => _fileStorage.GetPublicUrlAsync(k!)).ToArray();
+                    var urls = await Task.WhenAll(tasks);
+                    var map = coverKeys.Select((k, i) => new { Key = k, Url = urls[i] }).ToDictionary(x => x.Key!, x => x.Url);
+
+                    foreach (var item in vm.Purchases)
+                    {
+                        var course = purchases.FirstOrDefault(p => p.Id == item.Id)?.PrivateCourse;
+                        var key = course?.CoverImageKey;
+                        if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu))
+                            item.CoverPublicUrl = pu;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed resolving some cover urls in MyPurchases");
+                    // fall back: leave null
+                }
+            }
+
             ViewData["ActivePage"] = "MyPurchaseRequests";
             return View(vm);
         }
@@ -201,7 +448,8 @@ namespace Edu.Web.Areas.Student.Controllers
             var purchase = await _db.PurchaseRequests.FirstOrDefaultAsync(p => p.PrivateCourseId == courseId && p.StudentId == userId && p.Status == PurchaseStatus.Completed);
             if (purchase == null)
             {
-                TempData["Error"] = _localizer["Purchase.NotCompleted"].Value ?? "You must purchase the course to view lessons.";
+                // set TempData key instead of localized string
+                TempData["Error"] = "Purchase.NotCompleted";
                 return RedirectToAction(nameof(Details), new { id = courseId });
             }
 
@@ -216,30 +464,65 @@ namespace Edu.Web.Areas.Student.Controllers
                     Id = f.Id,
                     Name = f.Name,
                     FileType = f.FileType,
-                    PublicUrl = string.IsNullOrEmpty(f.StorageKey) ? f.FileUrl : null
+                    StorageKey = f.StorageKey,
+                    FileUrl = f.FileUrl
                 }).ToList()
             };
 
-            foreach (var fr in vm.Files)
+            // resolve file public urls
+            var keys = vm.Files.Select(f => f.StorageKey ?? f.FileUrl).Where(k => !string.IsNullOrEmpty(k)).Distinct().ToList();
+            if (keys.Any())
             {
-                var fileEntity = lesson.Files.FirstOrDefault(x => x.Id == fr.Id);
-                if (fileEntity != null && !string.IsNullOrEmpty(fileEntity.StorageKey))
+                try
                 {
-                    fr.PublicUrl = await _fileStorage.GetPublicUrlAsync(fileEntity.StorageKey);
+                    var tasks = keys.Select(k => _fileStorage.GetPublicUrlAsync(k!)).ToArray();
+                    var urls = await Task.WhenAll(tasks);
+                    var map = keys.Select((k, i) => new { Key = k, Url = urls[i] }).ToDictionary(x => x.Key!, x => x.Url);
+
+                    foreach (var f in vm.Files)
+                    {
+                        var key = f.StorageKey ?? f.FileUrl;
+                        if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu))
+                            f.PublicUrl = pu;
+                        else
+                            f.PublicUrl = key;
+                    }
                 }
-                else if (!string.IsNullOrEmpty(fileEntity?.FileUrl))
+                catch (Exception ex)
                 {
-                    fr.PublicUrl = fileEntity.FileUrl;
+                    _logger.LogWarning(ex, "Failed resolving lesson files for lesson {LessonId}", lesson.Id);
+                    foreach (var f in vm.Files)
+                        f.PublicUrl = f.FileUrl ?? f.StorageKey;
                 }
             }
+
             ViewData["ActivePage"] = "MyPurchaseRequests";
             return View(vm);
         }
+
         private async Task NotifyFireAndForgetAsync(Func<Task> work)
         {
-            if (work == null) return; try { if (_env?.IsDevelopment() == true) await work(); else _ = Task.Run(work); } catch (Exception ex) { _logger.LogError(ex, "NotifyFireAndForget failed"); }
+            if (work == null) return;
+            try
+            {
+                if (_env?.IsDevelopment() == true)
+                {
+                    await work();
+                }
+                else
+                {
+                    _ = Task.Run(work);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NotifyFireAndForget failed");
+            }
         }
     }
+
 }
+
+
 
 

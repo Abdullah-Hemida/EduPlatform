@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 
-
 namespace Edu.Web.Controllers
 {
     public class OnlineSchoolController : Controller
@@ -19,7 +18,7 @@ namespace Edu.Web.Controllers
         private readonly IStringLocalizer<SharedResource> _L;
         private readonly IHeroService _heroService;
 
-        public OnlineSchoolController(ApplicationDbContext db, IFileStorageService fileStorage, IStringLocalizer<SharedResource> L,  IHeroService heroService)
+        public OnlineSchoolController(ApplicationDbContext db, IFileStorageService fileStorage, IStringLocalizer<SharedResource> L, IHeroService heroService)
         {
             _db = db;
             _fileStorage = fileStorage;
@@ -28,34 +27,51 @@ namespace Edu.Web.Controllers
         }
 
         // GET: /OnlineSchool
-        public async Task<IActionResult> Index(int? levelId, int page = 1, int pageSize = 9, string ajax = null)
+        public async Task<IActionResult> Index(int? levelId, int page = 1, int pageSize = 9, string? ajax = null)
         {
             page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 6, 50);
+            // keep pageSize within reasonable bounds but allow small pages
+            pageSize = Math.Clamp(pageSize, 1, 50);
 
-            // levels for filter cards (ordered)
+            // 1) Load levels (ordered) and compute localized names
             var levels = await _db.Levels
+                                  .AsNoTracking()
                                   .OrderBy(l => l.Order)
-                                  .Select(l => new OnlineSchoolLevelVm
-                                  {
-                                      Id = l.Id,
-                                      Name = LocalizationHelpers.GetLocalizedLevelName(l),
-                                      CourseCount = l.OnlineCourses != null ? l.OnlineCourses.Count : 0
-                                  })
                                   .ToListAsync();
 
-            // base query: only published courses
+            var levelVms = levels.Select(l => new OnlineSchoolLevelVm
+            {
+                Id = l.Id,
+                Name = LocalizationHelpers.GetLocalizedLevelName(l),
+                CourseCount = 0 // fill below
+            }).ToList();
+
+            // 2) Fill course counts per level in one query to avoid N+1
+            var levelIds = levelVms.Select(l => l.Id).ToList();
+            if (levelIds.Any())
+            {
+                var counts = await _db.OnlineCourses
+                                     .AsNoTracking()
+                                     .Where(c => c.IsPublished && levelIds.Contains(c.LevelId))
+                                     .GroupBy(c => c.LevelId)
+                                     .Select(g => new { LevelId = g.Key, Count = g.Count() })
+                                     .ToListAsync();
+
+                var countsMap = counts.ToDictionary(x => x.LevelId, x => x.Count);
+                foreach (var lv in levelVms)
+                {
+                    if (countsMap.TryGetValue(lv.Id, out var c)) lv.CourseCount = c;
+                }
+            }
+
+            // 3) Base query: only published courses
             var baseQuery = _db.OnlineCourses
                 .AsNoTracking()
-                .Where(c => c.IsPublished)
-                .Include(c => c.Months)
-                .Include(c => c.Lessons);
+                .Where(c => c.IsPublished);
 
             if (levelId.HasValue)
             {
-                baseQuery = baseQuery.Where(c => c.LevelId == levelId.Value)
-                    .Include(c => c.Months)
-                    .Include(c => c.Lessons);
+                baseQuery = baseQuery.Where(c => c.LevelId == levelId.Value);
             }
 
             var totalCount = await baseQuery.CountAsync();
@@ -64,23 +80,53 @@ namespace Edu.Web.Controllers
                 .OrderByDescending(c => c.CreatedAtUtc)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                // don't include Files/Months/Lessons here to keep this query light; we only need counts
                 .ToListAsync();
 
-            // map to cards and resolve cover urls
-            var cardTasks = courses.Select(async c => new OnlineCourseCardVm
+            // 4) Resolve distinct cover keys in parallel (best-effort)
+            var distinctKeys = courses
+                .Select(c => c.CoverImageKey)
+                .Where(k => !string.IsNullOrEmpty(k))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var coverMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (distinctKeys.Any())
+            {
+                var tasks = distinctKeys.Select(async key =>
+                {
+                    try
+                    {
+                        var url = await _fileStorage.GetPublicUrlAsync(key!);
+                        return (Key: key!, Url: string.IsNullOrEmpty(url) ? null : url);
+                    }
+                    catch
+                    {
+                        return (Key: key!, Url: (string?)null);
+                    }
+                }).ToArray();
+
+                var results = await Task.WhenAll(tasks);
+                foreach (var r in results)
+                {
+                    if (!coverMap.ContainsKey(r.Key))
+                        coverMap[r.Key] = r.Url;
+                }
+            }
+
+            // 5) Map to card VMs using resolved cover urls
+            var courseCards = courses.Select(c => new OnlineCourseCardVm
             {
                 Id = c.Id,
                 Title = c.Title,
                 Description = c.Description,
-                CoverImageUrl = string.IsNullOrEmpty(c.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(c.CoverImageKey),
-                PricePerMonthLabel = c.PricePerMonth.ToEuro(), // assumes extension method exists
+                CoverImageUrl = !string.IsNullOrEmpty(c.CoverImageKey) && coverMap.TryGetValue(c.CoverImageKey!, out var found) ? found : null,
+                PricePerMonthLabel = c.PricePerMonth.ToEuro(),
                 DurationMonths = c.DurationMonths,
                 LevelId = c.LevelId,
                 LessonCount = c.Lessons?.Count ?? 0,
                 IsPublished = c.IsPublished
             }).ToList();
-
-            var courseCards = await Task.WhenAll(cardTasks);
 
             var vm = new OnlineSchoolIndexVm
             {
@@ -89,8 +135,8 @@ namespace Edu.Web.Controllers
                 PageSize = pageSize,
                 TotalCount = totalCount,
                 TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
-                AllLevels = levels,
-                Courses = courseCards.ToList(),
+                AllLevels = levelVms,
+                Courses = courseCards,
                 SchoolHero = await _heroService.GetHeroAsync(HeroPlacement.School)
             };
 
@@ -115,12 +161,13 @@ namespace Edu.Web.Controllers
 
             if (course == null) return NotFound();
 
+            // Prepare VM (map basic fields)
             var vm = new OnlineCoursePublicDetailsVm
             {
                 Id = course.Id,
                 Title = course.Title,
                 Description = course.Description,
-                CoverImageUrl = string.IsNullOrEmpty(course.CoverImageKey) ? null : await _fileStorage.GetPublicUrlAsync(course.CoverImageKey),
+                CoverImageUrl = null, // fill next
                 IntroductionVideoUrl = course.IntroductionVideoUrl,
                 PricePerMonthLabel = course.PricePerMonth.ToEuro(),
                 DurationMonths = course.DurationMonths,
@@ -134,23 +181,91 @@ namespace Edu.Web.Controllers
                     MonthEndUtc = m.MonthEndUtc,
                     IsReadyForPayment = m.IsReadyForPayment
                 }).ToList(),
-                Lessons = course.Lessons.OrderBy(l => l.Order).Select(l => new OnlineCourseLessonPublicVm
-                {
-                    Id = l.Id,
-                    Title = l.Title,
-                    Notes = l.Notes,
-                    MeetUrl = l.MeetUrl,
-                    RecordedVideoUrl = l.RecordedVideoUrl,
-                    ScheduledUtc = l.ScheduledUtc,
-                    Order = l.Order,
-                    Files = l.Files.Select(f => new OnlineCourseFilePublicVm
-                    {
-                        Id = f.Id,
-                        FileName = f.Name ?? System.IO.Path.GetFileName(f.FileUrl ?? f.StorageKey ?? ""),
-                        PublicUrl = !string.IsNullOrEmpty(f.StorageKey) ? _fileStorage.GetPublicUrlAsync(f.StorageKey).Result : (f.FileUrl ?? null)
-                    }).ToList()
-                }).ToList()
+                Lessons = new List<OnlineCourseLessonPublicVm>()
             };
+
+            // Resolve cover image url (best-effort)
+            if (!string.IsNullOrEmpty(course.CoverImageKey))
+            {
+                try
+                {
+                    vm.CoverImageUrl = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey);
+                }
+                catch
+                {
+                    vm.CoverImageUrl = null;
+                }
+            }
+
+            // Map lessons & resolve file public urls in batch to avoid per-file blocking calls
+            var lessons = course.Lessons.OrderBy(l => l.Order).ToList();
+            var fileResources = lessons.SelectMany(l => l.Files ?? Enumerable.Empty<FileResource>()).ToList();
+
+            // distinct keys to resolve
+            var keys = fileResources
+                        .Where(f => !string.IsNullOrEmpty(f.StorageKey))
+                        .Select(f => f.StorageKey!)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+            var filesMap = new Dictionary<int, string?>();
+            if (keys.Any())
+            {
+                // resolve keys in parallel
+                var resolveTasks = keys.Select(async k =>
+                {
+                    try
+                    {
+                        var url = await _fileStorage.GetPublicUrlAsync(k);
+                        return (Key: k, Url: string.IsNullOrEmpty(url) ? null : url);
+                    }
+                    catch
+                    {
+                        return (Key: k, Url: (string?)null);
+                    }
+                }).ToArray();
+
+                var resolved = await Task.WhenAll(resolveTasks);
+                var urlMap = resolved.ToDictionary(x => x.Key, x => x.Url, StringComparer.OrdinalIgnoreCase);
+
+                // assign public url per file record id
+                foreach (var fr in fileResources)
+                {
+                    string? publicUrl = null;
+                    if (!string.IsNullOrEmpty(fr.StorageKey) && urlMap.TryGetValue(fr.StorageKey, out var pu))
+                        publicUrl = pu;
+                    else if (!string.IsNullOrEmpty(fr.FileUrl))
+                        publicUrl = fr.FileUrl;
+
+                    filesMap[fr.Id] = publicUrl;
+                }
+            }
+            else
+            {
+                // no storage keys, fall back to FileUrl values
+                foreach (var fr in fileResources)
+                {
+                    filesMap[fr.Id] = string.IsNullOrEmpty(fr.FileUrl) ? null : fr.FileUrl;
+                }
+            }
+
+            // Build lesson VMs
+            vm.Lessons = lessons.Select(l => new OnlineCourseLessonPublicVm
+            {
+                Id = l.Id,
+                Title = l.Title,
+                Notes = l.Notes,
+                MeetUrl = l.MeetUrl,
+                RecordedVideoUrl = l.RecordedVideoUrl,
+                ScheduledUtc = l.ScheduledUtc,
+                Order = l.Order,
+                Files = (l.Files ?? Enumerable.Empty<FileResource>()).Select(f => new OnlineCourseFilePublicVm
+                {
+                    Id = f.Id,
+                    FileName = f.Name ?? System.IO.Path.GetFileName(f.FileUrl ?? f.StorageKey ?? ""),
+                    PublicUrl = filesMap.TryGetValue(f.Id, out var pu) ? pu : (f.FileUrl ?? null)
+                }).ToList()
+            }).ToList();
 
             // optional: localize level name
             var level = await _db.Levels.FindAsync(course.LevelId);
@@ -160,3 +275,4 @@ namespace Edu.Web.Controllers
         }
     }
 }
+

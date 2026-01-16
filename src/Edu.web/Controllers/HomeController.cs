@@ -20,7 +20,7 @@ public class HomeController : Controller
 
     public async Task<IActionResult> Index()
     {
-        var culture = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName ?? "en";
+        var culture = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName ?? "it";
         var hero = await _heroService.GetHeroAsync(HeroPlacement.Home);
         // counts
         var vm = new Edu.Web.ViewModels.HomeVm

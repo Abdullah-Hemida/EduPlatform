@@ -859,3 +859,49 @@ html[dir="rtl"] .booking-card .meta-right {
 [dir="rtl"] .ltr-phone {
     direction: ltr;
 }
+
+/* Sticky the header visually and keep background */
+/*.table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bs-white);
+    backdrop-filter: blur(4px);
+}*/
+
+/* small month pills in mobile */
+/*.months-scroll {
+    -webkit-overflow-scrolling: touch;
+}
+
+.month-pill {
+    min-width: 84px;
+    flex: 0 0 auto;
+    border-radius: .35rem;
+    padding: .35rem .5rem;
+    background: rgba(0,0,0,0.03);
+    text-align: center;
+}*/
+
+/* Ensure images remain square and aligned */
+/*.card img.rounded {
+    border-radius: 6px;
+}*/
+
+/* Reduce font size on very narrow screens to avoid overflow */
+/*@media (max-width: 360px) {
+    .month-pill {
+        min-width: 72px;
+        padding: .25rem .4rem;
+    }
+
+    .table td, .table th {
+        font-size: .85rem;
+    }
+}*/
+
+/* Improve table readability on medium widths */
+/*@media (min-width: 768px) and (max-width: 992px) {
+    .table td, .table th {
+        font-size: .9rem;
+    }
+}*/

@@ -76,7 +76,6 @@ namespace Edu.Web.Areas.Shared.ViewModels
         public string? Notes { get; set; }
         public string? StudentImageKey { get; set; }   // optional, for internal tracking
         public string? StudentImageUrl { get; set; }
-        public List<BookingModerationLog>? ModerationLogs { get; set; } = new();
     }
 
     public class UpdateMeetUrlVm

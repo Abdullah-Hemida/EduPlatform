@@ -1,4 +1,5 @@
 ﻿
+using Edu.Domain.Entities;
 using Edu.Infrastructure.Helpers;
 using System.Globalization;
 
@@ -56,7 +57,10 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public DateTime RequestedDateUtc { get; set; }
         public string? StudentName { get; set; }
         public string? StudentEmail { get; set; }
-        public string? Status { get; set; }
+
+        // now using enum instead of string
+        public BookingStatus Status { get; set; } = BookingStatus.Pending;
+
         public string? MeetUrl { get; set; }
         public decimal Price { get; set; }
         public string? PriceLabel { get; set; }
@@ -69,7 +73,10 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public string? CourseTitle { get; set; }
         public string? StudentName { get; set; }
         public DateTime RequestDateUtc { get; set; }
-        public string Status { get; set; } = "Pending";
+
+        // now using enum instead of string
+        public PurchaseStatus Status { get; set; } = PurchaseStatus.Pending;
+
         public decimal? Amount { get; set; }
         public string? AmountLabel { get; set; }
     }
@@ -103,5 +110,6 @@ namespace Edu.Web.Areas.Teacher.ViewModels
     //     public static string ToEuro(this decimal value) => value.ToString("C", CultureInfo.GetCultureInfo("it-IT"));
     // }
 }
+
 
 
