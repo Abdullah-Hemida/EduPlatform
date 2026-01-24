@@ -175,6 +175,7 @@ namespace Edu.Web.Areas.Teacher.ViewModels
         public string? StorageKey { get; set; }  // preferred
         // server-resolved public link (filled in controller)
         public string? PublicUrl { get; set; }
+        public string? DownloadUrl { get; set; }
     }
 
     public class CourseModerationLogVm

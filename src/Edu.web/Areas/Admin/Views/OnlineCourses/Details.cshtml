@@ -128,9 +128,29 @@
                                                             <ul class="small list-unstyled mt-1 mb-0">
                                                                 @foreach (var a in lesson.Attachments)
                                                                 {
-                                                                    <li><a href="@a.PublicUrl" target="_blank" rel="noopener">@a.FileName</a></li>
+                                                                    <li id="file-@a.Id" class="d-flex align-items-center">
+                                                                        <!-- href uses server Download endpoint (safe fallback) -->
+                                                                        <a href="@(a.DownloadUrl ?? Url.Action("Download", "FileResources", new { area = "Admin", id = a.Id }))"
+                                                                           class="js-file-download text-decoration-none flex-grow-1"
+                                                                           data-file-id="@a.Id"
+                                                                           data-public-url="@(a.PublicUrl ?? "")"
+                                                                           target="_blank" rel="noopener noreferrer">
+                                                                            @a.FileName
+                                                                        </a>
+
+                                                                        @if (User.IsInRole("Admin") || User.IsInRole("Teacher"))
+                                                                        {
+                                                                            <button type="button"
+                                                                                    class="btn btn-sm btn-outline-danger js-file-delete ms-2 text-nowrap ms-1"
+                                                                                    data-file-id="@a.Id"
+                                                                                    aria-label="@L["Button.DeleteFile"]">
+                                                                                @L["Button.DeleteFile"]
+                                                                            </button>
+                                                                        }
+                                                                    </li>
                                                                 }
                                                             </ul>
+
                                                         </div>
                                                     }
                                                 </div>

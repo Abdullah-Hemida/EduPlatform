@@ -247,6 +247,7 @@
   "Admin.StudentCurriculaHint": "Seleziona i curricula a cui questo studente deve avere accesso.",
   "Admin.NoCurricula": "Nessun curriculum disponibile.",
   "Admin.StudentAllowed": "Stato di ammissibilità dello studente",
+  "Admin.EditLesson": "Modifica della lezione",
 
 
   "DataTable.Search": "Cerca",
@@ -925,7 +926,15 @@
   "Hero.Tooltip.OnlineSchool": "Aula online e corsi",
   "Hero.Tooltip.Teachers": "Sfoglia i nostri insegnanti",
   "Hero.Tooltip.RecordedCourses": "Libreria di corsi registrati",
-  "Hero.Tooltip.ReactiveCourses": "Corsi live/reactive e gruppi"
+  "Hero.Tooltip.ReactiveCourses": "Corsi live/reactive e gruppi",
+
+  "Admin.ConfirmDeleteTitle": "Conferma eliminazione",
+  "FileResource.Deleted": "File eliminato",
+  "FileResource.DeleteFailed": "Eliminazione fallita",
+  "FileResource.InvalidId": "ID file non valido",
+  "Common.NoFiles": "Nessun file",
+  "Common.Forbidden": "Non sei autorizzato a eseguire questa azione",
+  "Button.DeleteFile": "elimina file"
 }
 
 

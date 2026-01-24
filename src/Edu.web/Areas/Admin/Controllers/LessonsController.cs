@@ -99,7 +99,6 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Description = vm.Description,
                 YouTubeVideoId = ytId,
                 VideoUrl = vm.YouTubeUrl,
-                IsFree = vm.IsFree,
                 Order = vm.Order
             };
 
@@ -165,9 +164,13 @@ namespace Edu.Web.Areas.Admin.Controllers
                 Title = l.Title,
                 Description = l.Description,
                 YouTubeUrl = l.VideoUrl,
-                IsFree = l.IsFree,
-                Order = l.Order
+                Order = l.Order,
+                ExistingFiles = l.Files?.ToList() ?? new List<FileResource>()
             };
+
+            // used by Cancel link in your view
+            ViewBag.CurriculumId = l.CurriculumId;
+
             return View(vm);
         }
 
@@ -176,12 +179,21 @@ namespace Edu.Web.Areas.Admin.Controllers
         {
             ViewData["ActivePage"] = "Curricula";
 
-            if (!ModelState.IsValid) return View(vm);
+            if (!ModelState.IsValid)
+            {
+                // repopulate ExistingFiles for redisplay if modelstate invalid
+                var existing = await _db.FileResources
+                                        .AsNoTracking()
+                                        .Where(f => f.SchoolLessonId == vm.Id)
+                                        .ToListAsync(cancellationToken);
+                vm.ExistingFiles = existing;
+                return View(vm);
+            }
 
             var l = await _db.SchoolLessons.FindAsync(new object[] { vm.Id }, cancellationToken);
             if (l == null) return NotFound();
 
-            // If ModuleId changed and is provided, ensure module belongs to same curriculum or update CurriculumId accordingly.
+            // Module handling (same as your existing code)
             if (vm.ModuleId.HasValue)
             {
                 var module = await _db.SchoolModules
@@ -193,18 +205,26 @@ namespace Edu.Web.Areas.Admin.Controllers
                 if (module == null)
                 {
                     ModelState.AddModelError(nameof(vm.ModuleId), "Module not found.");
+                    // repopulate ExistingFiles before returning
+                    vm.ExistingFiles = await _db.FileResources
+                                               .AsNoTracking()
+                                               .Where(f => f.SchoolLessonId == vm.Id)
+                                               .ToListAsync(cancellationToken);
                     return View(vm);
                 }
 
                 l.ModuleId = vm.ModuleId;
-                l.CurriculumId = module.CurriculumId; // ensure lesson's curriculum matches module
+                l.CurriculumId = module.CurriculumId;
             }
             else
             {
-                // If module removed, ensure CurriculumId is provided
                 if (vm.CurriculumId == 0)
                 {
                     ModelState.AddModelError(nameof(vm.CurriculumId), "Curriculum is required when removing module.");
+                    vm.ExistingFiles = await _db.FileResources
+                                               .AsNoTracking()
+                                               .Where(f => f.SchoolLessonId == vm.Id)
+                                               .ToListAsync(cancellationToken);
                     return View(vm);
                 }
                 l.ModuleId = null;
@@ -215,11 +235,46 @@ namespace Edu.Web.Areas.Admin.Controllers
             l.Description = vm.Description;
             l.YouTubeVideoId = !string.IsNullOrWhiteSpace(vm.YouTubeUrl) ? YouTubeHelper.ExtractYouTubeId(vm.YouTubeUrl) : null;
             l.VideoUrl = vm.YouTubeUrl;
-            l.IsFree = vm.IsFree;
             l.Order = vm.Order;
 
             _db.SchoolLessons.Update(l);
             await _db.SaveChangesAsync(cancellationToken);
+
+            // --- NEW: Upload any newly attached files and save FileResource rows ---
+            if (vm.Files != null && vm.Files.Any())
+            {
+                var toAdd = new List<FileResource>(vm.Files.Length);
+
+                foreach (var f in vm.Files)
+                {
+                    if (f == null || f.Length == 0) continue;
+
+                    try
+                    {
+                        // SaveFileAsync returns a key or url depending on implementation
+                        var urlOrKey = await _fs.SaveFileAsync(f, "lesson-files");
+                        var fr = new FileResource
+                        {
+                            SchoolLessonId = l.Id,
+                            FileUrl = urlOrKey,
+                            Name = Path.GetFileName(f.FileName),
+                            FileType = f.ContentType
+                        };
+                        toAdd.Add(fr);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to save uploaded file for lesson {LessonId}. File: {FileName}", l.Id, f?.FileName);
+                        // continue with other files; do not fail the whole request
+                    }
+                }
+
+                if (toAdd.Count > 0)
+                {
+                    _db.FileResources.AddRange(toAdd);
+                    await _db.SaveChangesAsync(cancellationToken);
+                }
+            }
 
             // redirect to curriculum details
             return RedirectToAction("Details", "Curricula", new { area = "Admin", id = l.CurriculumId });

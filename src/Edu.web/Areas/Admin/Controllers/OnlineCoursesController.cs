@@ -323,8 +323,29 @@ namespace Edu.Web.Areas.Admin.Controllers
             }
 
             // Create a map fileId -> url
-            var fileIdToUrl = files.Select((f, idx) => new { f.Id, Url = fileUrls.ElementAtOrDefault(idx) })
-                                   .ToDictionary(x => x.Id, x => x.Url);
+            // After you computed fileUrls (string?[] fileUrls) and files list:
+            string NormalizeUrl(string? u)
+            {
+                if (string.IsNullOrWhiteSpace(u)) return null;
+                // trim whitespace and stray quotes
+                u = u.Trim().Trim('"', '\'');
+
+                // If storage provider returned a virtual path like "~/uploads/..." => convert to root-relative
+                if (u.StartsWith("~"))
+                    u = Url.Content(u); // results in "/uploads/..."
+
+                // If not absolute URL and not root-relative, make it root-relative
+                if (!Uri.TryCreate(u, UriKind.Absolute, out _) && !u.StartsWith("/"))
+                    u = "/" + u.TrimStart('/');
+
+                return u;
+            }
+
+            var fileIdToUrl = files.Select((f, idx) => new
+            {
+                f.Id,
+                Url = NormalizeUrl(fileUrls.ElementAtOrDefault(idx))
+            }).ToDictionary(x => x.Id, x => x.Url);
 
             var monthsVm = course.Months.OrderBy(m => m.MonthIndex).Select(m => new OnlineCourseMonthVm
             {
@@ -342,7 +363,8 @@ namespace Edu.Web.Areas.Admin.Controllers
                     {
                         Id = ff.Id,
                         FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? string.Empty),
-                        PublicUrl = fileIdToUrl.TryGetValue(ff.Id, out var u) ? u : null
+                        PublicUrl = fileIdToUrl.TryGetValue(ff.Id, out var u) ? u : null,
+                        DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = ff.Id })
                     }).ToList();
 
                 return new OnlineCourseLessonVm

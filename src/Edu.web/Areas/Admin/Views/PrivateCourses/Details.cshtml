@@ -106,9 +106,25 @@
                                                     <ul class="list-unstyled mb-0">
                                                         @foreach (var f in l.Files)
                                                         {
-                                                            <li>
-                                                                <a asp-controller="FileResources" asp-action="Download" asp-area="Admin" asp-route-id="@f.Id">@f.Name</a>
-                                                                <span class="text-muted small">(@f.FileType)</span>
+                                                            <li id="file-@f.Id" class="d-flex align-items-center mb-1">
+                                                                <a href="@(!string.IsNullOrEmpty(f.DownloadUrl) ? f.DownloadUrl : Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id }))"
+                                                                   class="js-file-download text-decoration-none flex-grow-1"
+                                                                   data-file-id="@f.Id"
+                                                                   data-public-url="@(f.PublicUrl ?? string.Empty)"
+                                                                   target="_blank" rel="noopener noreferrer">
+                                                                    @f.Name
+                                                                </a>
+                                                                <span class="text-muted small ms-2">(@f.FileType)</span>
+
+                                                                @if (User.IsInRole("Admin") || User.IsInRole("Teacher"))
+                                                                {
+                                                                    <button type="button"
+                                                                            class="btn btn-sm btn-outline-danger js-file-delete ms-2 text-nowrap"
+                                                                            data-file-id="@f.Id"
+                                                                            aria-label="@L["Button.DeleteFile"]">
+                                                                        @L["Button.DeleteFile"]
+                                                                    </button>
+                                                                }
                                                             </li>
                                                         }
                                                     </ul>
@@ -162,9 +178,25 @@
                                     <ul class="list-unstyled mb-0">
                                         @foreach (var f in l.Files)
                                         {
-                                            <li>
-                                                <a asp-controller="FileResources" asp-action="Download" asp-area="Admin" asp-route-id="@f.Id">@f.Name</a>
-                                                <span class="text-muted small">(@f.FileType)</span>
+                                            <li id="file-@f.Id" class="d-flex align-items-center mb-1">
+                                                <a href="@(!string.IsNullOrEmpty(f.DownloadUrl) ? f.DownloadUrl : Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id }))"
+                                                   class="js-file-download text-decoration-none flex-grow-1"
+                                                   data-file-id="@f.Id"
+                                                   data-public-url="@(f.PublicUrl ?? string.Empty)"
+                                                   target="_blank" rel="noopener noreferrer">
+                                                    @f.Name
+                                                </a>
+                                                <span class="text-muted small ms-2">(@f.FileType)</span>
+
+                                                @if (User.IsInRole("Admin") || User.IsInRole("Teacher"))
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-danger js-file-delete ms-2"
+                                                            data-file-id="@f.Id"
+                                                            aria-label="@L["Button.DeleteFile"]">
+                                                        @L["Button.DeleteFile"]
+                                                    </button>
+                                                }
                                             </li>
                                         }
                                     </ul>

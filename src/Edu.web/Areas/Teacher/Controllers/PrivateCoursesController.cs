@@ -245,10 +245,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
             // Resolve public cover url (best-effort)
             if (!string.IsNullOrEmpty(vm.CoverImageKey))
             {
-                try
-                {
-                    vm.PublicCoverUrl = await _fileStorage.GetPublicUrlAsync(vm.CoverImageKey);
-                }
+                try { vm.PublicCoverUrl = await _fileStorage.GetPublicUrlAsync(vm.CoverImageKey); }
                 catch { vm.PublicCoverUrl = null; }
             }
 
@@ -269,16 +266,21 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 });
             }
 
-            // Lessons
+            // Lessons -> populate VMs with files (and include DownloadUrl)
             foreach (var l in lessonsWithFiles.OrderBy(l => l.Order))
             {
+                // ensure we have a YouTube id (extract from VideoUrl if missing)
+                var ytId = !string.IsNullOrWhiteSpace(l.YouTubeVideoId)
+                           ? l.YouTubeVideoId
+                           : (!string.IsNullOrWhiteSpace(l.VideoUrl) ? YouTubeHelper.ExtractYouTubeId(l.VideoUrl) : null);
+
                 var lessonVm = new PrivateLessonVm
                 {
                     Id = l.Id,
                     PrivateCourseId = l.PrivateCourseId,
                     PrivateModuleId = l.PrivateModuleId,
                     Title = l.Title,
-                    YouTubeVideoId = l.YouTubeVideoId,
+                    YouTubeVideoId = ytId,
                     VideoUrl = l.VideoUrl,
                     Order = l.Order
                 };
@@ -294,7 +296,9 @@ namespace Edu.Web.Areas.Teacher.Controllers
                             Name = f.Name,
                             FileType = f.FileType,
                             FileUrl = f.FileUrl,
-                            StorageKey = f.StorageKey
+                            StorageKey = f.StorageKey,
+                            // DownloadUrl fallback - server endpoint that will stream/redirect
+                            DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id })
                         });
                     }
                 }
@@ -316,9 +320,63 @@ namespace Edu.Web.Areas.Teacher.Controllers
             var currentUser = await _userManager.GetUserAsync(User);
             vm.IsOwner = currentUser != null && !string.IsNullOrEmpty(course.TeacherId) && currentUser.Id == course.TeacherId;
 
+            // -------------------------
+            // Normalize and resolve public URLs for files (batch)
+            // -------------------------
+            // collect distinct keys/urls (StorageKey preferred)
+            var keys = vm.Lessons
+                         .SelectMany(l => l.Files ?? Enumerable.Empty<ViewModels.FileResourceVm>())
+                         .Select(f => f.StorageKey ?? f.FileUrl)
+                         .Where(k => !string.IsNullOrWhiteSpace(k))
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .ToList();
+
+            // helper local function
+            string? NormalizeUrl(string? u)
+            {
+                if (string.IsNullOrWhiteSpace(u)) return null;
+                u = u.Trim().Trim('"', '\'');
+                if (u.StartsWith("~")) u = Url.Content(u);
+                if (Uri.TryCreate(u, UriKind.Absolute, out _)) return u;
+                if (!u.StartsWith("/")) u = "/" + u.TrimStart('/');
+                return u;
+            }
+
+            if (keys.Any())
+            {
+                try
+                {
+                    var tasks = keys.Select(k => _fileStorage.GetPublicUrlAsync(k)).ToArray();
+                    var resolved = await Task.WhenAll(tasks);
+
+                    var map = keys.Select((k, i) => new { Key = k, Url = NormalizeUrl(resolved[i]) ?? NormalizeUrl(k) })
+                                  .ToDictionary(x => x.Key, x => x.Url, StringComparer.OrdinalIgnoreCase);
+
+                    // set PublicUrl for each file VM
+                    foreach (var fileVm in vm.Lessons.SelectMany(l => l.Files ?? Enumerable.Empty<ViewModels.FileResourceVm>()))
+                    {
+                        var key = fileVm.StorageKey ?? fileVm.FileUrl;
+                        fileVm.PublicUrl = key != null && map.TryGetValue(key, out var v) ? v : NormalizeUrl(key);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed resolving some file public URLs for teacher course {CourseId}", id);
+                    // fallback: normalize stored FileUrl or StorageKey
+                    foreach (var fileVm in vm.Lessons.SelectMany(l => l.Files ?? Enumerable.Empty<ViewModels.FileResourceVm>()))
+                        fileVm.PublicUrl = NormalizeUrl(fileVm.FileUrl ?? fileVm.StorageKey);
+                }
+            }
+            else
+            {
+                foreach (var fileVm in vm.Lessons.SelectMany(l => l.Files ?? Enumerable.Empty<ViewModels.FileResourceVm>()))
+                    fileVm.PublicUrl = NormalizeUrl(fileVm.FileUrl ?? fileVm.StorageKey);
+            }
+
             ViewData["ActivePage"] = "MyPrivateCourses";
             return View(vm);
         }
+
 
         // GET: Teacher/Courses/Create
         public async Task<IActionResult> Create()

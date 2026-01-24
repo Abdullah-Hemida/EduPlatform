@@ -2,11 +2,11 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 
 @{
-    ViewData["Title"] = L["OnlineCourse.MyEnrollments"] ?? "My Enrollments";
+    ViewData["Title"] = L["ReactiveCourse.MyEnrollments"] ?? "My Enrollments";
 }
 
 <div>
-    <h3>@(L["OnlineCourse.MyEnrollments"] ?? "My Enrollments")</h3>
+    <h3>@(L["ReactiveCourse.MyEnrollments"] ?? "My Enrollments")</h3>
 
     @if (Model == null || !Model.Any())
     {

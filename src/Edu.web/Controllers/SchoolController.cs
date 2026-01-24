@@ -55,16 +55,19 @@ namespace Edu.Web.Controllers
 
             if (user != null && !isAdmin)
             {
-                // get student record and assigned curricula in as few queries as possible
-                var studentTask = _db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == user.Id);
-                var assignedTask = _db.StudentCurricula.AsNoTracking().Where(sc => sc.StudentId == user.Id).Select(sc => sc.CurriculumId).ToListAsync();
-                var studentRecord = await studentTask;
+                // fetch student record first
+                var studentRecord = await _db.Students.AsNoTracking()
+                                             .FirstOrDefaultAsync(s => s.Id == user.Id);
+
                 if (studentRecord != null)
                 {
                     studentIsAllowed = studentRecord.IsAllowed;
                     if (studentIsAllowed)
                     {
-                        assignedCurriculumIds = await assignedTask;
+                        assignedCurriculumIds = await _db.StudentCurricula.AsNoTracking()
+                                                    .Where(sc => sc.StudentId == user.Id)
+                                                    .Select(sc => sc.CurriculumId)
+                                                    .ToListAsync();
                     }
                 }
             }
@@ -305,7 +308,6 @@ namespace Edu.Web.Controllers
                                               Description = l.Description,
                                               YouTubeVideoId = l.YouTubeVideoId,
                                               VideoUrl = l.VideoUrl,
-                                              IsFree = l.IsFree,
                                               Order = l.Order,
                                               Files = new List<FileResourceVm>()
                                           }).ToList() ?? new List<LessonVm>()
@@ -430,7 +432,6 @@ namespace Edu.Web.Controllers
                 Description = lesson.Description,
                 YouTubeVideoId = lesson.YouTubeVideoId,
                 VideoUrl = lesson.VideoUrl,
-                IsFree = lesson.IsFree,
                 ModuleTitle = lesson.SchoolModule?.Title,
                 CurriculumTitle = lesson.SchoolModule?.Curriculum?.Title,
                 Files = fileVms

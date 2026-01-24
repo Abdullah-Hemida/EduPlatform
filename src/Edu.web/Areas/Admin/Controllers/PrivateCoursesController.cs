@@ -332,6 +332,19 @@ namespace Edu.Web.Areas.Admin.Controllers
 
                 courseVm.Modules.Add(moduleVm);
             }
+            // helper local function to normalize a provider returned url or stored FileUrl/key
+            string? NormalizeUrl(string? u)
+            {
+                if (string.IsNullOrWhiteSpace(u)) return null;
+                u = u.Trim().Trim('"', '\''); // remove stray quotes
+                                              // ~ => root-relative
+                if (u.StartsWith("~")) u = Url.Content(u);
+                // if already absolute, return as-is
+                if (Uri.TryCreate(u, UriKind.Absolute, out _)) return u;
+                // ensure root-relative
+                if (!u.StartsWith("/")) u = "/" + u.TrimStart('/');
+                return u;
+            }
 
             // standalone lessons (moduleId == null -> key 0)
             if (lessonsByModule.TryGetValue(0, out var standalone))
@@ -351,7 +364,9 @@ namespace Edu.Web.Areas.Admin.Controllers
                             Name = f.Name,
                             StorageKey = f.StorageKey,
                             FileUrl = f.FileUrl,
-                            FileType = f.FileType
+                            FileType = f.FileType,
+                            // DownloadUrl points to server Download endpoint (safe fallback)
+                            DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id })
                         }).ToList() ?? new List<FileResourceVm>()
                     };
                     courseVm.StandaloneLessons.Add(lvm);
@@ -381,25 +396,40 @@ namespace Edu.Web.Areas.Admin.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Some file public URL lookups failed for course {CourseId}", id);
+                    // fallback to using key itself (but normalize)
                     urls = distinctKeys.Select(k => (string?)k).ToArray();
                 }
 
-                var map = distinctKeys.Select((k, i) => new { Key = k, Url = urls[i] }).ToDictionary(x => x.Key, x => x.Url);
+                var map = distinctKeys.Select((k, i) => new { Key = k, Url = NormalizeUrl(urls[i]) }).ToDictionary(x => x.Key, x => x.Url);
 
                 foreach (var m in courseVm.Modules)
                     foreach (var l in m.Lessons ?? Enumerable.Empty<PrivateLessonVm>())
                         foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
                         {
                             var key = f.StorageKey ?? f.FileUrl;
-                            f.PublicUrl = key != null && map.TryGetValue(key, out var pu) ? pu : key;
+                            var resolved = key != null && map.TryGetValue(key, out var pu) ? pu : NormalizeUrl(key);
+                            f.PublicUrl = resolved;
                         }
 
                 foreach (var l in courseVm.StandaloneLessons)
                     foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
                     {
                         var key = f.StorageKey ?? f.FileUrl;
-                        f.PublicUrl = key != null && map.TryGetValue(key, out var pu) ? pu : key;
+                        var resolved = key != null && map.TryGetValue(key, out var pu) ? pu : NormalizeUrl(key);
+                        f.PublicUrl = resolved;
                     }
+            }
+            else
+            {
+                // if no storage keys but file urls may exist, normalize them
+                foreach (var m in courseVm.Modules)
+                    foreach (var l in m.Lessons ?? Enumerable.Empty<PrivateLessonVm>())
+                        foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
+                            f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
+
+                foreach (var l in courseVm.StandaloneLessons)
+                    foreach (var f in l.Files ?? Enumerable.Empty<FileResourceVm>())
+                        f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
             }
 
             ViewData["ActivePage"] = "PrivateCourses";

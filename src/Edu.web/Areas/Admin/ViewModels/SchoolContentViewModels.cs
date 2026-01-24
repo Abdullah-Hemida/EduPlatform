@@ -92,8 +92,13 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string Title { get; set; } = string.Empty;
         public string? Description { get; set; }
         public string? YouTubeUrl { get; set; }
-        public bool IsFree { get; set; } = false;
         public int Order { get; set; } = 1;
+        // NEW: uploaded files from form
+        public IFormFile[]? Files { get; set; }
+
+        // NEW: existing files (for display)
+        public List<FileResource>? ExistingFiles { get; set; }
+
     }
 }
 

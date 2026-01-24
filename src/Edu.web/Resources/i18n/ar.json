@@ -228,6 +228,7 @@
   "Admin.StudentCurriculaHint": "اختر المواد الدراسية التي يُسمح لهذا الطالب بالوصول إليها.",
   "Admin.NoCurricula": "لا توجد مواد دراسية متاحة.",
   "Admin.StudentAllowed": "حالة سماحية الطالب",
+  "Admin.EditLesson": "تعديل الدرس",
 
   "DataTable.Search": "إبحث",
   "DataTable.ShowEntries": "عرض إدخالات القائمة",
@@ -326,7 +327,7 @@
   "ReactiveCourse.MonthNotReady": "هذا الشهر غير جاهز للدفع بعد.",
   "ReactiveCourse.PaymentAlreadyRequested": "لقد أرسلت بالفعل طلب دفع لهذا الشهر وهو قيد الانتظار.",
   "ReactiveCourse.PaymentRequested": "تم إرسال طلب الدفع. ستراجعه الإدارة.",
-  "ReactiveCourse.MyEnrollments": "تسجيلاتي",
+  "ReactiveCourse.MyEnrollments": "إشتراكاتى",
   "ReactiveCourse.NoEnrollments": "ليس لديك أي تسجيلات بعد.",
   "ReactiveCourse.MonthAdded": "تمت إضافة الشهر {0}.",
   "ReactiveCourse.MonthAlreadyExists": "الشهر {0} موجود بالفعل.",
@@ -921,7 +922,15 @@
   "Hero.Tooltip.OnlineSchool": "الفصول والدورات عبر الإنترنت",
   "Hero.Tooltip.Teachers": "استعرض المعلمين لدينا",
   "Hero.Tooltip.RecordedCourses": "مكتبة الدورات المسجَّلة",
-  "Hero.Tooltip.ReactiveCourses": "الدورات التفاعلية والمجموعات"
+  "Hero.Tooltip.ReactiveCourses": "الدورات التفاعلية والمجموعات",
+
+  "Admin.ConfirmDeleteTitle": "تأكيد الحذف",
+  "FileResource.Deleted": "تم حذف الملف",
+  "FileResource.DeleteFailed": "فشل الحذف",
+  "FileResource.InvalidId": "معرّف ملف غير صالح",
+  "Common.NoFiles": "لا توجد ملفات",
+  "Common.Forbidden": "غير مسموح لك بتنفيذ هذا الإجراء",
+  "Button.DeleteFile": "حذف الملف"
 }
 
 

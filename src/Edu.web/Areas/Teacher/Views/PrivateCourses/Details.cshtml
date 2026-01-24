@@ -167,12 +167,29 @@
                                             @if (lesson.Files != null && lesson.Files.Any())
                                             {
                                                 <div class="mt-2">
-                                                    @foreach (var f in lesson.Files)
-                                                    {
-                                                        <a asp-area="Teacher" asp-controller="FileResources" asp-action="Download" asp-route-id="@f.Id" class="me-2 small text-truncate d-inline-block" style="max-width:100%;">@f.Name</a>
-                                                    }
+                                                    <ul class="list-unstyled mb-0">
+                                                        @foreach (var f in lesson.Files)
+                                                        {
+                                                            <li id="file-@f.Id" class="d-flex align-items-center mb-1">
+                                                                <a href="@(!string.IsNullOrEmpty(f.DownloadUrl) ? f.DownloadUrl : Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id }))"
+                                                                   class="js-file-download me-2 small text-truncate flex-grow-1"
+                                                                   data-file-id="@f.Id"
+                                                                   data-public-url="@(f.PublicUrl ?? string.Empty)"
+                                                                   target="_blank" rel="noopener noreferrer" style="max-width:100%;">
+                                                                    @f.Name
+                                                                </a>
+                                                                <span class="text-muted small ms-2">(@f.FileType)</span>
+
+                                                                @if (isOwner)
+                                                                {
+                                                                    <button type="button" class="btn btn-sm btn-outline-danger js-file-delete ms-2" data-file-id="@f.Id">@L["Button.DeleteFile"]</button>
+                                                                }
+                                                            </li>
+                                                        }
+                                                    </ul>
                                                 </div>
                                             }
+
                                         </div>
                                     </div>
                                 }
@@ -235,12 +252,29 @@
                                     @if (lesson.Files != null && lesson.Files.Any())
                                     {
                                         <div class="mt-2">
-                                            @foreach (var f in lesson.Files)
-                                            {
-                                                <a asp-area="Teacher" asp-controller="FileResources" asp-action="Download" asp-route-id="@f.Id" class="me-2 small text-truncate d-inline-block" style="max-width:100%;">@f.Name</a>
-                                            }
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach (var f in lesson.Files)
+                                                {
+                                                    <li id="file-@f.Id" class="d-flex align-items-center mb-1">
+                                                        <a href="@(!string.IsNullOrEmpty(f.DownloadUrl) ? f.DownloadUrl : Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id }))"
+                                                           class="js-file-download me-2 small text-truncate flex-grow-1"
+                                                           data-file-id="@f.Id"
+                                                           data-public-url="@(f.PublicUrl ?? string.Empty)"
+                                                           target="_blank" rel="noopener noreferrer" style="max-width:100%;">
+                                                            @f.Name
+                                                        </a>
+                                                        <span class="text-muted small ms-2">(@f.FileType)</span>
+
+                                                        @if (isOwner)
+                                                        {
+                                                            <button type="button" class="btn btn-sm btn-outline-danger js-file-delete ms-2" data-file-id="@f.Id">@L["Button.DeleteFile"]</button>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
                                         </div>
                                     }
+
                                 </div>
                             </div>
                         }

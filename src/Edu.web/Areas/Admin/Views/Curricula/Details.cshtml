@@ -8,6 +8,9 @@
     var modules = Model.Modules ?? Enumerable.Empty<Edu.Domain.Entities.SchoolModule>();
     var directLessons = Model.DirectLessons ?? Enumerable.Empty<Edu.Domain.Entities.SchoolLesson>();
     string crop(string? s, int len = 140) => string.IsNullOrEmpty(s) ? "" : (s.Length <= len ? s : s.Substring(0, len) + "…");
+    var filePublicUrls = ViewBag.FilePublicUrls as IDictionary<int, string?>
+                     ?? (ViewBag.FilePublicUrls as Dictionary<int, string?>)
+                     ?? new Dictionary<int, string?>();
 }
 
 <div class="row mb-3 mt-3 align-items-center">
@@ -96,10 +99,45 @@
                                         <div class="mt-2">
                                             @foreach (var f in lesson.Files)
                                             {
-                                                <a asp-controller="FileResources" asp-action="Download" asp-route-id="@f.Id" asp-area="Admin" class="me-2 small">@f.Name</a>
+                                                // prefer public URL, otherwise fallback to download action
+                                                var publicUrl = filePublicUrls.TryGetValue(f.Id, out var u) ? u : null;
+                                                <div class="d-inline-block me-2 small">
+                                                    @if (!string.IsNullOrEmpty(publicUrl))
+                                                    {
+                                                        <a href="@publicUrl" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+                                                            @f.Name
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <a asp-controller="FileResources"
+                                                           asp-action="Download"
+                                                           asp-route-id="@f.Id"
+                                                           asp-area="Admin"
+                                                           class="text-decoration-none">
+                                                            @f.Name
+                                                        </a>
+                                                    }
+
+                                                    @* Delete button only for Admin or Teacher *@
+                                                    @if (User.IsInRole("Admin"))
+                                                    {
+                                                        <form asp-controller="FileResources"
+                                                              asp-action="Delete"
+                                                              asp-area="Admin"
+                                                              method="post"
+                                                              class="d-inline ms-1"
+                                                              onsubmit="return confirm('@L["Admin.ConfirmDeleteFile"]');">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="id" value="@f.Id" />
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger rounded">@L["Button.Delete"]</button>
+                                                        </form>
+                                                    }
+                                                </div>
                                             }
                                         </div>
                                     }
+
                                 </div>
                             </div>
                         }
@@ -180,30 +218,16 @@
                                                 <div class="mt-2 d-flex flex-column gap-1">
                                                     @foreach (var f in lesson.Files)
                                                     {
-                                                        <div class="d-flex align-items-center gap-2 small">
-                                                            <a asp-controller="FileResources"
-                                                               asp-action="Download"
-                                                               asp-route-id="@f.Id"
-                                                               asp-area="Admin"
-                                                               class="text-decoration-none">
-                                                                @f.Name
-                                                            </a>
+                                                        <div id="file-@f.Id" class="file-entry d-flex align-items-center gap-2 small mb-1">
+                                                            <a href="@Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id })"
+                                                               class="js-file-download text-decoration-none"
+                                                               data-file-id="@f.Id">@f.Name</a>
 
-                                                            @* Delete button only for Admin or Teacher *@
-                                                            @if (User.IsInRole("Admin"))
+                                                            @if (User.IsInRole("Admin") || User.IsInRole("Teacher"))
                                                             {
-                                                                <form asp-controller="FileResources"
-                                                                      asp-action="Delete"
-                                                                      asp-area="Admin"
-                                                                      method="post"
-                                                                      class="d-inline"
-                                                                      onsubmit="return confirm('@L["Admin.ConfirmDeleteFile"]');">
-                                                                    @Html.AntiForgeryToken()
-                                                                    <input type="hidden" name="id" value="@f.Id" />
-                                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded">
-                                                                        @L["Button.Delete"]
-                                                                    </button>
-                                                                </form>
+                                                                <button type="button" class="btn btn-sm btn-outline-danger js-file-delete ms-2" data-file-id="@f.Id">
+                                                                    @L["Button.DeleteFile"]
+                                                                </button>
                                                             }
                                                         </div>
                                                     }
@@ -311,6 +335,8 @@
                 }
             } catch (e) { console && console.warn(e); }
         })();
+                // wwwroot/js/layout.js
+
     </script>
 }
 

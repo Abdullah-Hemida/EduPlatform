@@ -172,15 +172,188 @@
     observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
 })();
 
-function showAlert(message, type = 'success') {
-    const alertContainer = document.getElementById('alert-container');
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show shadow alert-floating mt-2`;
-    alert.role = 'alert';
-    alert.innerHTML = `
-    ${message}
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    `;
-    alertContainer.appendChild(alert);
-    setTimeout(() => alert.remove(), 4000);
-}
+// wwwroot/js/layout.js
+(function ($) {
+    // read localized strings (fallbacks if missing)
+    const L = window.localizedStrings || {};
+    const msgConfirmDelete = L.confirmDelete || 'Are you sure you want to delete this file?';
+    const msgDeleteSuccess = L.deleteSuccess || 'File deleted';
+    const msgDeleteFailed = L.deleteFailed || 'Delete failed';
+    const msgForbidden = L.forbidden || 'Forbidden';
+    const msgInvalidId = L.invalidFileId || 'Invalid file id';
+    const msgNoFiles = L.noFiles || 'No files';
+    const btnDeleteText = L.deleteConfirmButtonText || 'Delete';
+
+
+    // quick safety
+    if (typeof $ === 'undefined') {
+        console.error('layout.js: jQuery not found. Ensure jQuery is loaded before layout.js.');
+        return;
+    }
+    console.debug('layout.js loaded');
+
+    // Read CSRF token
+    const csrfToken = $('meta[name="csrf-token"]').attr('content') || '';
+    if (!csrfToken) console.warn('layout.js: CSRF token meta tag missing.');
+
+    // Check api urls
+    function getApi(key) {
+        if (window.fileResourceApi && window.fileResourceApi[key]) return window.fileResourceApi[key];
+        const fallback = {
+            getDownloadUrl: '/Admin/FileResources/GetDownloadUrl',
+            getFiles: '/Admin/FileResources/GetFiles',
+            deleteAjax: '/Admin/FileResources/DeleteAjax'
+        };
+        console.warn('layout.js: window.fileResourceApi.' + key + ' not found; using fallback: ' + fallback[key]);
+        return fallback[key];
+    }
+
+    // Small toast for visual feedback (uses bootstrap alerts)
+    function showToast(msg, type) {
+        const containerId = 'file-ajax-toast-container';
+        let container = $('#' + containerId);
+        if (!container.length) {
+            container = $('<div id="' + containerId + '"></div>').css({
+                position: 'fixed',
+                top: '1rem',
+                right: '1rem',
+                zIndex: 12000
+            });
+            $('body').append(container);
+        }
+        const alert = $('<div class="alert alert-' + (type || 'success') + ' alert-dismissible fade show" role="alert">' +
+            msg + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
+        container.append(alert);
+        setTimeout(function () { alert.fadeOut(300, function () { $(this).remove(); }); }, 4000);
+    }
+
+    // DEBUG: confirm handler attachment
+    console.debug('layout.js: attaching handlers for .js-file-download and .js-file-delete');
+
+    // Download handler
+    $(document).on('click', 'a.js-file-download', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const $a = $(this);
+        const href = $a.attr('href');
+        const publicUrl = $a.data('public-url');
+        const fileId = $a.data('file-id') || new URL(href, window.location.origin).searchParams.get('id');
+
+        if (publicUrl) {
+            // open provider URL immediately
+            window.open(publicUrl, '_blank');
+            return;
+        }
+
+        if (!fileId) {
+            window.open(href, '_blank');
+            return;
+        }
+
+        $.ajax({
+            url: getApi('getDownloadUrl'),
+            method: 'GET',
+            data: { id: fileId },
+            dataType: 'json'
+        }).done(function (json) {
+            console.debug('layout.js: GetDownloadUrl returned', json);
+            if (!json || !json.success) {
+                window.open(href, '_blank');
+                return;
+            }
+            if (json.publicUrl) {
+                // open provider url
+                window.open(json.publicUrl, '_blank');
+                return;
+            }
+            if (json.downloadUrl) {
+                window.open(json.downloadUrl, '_blank');
+                return;
+            }
+            window.open(href, '_blank');
+        }).fail(function (xhr, status, err) {
+            console.error('layout.js: GetDownloadUrl failed', status, err);
+            window.open(href, '_blank');
+        });
+    });
+
+    // Delete handler
+    $(document).on('click', '.js-file-delete', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const $btn = $(this);
+        const fileId = $btn.data('file-id');
+        if (!fileId) {
+            showToast('Invalid file id', 'danger');
+            return;
+        }
+
+        if (!confirm(msgConfirmDelete)) return;
+
+        $btn.prop('disabled', true).text('Deleting...');
+
+        // send form-encoded data (default for jQuery) so antiforgery token can be read from body
+        $.ajax({
+            url: getApi('deleteAjax'),
+            method: 'POST',
+            data: {
+                id: fileId,
+                __RequestVerificationToken: csrfToken
+            },
+            // do not set contentType: let jQuery use application/x-www-form-urlencoded
+            dataType: 'json'
+        }).done(function (json) {
+            console.debug('layout.js: DeleteAjax returned', json);
+            if (json && json.success) {
+                $('#file-' + fileId).fadeOut(200, function () { $(this).remove(); });
+                showToast(msgDeleteSuccess, 'success');
+            } else {
+                showToast(json && json.message ? json.message : msgDeleteFailed, 'danger');
+                if (xhr.status === 403) showToast(msgForbidden, 'danger');
+                $btn.prop('disabled', false).text('Delete');
+            }
+        }).fail(function (xhr) {
+            console.error('layout.js: DeleteAjax failed', xhr.status, xhr.responseText);
+            if (xhr.status === 403) showToast('Forbidden', 'danger');
+            else showToast('Delete failed', 'danger');
+            $btn.prop('disabled', false).text('Delete');
+        });
+    });
+    // optional loader...
+    window.loadLessonFiles = function (lessonId, $container) {
+        $.ajax({
+            url: getApi('getFiles'),
+            method: 'GET',
+            data: { schoolLessonId: lessonId },
+            dataType: 'json'
+        }).done(function (json) {
+            if (!json || !json.success) {
+                $container.html('<div class="small text-muted">No files</div>');
+                return;
+            }
+            $container.empty();
+            json.files.forEach(function (f) {
+                const link = $('<a>')
+                    .addClass('js-file-download text-decoration-none')
+                    .attr('href', f.downloadUrl)
+                    .attr('target', '_blank')
+                    .attr('data-file-id', f.id)
+                    .text(f.name || ('file-' + f.id));
+                const delBtn = $('<button>')
+                    .addClass('btn btn-sm btn-outline-danger js-file-delete ms-2')
+                    .attr('data-file-id', f.id)
+                    .text('Delete');
+                const row = $('<div>').attr('id', 'file-' + f.id).addClass('file-entry d-flex align-items-center gap-2 small mb-1');
+                row.append(link).append(delBtn);
+                $container.append(row);
+            });
+        }).fail(function () {
+            $container.html('<div class="small text-muted">Failed to load files</div>');
+        });
+    };
+})(jQuery);
+
+
+

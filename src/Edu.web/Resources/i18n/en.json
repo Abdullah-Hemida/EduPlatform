@@ -932,7 +932,15 @@
   "Hero.Tooltip.OnlineSchool": "Online classroom and courses",
   "Hero.Tooltip.Teachers": "Browse our teachers",
   "Hero.Tooltip.RecordedCourses": "Recorded courses library",
-  "Hero.Tooltip.ReactiveCourses": "Live/reactive courses and groups"
+  "Hero.Tooltip.ReactiveCourses": "Live/reactive courses and groups",
+
+  "Admin.ConfirmDeleteTitle": "Confirm delete",
+  "FileResource.Deleted": "File deleted",
+  "FileResource.DeleteFailed": "Delete failed",
+  "FileResource.InvalidId": "Invalid file id",
+  "Common.NoFiles": "No files",
+  "Common.Forbidden": "You are not allowed to perform this action",
+  "Button.DeleteFile": "delete file"
 }
 
 

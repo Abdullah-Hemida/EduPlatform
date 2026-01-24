@@ -151,7 +151,7 @@ namespace Edu.Web.Areas.Admin.Controllers
             return RedirectToAction(nameof(Details), new { id = curr.Id });
         }
 
-        // GET: Admin/Curricula/Details/5
+        // GET: Admin/Curricula/Details/5 
         public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             ViewData["ActivePage"] = "Curricula";
@@ -195,6 +195,81 @@ namespace Edu.Web.Areas.Admin.Controllers
                                          .OrderBy(l => l.Order)
                                          .Include(l => l.Files)
                                          .ToListAsync(cancellationToken);
+
+            // --- NEW: resolve file public URLs in batch and pass to view ---
+            // Collect all files from modules and direct lessons
+            var allFiles = new List<Edu.Domain.Entities.FileResource>(); // adjust type name if different
+            if (modules != null)
+            {
+                foreach (var m in modules)
+                {
+                    if (m.SchoolLessons != null)
+                    {
+                        foreach (var l in m.SchoolLessons)
+                        {
+                            if (l.Files != null) allFiles.AddRange(l.Files);
+                        }
+                    }
+                }
+            }
+
+            if (directLessons != null)
+            {
+                foreach (var l in directLessons)
+                {
+                    if (l.Files != null) allFiles.AddRange(l.Files);
+                }
+            }
+
+            // Build distinct storage keys to resolve (skip empty)
+            var keysToResolve = allFiles
+                .Where(f => !string.IsNullOrEmpty(f.StorageKey))
+                .Select(f => f.StorageKey!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var keyToPublicUrl = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (keysToResolve.Any())
+            {
+                try
+                {
+                    // Resolve in parallel (one task per key)
+                    var tasks = keysToResolve.Select(k => _fs.GetPublicUrlAsync(k)).ToArray();
+                    var urls = await Task.WhenAll(tasks);
+                    keyToPublicUrl = keysToResolve.Zip(urls, (k, u) => (k, u))
+                                                  .ToDictionary(x => x.k, x => x.u, StringComparer.OrdinalIgnoreCase);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed resolving some file storage keys for curriculum {CurriculumId}", id);
+                    // leave keyToPublicUrl empty for failed resolution — view will fallback to FileUrl or Download link
+                }
+            }
+
+            // Build fileId -> publicUrl map (falls back to stored FileUrl or StorageKey if public url absent)
+            var fileIdToPublicUrl = new Dictionary<int, string?>();
+            foreach (var f in allFiles)
+            {
+                string? publicUrl = null;
+                if (!string.IsNullOrEmpty(f.StorageKey) && keyToPublicUrl.TryGetValue(f.StorageKey!, out var resolved))
+                {
+                    publicUrl = resolved;
+                }
+
+                // fallback to FileUrl (e.g. if you store direct URL in DB) or to StorageKey (last resort)
+                if (string.IsNullOrEmpty(publicUrl))
+                {
+                    if (!string.IsNullOrEmpty(f.FileUrl))
+                        publicUrl = f.FileUrl;
+                    else if (!string.IsNullOrEmpty(f.StorageKey))
+                        publicUrl = f.StorageKey; // still something we can show (or leave null to force Download)
+                }
+
+                fileIdToPublicUrl[f.Id] = publicUrl;
+            }
+
+            // expose to view
+            ViewBag.FilePublicUrls = fileIdToPublicUrl;
 
             var vm = new CurriculumDetailsViewModel
             {

@@ -1,10 +1,9 @@
 ﻿@using System.Globalization
 @using Edu.Web.Resources
-@using Microsoft.AspNetCore.Antiforgery
 @using Microsoft.AspNetCore.Identity
 @using System.Text.Json
 @inject Edu.Application.IServices.IFileStorageService Storage
-@inject IAntiforgery Antiforgery
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @inject UserManager<Edu.Domain.Entities.ApplicationUser> UserManager
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> Localizer
 
@@ -29,6 +28,19 @@
     var isAdmin = User.IsInRole("Admin");
     var isTeacher = User.IsInRole("Teacher");
     var isStudent = User.IsInRole("Student");
+    var localized = new
+    {
+        ConfirmDelete = (L["Admin.ConfirmDeleteFile"].Value ?? "Are you sure?"),
+        DeleteSuccess = (L["FileResource.Deleted"].Value ?? "File deleted"),
+        DeleteFailed = (L["FileResource.DeleteFailed"].Value ?? "Delete failed"),
+        Forbidden = (L["Common.Forbidden"].Value ?? "Forbidden"),
+        InvalidFileId = (L["FileResource.InvalidId"].Value ?? "Invalid file id"),
+        NoFiles = (L["Common.NoFiles"].Value ?? "No files"),
+        DeleteConfirmButtonText = (L["Button.Delete"].Value ?? "Delete"),
+        DeleteConfirmTitle = (L["Admin.ConfirmDeleteTitle"].Value ?? "Confirm Delete")
+    };
+
+    var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 }
 
 <!doctype html>
@@ -43,7 +55,18 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/dataTables.bootstrap5.min.css" />
     <link rel="stylesheet" href="~/lib/fontawesome/css/all.min.css" />
     <link rel="stylesheet" href="~/css/admin.css" />
+
+    <script>
+        // prefer Url.Action so the JS uses the exact server-generated endpoints
+        window.fileResourceApi = {
+            getDownloadUrl: '@Url.Action("GetDownloadUrl", "FileResources", new { area = "Admin" })',
+            getFiles: '@Url.Action("GetFiles", "FileResources", new { area = "Admin" })',
+            deleteAjax: '@Url.Action("DeleteAjax", "FileResources", new { area = "Admin" })',
+            downloadTemplate: '@Url.Action("Download", "FileResources", new { area = "Admin", id = "__ID__" })'
+        };
+    </script>
 </head>
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 
 <body class="bg-light">
     <!-- Global Alerts -->
@@ -410,6 +433,7 @@
                 bsAlert.close();
             }, 4000);
         }
+        window.localizedStrings = @Html.Raw(JsonSerializer.Serialize(localized, jsonOptions));
     </script>
 
     @RenderSection("Scripts", required: false)

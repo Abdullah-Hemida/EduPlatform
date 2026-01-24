@@ -29,6 +29,37 @@
         <label class="form-label">@L["Admin.Order"]</label>
              <input asp-for="Order" type="number" value="1" class="form-control form-control-sm" />
       </div>
+            @if (Model.ExistingFiles != null && Model.ExistingFiles.Any())
+            {
+                <div class="col-12">
+                    <label class="form-label small">@L["Attachments"]</label>
+                    <div class="mb-2">
+                        @foreach (var f in Model.ExistingFiles)
+                        {
+                            <div class="d-flex align-items-center gap-2 small mb-1">
+                                <div id="file-@f.Id" class="file-entry d-flex align-items-center gap-2 small mb-1">
+                                    <a href="@Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id })"
+                                       class="js-file-download text-decoration-none"
+                                       data-file-id="@f.Id">@f.Name</a>
+
+                                    @* Delete button (non-js fallback uses Delete POST) *@
+                                    @if (User.IsInRole("Admin") || User.IsInRole("Teacher"))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-danger js-file-delete ms-2" data-file-id="@f.Id">
+                                            @L["Button.Delete"]
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            <div class="col-12">
+                <label class="form-label small">@L["Admin.Files"]</label>
+                <input type="file" name="Files" multiple class="form-control form-control-sm" />
+                <div class="form-text small">@L["Admin.FilesHint"]</div>
+            </div>
       <div class="col-12">
         <button class="btn btn-primary">@L["Admin.SaveChanges"]</button>
              <a asp-controller="Curricula" asp-action="Details" asp-area="Admin" asp-route-id="@(ViewBag.CurriculumId ?? 0)" class="btn btn-link">@L["Button.Cancel"]</a>

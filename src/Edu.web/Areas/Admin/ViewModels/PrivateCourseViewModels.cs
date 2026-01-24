@@ -65,7 +65,6 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public TeacherVm? Teacher { get; set; }
         public List<PrivateModuleVm> Modules { get; set; } = new();
         public List<PrivateLessonVm> StandaloneLessons { get; set; } = new();
-        public List<CourseModerationLogVm>? ModerationLogs { get; set; } = new();
     }
 
     public class TeacherVm
@@ -73,17 +72,6 @@ namespace Edu.Web.Areas.Admin.ViewModels
         public string? Id { get; set; }
         public string? FullName { get; set; }
         public string? Email { get; set; }
-    }
-
-    public class CourseModerationLogVm
-    {
-        public int Id { get; set; }
-        public string? Action { get; set; }
-        public string? Note { get; set; }
-        public string? AdminId { get; set; }
-        public string? AdminName { get; set; }
-        public string? AdminEmail { get; set; }
-        public DateTime CreatedAtUtc { get; set; }
     }
     public class FileResourceVm
     {
@@ -96,6 +84,9 @@ namespace Edu.Web.Areas.Admin.ViewModels
 
         // server-resolved public link (filled in controller)
         public string? PublicUrl { get; set; }
+
+        // server-side anchor fallback -> FileResourcesController.Download
+        public string? DownloadUrl { get; set; }
     }
 
     public class PrivateLessonVm
