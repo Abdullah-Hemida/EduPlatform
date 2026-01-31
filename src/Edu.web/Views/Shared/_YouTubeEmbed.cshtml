@@ -1,35 +1,79 @@
 ﻿@* Views/Shared/_YouTubeEmbed.cshtml *@
-@model string
-@{
-    var videoId = (Model ?? "").Trim();
-    if (string.IsNullOrEmpty(videoId))
-    {
-        <div class="alert alert-warning small">@("No video available")</div>
-        ;
-        return;
-    }
+@* @model string?
 
-    var qs = "controls=1&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1";
-    var src = $"https://www.youtube-nocookie.com/embed/{videoId}?{qs}";
-    var sandbox = "allow-scripts allow-same-origin allow-presentation";
-    var iframeId = $"yt-sandbox-{videoId}";
+@using Edu.Infrastructure.Helpers
+@using Microsoft.AspNetCore.WebUtilities
+
+@{
+    // raw input (could be a direct id like "VsbCVoP3yXM" or a full youtube url)
+    var raw = (Model ?? "").Trim();
+    raw = raw.Trim('"', '\''); // remove stray quotes
+
+    // try to extract the canonical 11-char video id
+    var videoId = YouTubeHelper.ExtractYouTubeId(raw);
+
+    // try to capture playlist id (if present) so we can preserve it in embed
+    string playlistParam = "";
+    if (!string.IsNullOrEmpty(raw) && Uri.TryCreate(raw, UriKind.Absolute, out var parsedUri))
+    {
+        var q = QueryHelpers.ParseQuery(parsedUri.Query);
+        if (q.TryGetValue("list", out var list) && !string.IsNullOrWhiteSpace(list))
+        {
+            playlistParam = "&list=" + Uri.EscapeDataString(list.ToString());
+        }
+    }
+    // query string for embed
+    var qs = "controls=1&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1";
+    var src = !string.IsNullOrEmpty(videoId) ? $"https://www.youtube-nocookie.com/embed/{videoId}?{qs}{playlistParam}" : null;
 }
-<div class="youtube-embed-wrapper" data-videoid="@videoId" style="max-width:100%;margin:0 auto;">
-    <div class="ratio ratio-16x9 position-relative">
-        <iframe id="@iframeId"
-                class="youtube-embed-iframe rounded"
-                src="@src"
+
+@if (string.IsNullOrWhiteSpace(src))
+{
+    <div class="bg-light border rounded p-2 small text-center">
+        @("No video available")
+    </div>
+}
+else
+{
+    <div class="youtube-embed-wrapper" data-videoid="@videoId" style="max-width:100%;">
+        <div class="ratio ratio-16x9 position-relative">
+            <iframe src="@src"
+                    title="YouTube video"
+                    frameborder="0"
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                    allowfullscreen>
+            </iframe>
+        </div>
+    </div>
+} *@
+@model string?
+
+@{
+    var raw = Model ?? "";
+    var videoId = Edu.Infrastructure.Helpers.YouTubeHelper.ExtractYouTubeId(raw);
+}
+
+@if (string.IsNullOrEmpty(videoId))
+{
+    <div class="bg-light border rounded p-2 small text-center">
+        @("No video available")
+        <div class="text-danger">Debug: raw='@raw', videoId='@videoId'</div>
+    </div>
+}
+else
+{
+    <div class="ratio ratio-16x9">
+        <iframe src="https://www.youtube-nocookie.com/embed/@videoId?controls=1&modestbranding=1&rel=0"
                 title="YouTube video"
                 frameborder="0"
-                loading="lazy"
-                sandbox="@sandbox"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"></iframe>
+                allowfullscreen>
+        </iframe>
     </div>
-</div>
+}
 
 
-
-@section Scripts {
+@* @section Scripts {
     <script>
         (function() {
             // Basic runtime test: try to create a YT.Player instance (works only when enablejsapi allowed)
@@ -144,5 +188,5 @@
 
         })();
     </script>
-}
+} *@
 

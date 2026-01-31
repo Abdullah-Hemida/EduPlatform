@@ -859,6 +859,25 @@ html[dir="rtl"] .booking-card .meta-right {
 [dir="rtl"] .ltr-phone {
     direction: ltr;
 }
+/*.lesson-thumb-max {
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    flex-shrink: 0 !important;
+}
+
+    .lesson-thumb-max .ratio-16x9 {
+        width: 200px !important;
+        height: 112.5px !important;*/ /* 16:9 for 200px width */
+    /*}
+
+    .lesson-thumb-max iframe {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+    }*/
 
 /* Sticky the header visually and keep background */
 /*.table thead th {

@@ -360,26 +360,82 @@ namespace Edu.Web.Areas.Teacher.Controllers
         }
 
         // GET: Teacher/ReactiveCourses/Details/5
-        public async Task<IActionResult> Details(int id)
+        [HttpGet]
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             var teacherId = _userManager.GetUserId(User);
 
+            // Load the course including months -> lessons -> files
             var course = await _db.ReactiveCourses
+                .AsNoTracking()
                 .Where(c => c.Id == id && c.TeacherId == teacherId)
                 .Include(c => c.Months)
                     .ThenInclude(m => m.Lessons)
                         .ThenInclude(l => l.Files)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (course == null) return NotFound();
 
+            // Resolve cover image public url (best-effort)
             string? coverPublic = null;
             if (!string.IsNullOrEmpty(course.CoverImageKey))
             {
                 try { coverPublic = await _fileStorage.GetPublicUrlAsync(course.CoverImageKey); }
-                catch { coverPublic = course.CoverImageKey; }
+                catch
+                {
+                    // fallback to key (may be relative)
+                    coverPublic = course.CoverImageKey;
+                }
             }
 
+            // helper to normalize urls (provider may return "~uploads/..." or raw keys)
+            string? NormalizeUrl(string? u)
+            {
+                if (string.IsNullOrWhiteSpace(u)) return null;
+                u = u.Trim().Trim('"', '\'');
+                if (u.StartsWith("~")) u = Url.Content(u);
+                if (Uri.TryCreate(u, UriKind.Absolute, out _)) return u;
+                if (!u.StartsWith("/")) u = "/" + u.TrimStart('/');
+                return u;
+            }
+
+            // Collect all file storage keys / file urls to resolve in batch
+            var monthsList = course.Months ?? Enumerable.Empty<ReactiveCourseMonth>();
+            var allFiles = monthsList
+                .SelectMany(m => (m.Lessons ?? Enumerable.Empty<ReactiveCourseLesson>()))
+                .SelectMany(l => (l.Files ?? Enumerable.Empty<FileResource>()))
+                .ToList();
+
+            var keysToResolve = allFiles
+                .Select(f => !string.IsNullOrWhiteSpace(f.StorageKey) ? f.StorageKey! : f.FileUrl)
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var resolvedMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (keysToResolve.Any())
+            {
+                try
+                {
+                    var tasks = keysToResolve.Select(k => _fileStorage.GetPublicUrlAsync(k)).ToArray();
+                    var results = await Task.WhenAll(tasks);
+
+                    for (int i = 0; i < keysToResolve.Count; i++)
+                    {
+                        // Normalize provider returned url, fallback to normalized key
+                        var resolved = NormalizeUrl(results[i]) ?? NormalizeUrl(keysToResolve[i]);
+                        resolvedMap[keysToResolve[i]] = resolved;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed resolving some file public URLs for reactive course {CourseId}", id);
+                    // fallback: map each key to a normalized version of itself
+                    foreach (var k in keysToResolve) resolvedMap[k] = NormalizeUrl(k);
+                }
+            }
+
+            // Build VM
             var vm = new ReactiveCourseDetailsVm
             {
                 Id = course.Id,
@@ -394,9 +450,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 Months = new List<ReactiveCourseMonthVm>()
             };
 
-            var months = course.Months ?? Enumerable.Empty<ReactiveCourseMonth>();
-
-            foreach (var m in months.OrderBy(mo => mo.MonthIndex))
+            foreach (var m in monthsList.OrderBy(mo => mo.MonthIndex))
             {
                 var monthVm = new ReactiveCourseMonthVm
                 {
@@ -408,8 +462,8 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 };
 
                 var lessons = (m.Lessons ?? Enumerable.Empty<ReactiveCourseLesson>())
-                              .OrderBy(l => l.ScheduledUtc ?? DateTime.MaxValue)
-                              .ToList();
+                               .OrderBy(l => l.ScheduledUtc ?? DateTime.MaxValue)
+                               .ToList();
 
                 foreach (var l in lessons)
                 {
@@ -429,27 +483,29 @@ namespace Edu.Web.Areas.Teacher.Controllers
                     {
                         foreach (var f in l.Files)
                         {
-                            var fileVm = new ReactiveFileResourceVm
-                            {
-                                Id = f.Id,
-                                FileName = f.Name ?? Path.GetFileName(f.FileUrl ?? f.StorageKey ?? "")
-                            };
+                            var key = !string.IsNullOrEmpty(f.StorageKey) ? f.StorageKey : f.FileUrl;
+                            string? publicUrl = null;
 
-                            if (!string.IsNullOrEmpty(f.StorageKey))
+                            if (!string.IsNullOrEmpty(key) && resolvedMap.TryGetValue(key!, out var resolved))
                             {
-                                try
-                                {
-                                    fileVm.PublicUrl = await _fileStorage.GetPublicUrlAsync(f.StorageKey);
-                                }
-                                catch
-                                {
-                                    fileVm.PublicUrl = f.FileUrl;
-                                }
+                                publicUrl = resolved;
                             }
                             else
                             {
-                                fileVm.PublicUrl = f.FileUrl;
+                                publicUrl = NormalizeUrl(!string.IsNullOrEmpty(f.StorageKey) ? f.StorageKey : f.FileUrl);
                             }
+
+                            var fileVm = new ReactiveFileResourceVm
+                            {
+                                Id = f.Id,
+                                FileName = f.Name ?? Path.GetFileName(f.FileUrl ?? f.StorageKey ?? string.Empty),
+                                StorageKey = f.StorageKey,
+                                FileUrl = f.FileUrl,
+                                FileType = f.FileType,
+                                PublicUrl = publicUrl,
+                                // fallback server-side streaming/download endpoint (keeps auth/access/usage logging centralized)
+                                DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id })
+                            };
 
                             lessonVm.Files.Add(fileVm);
                         }
@@ -464,6 +520,7 @@ namespace Edu.Web.Areas.Teacher.Controllers
             ViewData["ActivePage"] = "MyReactiveCourses";
             return View(vm);
         }
+
         // POST: Teacher/ReactiveCourses/AddLessonAjax
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -744,7 +801,6 @@ namespace Edu.Web.Areas.Teacher.Controllers
                 monthIndex = month.MonthIndex
             });
         }
-        // ... (AddLessonAjax, EditLessonAjax, DeleteLesson, DeleteLessonAttachment, SetMonthReadyAjax unchanged) ...
 
         // GET: Teacher/ReactiveCourses/Delete/5
         public async Task<IActionResult> Delete(int id)

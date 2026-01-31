@@ -56,9 +56,21 @@
                                             <i class="fas fa-file me-2"></i>
                                             <span>@f.Name</span>
                                         </div>
-                                        @if (!string.IsNullOrEmpty(f.PublicUrl))
+
+                                        @* prefer provider PublicUrl; fallback to server DownloadUrl *@
+                                        @{
+                                            var href = !string.IsNullOrEmpty(f.PublicUrl) ? f.PublicUrl : (f.DownloadUrl ?? "#");
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(href) && href != "#")
                                         {
-                                            <a class="btn btn-sm btn-outline-primary" href="@f.PublicUrl" target="_blank">@L["Button.View"]</a>
+                                            <a class="btn btn-sm btn-outline-primary js-file-download"
+                                               href="@href"
+                                               data-file-id="@f.Id"
+                                               data-public-url="@(f.PublicUrl ?? "")"
+                                               target="_blank" rel="noopener noreferrer">
+                                                @L["Button.View"]
+                                            </a>
                                         }
                                         else
                                         {

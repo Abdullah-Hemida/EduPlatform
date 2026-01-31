@@ -89,13 +89,11 @@ namespace Edu.Web.Areas.Student.ViewModels
     {
         public int Id { get; set; }
         public string? Name { get; set; }
-
-        // storage key (preferred) and DB-file url (fallback), plus final resolved public url
         public string? StorageKey { get; set; }
         public string? FileUrl { get; set; }
-        public string? PublicUrl { get; set; }
-
         public string? FileType { get; set; }
+        public string? PublicUrl { get; set; }    // resolved provider / normalized URL
+        public string? DownloadUrl { get; set; }  // server fallback to FileResources/Download
     }
 
     public class PurchaseRequestCreateVm

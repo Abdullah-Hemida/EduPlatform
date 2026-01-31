@@ -88,9 +88,20 @@ namespace Edu.Web.Areas.Teacher.ViewModels
     public class ReactiveFileResourceVm
     {
         public int Id { get; set; }
-        public string? FileName { get; set; }
+        public string FileName { get; set; } = string.Empty;
+
+        // optional original DB fields
+        public string? StorageKey { get; set; }
+        public string? FileUrl { get; set; }
+        public string? FileType { get; set; }
+
+        // server-resolved
         public string? PublicUrl { get; set; }
+
+        // fallback download endpoint on server (streams / redirects)
+        public string? DownloadUrl { get; set; }
     }
+
 
     public class ReactiveCourseLessonCreateVm
     {

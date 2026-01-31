@@ -17,7 +17,7 @@
 
   "Nav.MyPrivateCourses": "دوراتي المسجلة",
   "Nav.ReactiveCourses": "الدورات التفاعلية",
-  "Nav.ReactiveEnrollments": "التسجيلات",
+  "Nav.ReactiveEnrollments": "الإشتراكات",
   "Nav.Teachers": "المعلمين",
   "Nav.Students": "الطلاب",
   "Nav.RecordedCourses": "الدورات المسجلة",
@@ -595,14 +595,14 @@
   "Admin.TextItem": "نص العنصر",
   "Admin.RemoveItem": "إزالة العنصر",
 
-  "Admin.ReactiveEnrollments.Title": "التسجيلات التفاعلية",
+  "Admin.ReactiveEnrollments.Title": "إشتراكات الدورات التفاعلية",
   "Admin.SchoolEnrollments.Title": "طلبات إنضمام الطلاب للمدرسة",
   "Admin.Search.Placeholder": "ابحث بالمساق، الطالب أو المُدرس...",
   "Admin.Search.Button": "بحث",
   "Admin.DeleteOld.Button": "حذف القديم",
   "Admin.DeleteOld.PickDate": "اختر تاريخًا",
-  "Admin.DeleteOld.Confirm": "حذف التسجيلات التي أنشئت قبل التاريخ المحدد (فقط التي ليس لها أشهر مدفوعة). هل تتابع؟",
-  "Admin.DeleteOldSuccess": "تم حذف التسجيلات القديمة بنجاح.",
+  "Admin.DeleteOld.Confirm": "حذف الإشتراكات التي أنشئت قبل التاريخ المحدد (فقط التي ليس لها أشهر مدفوعة). هل تتابع؟",
+  "Admin.DeleteOldSuccess": "تم حذف الإشتراكات القديمة بنجاح.",
   "Admin.DeleteOldNoMatching": "لم يتم العثور على تسجيلات مطابقة.",
   "Admin.Delete.Confirm": "هل تحذف هذا التسجيل؟ لا يمكن التراجع.",
   "Admin.DeleteError": "فشل حذف الإشتراك.",
@@ -930,7 +930,8 @@
   "FileResource.InvalidId": "معرّف ملف غير صالح",
   "Common.NoFiles": "لا توجد ملفات",
   "Common.Forbidden": "غير مسموح لك بتنفيذ هذا الإجراء",
-  "Button.DeleteFile": "حذف الملف"
+  "Button.DeleteFile": "حذف الملف",
+  "OnlineCourse.PaymentRequested": "تم إرسال طلب الدفع"
 }
 
 

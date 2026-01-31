@@ -396,10 +396,13 @@ namespace Edu.Web.Controllers
                 }
             }
 
-            // Resolve lesson files
+            // Resolve lesson files (batch/cache per storage key)
             var files = await _db.FileResources.AsNoTracking().Where(f => f.SchoolLessonId == lesson.Id).ToListAsync();
             var fileVms = new List<FileResourceVm>();
+
+            // cache for storage key -> public url (avoid repeated GetPublicUrl calls)
             var storageKeyCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var f in files)
             {
                 string? publicUrl = null;
@@ -413,7 +416,8 @@ namespace Edu.Web.Controllers
                 }
                 else if (!string.IsNullOrEmpty(f.FileUrl))
                 {
-                    publicUrl = f.FileUrl;
+                    // use stored FileUrl if present (normalize)
+                    publicUrl = NormalizeUrl(f.FileUrl);
                 }
 
                 fileVms.Add(new FileResourceVm
@@ -421,7 +425,9 @@ namespace Edu.Web.Controllers
                     Id = f.Id,
                     Name = f.Name ?? System.IO.Path.GetFileName(f.FileUrl ?? f.StorageKey ?? ""),
                     FileType = f.FileType,
-                    PublicUrl = publicUrl
+                    PublicUrl = publicUrl,
+                    // server fallback for protected download (always set)
+                    DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id })
                 });
             }
 
@@ -441,20 +447,34 @@ namespace Edu.Web.Controllers
             return View(vm);
         }
 
-        // Helper to resolve storage key to a public url with safe error handling
-        private async Task<string?> ResolvePublicUrlSafeAsync(string key)
+        // helper: normalize url (root-relative/absolute) used above
+        private string? NormalizeUrl(string? u)
         {
-            if (string.IsNullOrEmpty(key)) return null;
+            if (string.IsNullOrWhiteSpace(u)) return null;
+            u = u.Trim().Trim('"', '\'');
+            if (u.StartsWith("~")) u = Url.Content(u);
+            if (Uri.TryCreate(u, UriKind.Absolute, out _)) return u;
+            if (!u.StartsWith("/")) u = "/" + u.TrimStart('/');
+            return u;
+        }
+
+        // helper: attempt to resolve a storage key to a normalized public url safely (swallows exceptions)
+        private async Task<string?> ResolvePublicUrlSafeAsync(string storageKey)
+        {
+            if (string.IsNullOrWhiteSpace(storageKey)) return null;
             try
             {
-                var url = await _fileStorage.GetPublicUrlAsync(key);
-                return string.IsNullOrWhiteSpace(url) ? null : url;
+                var url = await _fileStorage.GetPublicUrlAsync(storageKey);
+                if (string.IsNullOrWhiteSpace(url)) return null;
+                return NormalizeUrl(url);
             }
             catch
             {
+                // On failure return null so view will use DownloadUrl fallback
                 return null;
             }
         }
+        // Helper to resolve storage key to a public url with safe error handling
     }
 }
 

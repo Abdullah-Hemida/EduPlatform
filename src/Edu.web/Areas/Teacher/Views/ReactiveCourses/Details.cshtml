@@ -113,15 +113,37 @@
                                                     @if (lesson.Files != null && lesson.Files.Any())
                                                     {
                                                         <div class="mt-2">
-                                                            <strong class="small">@((L["Attachments"] ?? "Attachments"))</strong>
+                                                            <strong class="small">@L["Attachments"]</strong>
                                                             <ul class="small list-unstyled mt-1 mb-0">
                                                                 @foreach (var a in lesson.Files)
                                                                 {
-                                                                    <li><a href="@a.PublicUrl" target="_blank" rel="noopener">@a.FileName</a></li>
+                                                                    <li id="file-@a.Id" class="d-flex align-items-center mb-1">
+                                                                        <a href="@(a.PublicUrl ?? a.DownloadUrl)"
+                                                                           class="js-file-download me-2 small text-truncate flex-grow-1"
+                                                                           data-file-id="@a.Id"
+                                                                           data-public-url="@(a.PublicUrl ?? string.Empty)"
+                                                                           target="_blank" rel="noopener noreferrer" style="max-width:100%;">
+                                                                            @a.FileName
+                                                                        </a>
+
+                                                                        <span class="text-muted small ms-2">(@(a.FileType ?? ""))</span>
+
+                                                                        @* Delete button for owner/admin - uses AJAX DeleteAjax in Admin area *@
+                                                                        @if (User.IsInRole("Admin") || User.IsInRole("Teacher"))
+                                                                        {
+                                                                            <button type="button"
+                                                                                    class="btn btn-sm btn-outline-danger js-file-delete ms-2"
+                                                                                    data-file-id="@a.Id"
+                                                                                    aria-label="@L["Button.DeleteFile"]">
+                                                                                @L["Button.DeleteFile"]
+                                                                            </button>
+                                                                        }
+                                                                    </li>
                                                                 }
                                                             </ul>
                                                         </div>
                                                     }
+
                                                 </div>
 
                                                 <div class="text-end ms-3">

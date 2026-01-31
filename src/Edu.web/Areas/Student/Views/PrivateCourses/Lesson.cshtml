@@ -33,9 +33,14 @@
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>@f.Name</div>
                         <div>
-                            @if (!string.IsNullOrEmpty(f.PublicUrl))
+                            @if (!string.IsNullOrEmpty(f.PublicUrl) || !string.IsNullOrEmpty(f.DownloadUrl))
                             {
-                                <a class="btn btn-sm btn-outline-primary" href="@f.PublicUrl" target="_blank">@(L["Download"] ?? "Download")</a>
+                                var href = !string.IsNullOrEmpty(f.PublicUrl) ? f.PublicUrl : f.DownloadUrl;
+                                <a class="btn btn-sm btn-outline-primary js-file-download"
+                                   href="@href"
+                                   data-file-id="@f.Id"
+                                   data-public-url="@(f.PublicUrl ?? "")"
+                                   target="_blank">@(L["Download"] ?? "Download")</a>
                             }
                             else
                             {
@@ -49,9 +54,7 @@
     </div>
 </div>
 
-<a asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-light">
-    <i class="fas fa-arrow-left me-1 d-none d-rtl-none"></i>
-    <i class="fas fa-arrow-right ms-1 d-none d-ltr-none"></i>
+<a asp-area="Student" asp-controller="PrivateCourses" asp-action="Details" asp-route-id="@Model.PrivateCourseId" class="btn btn-secondry">
     @L["Common.Back"]
 </a>
 

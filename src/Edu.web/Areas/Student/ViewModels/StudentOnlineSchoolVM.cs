@@ -54,6 +54,7 @@ namespace Edu.Web.Areas.Student.ViewModels
         public int Id { get; set; }
         public string FileName { get; set; } = "";
         public string? PublicUrl { get; set; }
+        public string? DownloadUrl { get; set; }
     }
 
     public class OnlineMyEnrollmentVm

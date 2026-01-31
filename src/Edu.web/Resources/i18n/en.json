@@ -940,7 +940,8 @@
   "FileResource.InvalidId": "Invalid file id",
   "Common.NoFiles": "No files",
   "Common.Forbidden": "You are not allowed to perform this action",
-  "Button.DeleteFile": "delete file"
+  "Button.DeleteFile": "delete file",
+  "OnlineCourse.PaymentRequested": "payment request sent"
 }
 
 

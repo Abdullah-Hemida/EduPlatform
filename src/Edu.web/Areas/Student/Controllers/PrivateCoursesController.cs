@@ -43,7 +43,7 @@ namespace Edu.Web.Areas.Student.Controllers
             _logger = logger;
         }
 
-        // GET: Student/PrivateCourses/Details/5
+        // GET: Student/PrivateCourses/Details/5  
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
@@ -65,6 +65,7 @@ namespace Edu.Web.Areas.Student.Controllers
                     pc.IsPublished,
                     pc.CoverImageKey,
                     pc.TeacherId,
+                    // projection of teacher info (may be null)
                     TeacherFullName = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.FullName : null,
                     TeacherEmail = pc.Teacher != null && pc.Teacher.User != null ? pc.Teacher.User.Email : null
                 })
@@ -105,6 +106,9 @@ namespace Edu.Web.Areas.Student.Controllers
                 IsPurchased = isPurchased
             };
 
+            // --- NEW: populate convenient flat TeacherName used by views that expect it ---
+            courseVm.TeacherName = courseVm.Teacher?.FullName ?? courseVm.Teacher?.Email ?? string.Empty;
+
             // set localized CategoryName
             courseVm.CategoryName = LocalizationHelpers.GetLocalizedCategoryName(new Edu.Domain.Entities.Category
             {
@@ -139,25 +143,45 @@ namespace Edu.Web.Areas.Student.Controllers
                 .Include(l => l.Files)
                 .ToListAsync(cancellationToken);
 
-            // group lessons by module id
-            var lessonsByModule = lessonsWithFiles.GroupBy(l => l.PrivateModuleId ?? 0)
+            // --- NEW: set total lessons count (includes standalone lessons) ---
+            courseVm.TotalLessons = lessonsWithFiles.Count;
+
+            // group lessons by module id (null => 0)
+            var lessonsByModule = lessonsWithFiles
+                .GroupBy(l => l.PrivateModuleId ?? 0)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Order).ToList());
 
-            // map modules & lessons to VMs
-            var fileKeys = new List<string?>();
+            // helper: normalize urls (~/ -> Url.Content, ensure root-relative or absolute)
+            string? NormalizeUrl(string? u)
+            {
+                if (string.IsNullOrWhiteSpace(u)) return null;
+                u = u.Trim().Trim('"', '\'');
+                if (u.StartsWith("~")) u = Url.Content(u);
+                if (Uri.TryCreate(u, UriKind.Absolute, out _)) return u;
+                if (!u.StartsWith("/")) u = "/" + u.TrimStart('/');
+                return u;
+            }
+
+            // map modules & lessons to VMs and collect file keys to resolve in batch
+            var fileKeys = new List<string>();
             foreach (var m in modules)
             {
+                // --- NEW: use lessonsByModule to get the lesson count for this module ---
+                var lessonCountForModule = lessonsByModule.TryGetValue(m.Id, out var lessonsForThisModule)
+                    ? lessonsForThisModule.Count
+                    : 0;
+
                 var moduleVm = new PrivateModuleVm
                 {
                     Id = m.Id,
                     Title = m.Title,
                     Order = m.Order,
-                    LessonCount = lessonsWithFiles.Count(l => l.PrivateModuleId == m.Id)
+                    LessonCount = lessonCountForModule
                 };
 
-                if (lessonsByModule.TryGetValue(m.Id, out var lessonsForModule))
+                if (lessonsForThisModule != null)
                 {
-                    foreach (var l in lessonsForModule)
+                    foreach (var l in lessonsForThisModule)
                     {
                         var lessonVm = new PrivateLessonVm
                         {
@@ -239,9 +263,12 @@ namespace Edu.Web.Areas.Student.Controllers
                 {
                     var urlTasks = distinctKeys.Select(k => _fileStorage.GetPublicUrlAsync(k!)).ToArray();
                     var urls = await Task.WhenAll(urlTasks);
-                    var map = distinctKeys.Select((k, i) => new { Key = k, Url = urls[i] }).ToDictionary(x => x.Key!, x => x.Url);
 
-                    // assign PublicUrl
+                    // map key -> normalized url (or fallback to the key)
+                    var map = distinctKeys.Select((k, i) => new { Key = k, Url = NormalizeUrl(urls[i]) ?? NormalizeUrl(k) })
+                                          .ToDictionary(x => x.Key!, x => x.Url, StringComparer.OrdinalIgnoreCase);
+
+                    // assign PublicUrl and DownloadUrl for each file VM
                     foreach (var m in courseVm.Modules)
                     {
                         foreach (var l in m.Lessons)
@@ -249,10 +276,13 @@ namespace Edu.Web.Areas.Student.Controllers
                             foreach (var f in l.Files)
                             {
                                 var key = f.StorageKey ?? f.FileUrl;
-                                if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu))
+                                if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu) && !string.IsNullOrEmpty(pu))
                                     f.PublicUrl = pu;
                                 else
-                                    f.PublicUrl = key;
+                                    f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
+
+                                // server fallback - safe endpoint that enforces access
+                                f.DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id });
                             }
                         }
                     }
@@ -262,26 +292,58 @@ namespace Edu.Web.Areas.Student.Controllers
                         foreach (var f in l.Files)
                         {
                             var key = f.StorageKey ?? f.FileUrl;
-                            if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu))
+                            if (!string.IsNullOrEmpty(key) && map.TryGetValue(key, out var pu) && !string.IsNullOrEmpty(pu))
                                 f.PublicUrl = pu;
                             else
-                                f.PublicUrl = key;
+                                f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
+
+                            f.DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id });
                         }
                     }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Some file public URL lookups failed for course {CourseId}", id);
-                    // fallback: leave PublicUrl null or set to fileUrl/storageKey where possible
+                    // fallback code (unchanged)...
                     foreach (var m in courseVm.Modules)
+                    {
                         foreach (var l in m.Lessons)
+                        {
                             foreach (var f in l.Files)
-                                if (string.IsNullOrEmpty(f.PublicUrl)) f.PublicUrl = f.FileUrl ?? f.StorageKey;
+                            {
+                                f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
+                                f.DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id });
+                            }
+                        }
+                    }
 
                     foreach (var l in courseVm.StandaloneLessons)
+                    {
                         foreach (var f in l.Files)
-                            if (string.IsNullOrEmpty(f.PublicUrl)) f.PublicUrl = f.FileUrl ?? f.StorageKey;
+                        {
+                            f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
+                            f.DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id });
+                        }
+                    }
                 }
+            }
+            else
+            {
+                // no keys to resolve — normalize existing values and add DownloadUrl fallback
+                foreach (var m in courseVm.Modules)
+                    foreach (var l in m.Lessons)
+                        foreach (var f in l.Files)
+                        {
+                            f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
+                            f.DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id });
+                        }
+
+                foreach (var l in courseVm.StandaloneLessons)
+                    foreach (var f in l.Files)
+                    {
+                        f.PublicUrl = NormalizeUrl(f.FileUrl ?? f.StorageKey);
+                        f.DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = f.Id });
+                    }
             }
 
             ViewData["ActivePage"] = "MyPurchaseRequests";

@@ -6,19 +6,31 @@
 }
 
 <div class="row g-3">
-    <div class="col-md-8">
+    <!-- Main column -->
+    <div class="col-12 col-md-8">
         <div class="card mb-3 shadow-sm">
             @if (!string.IsNullOrEmpty(Model.CoverPublicUrl))
             {
-                <img src="@Model.CoverPublicUrl" class="card-img-top" style="height:260px;object-fit:cover" />
+                <!-- responsive ratio container keeps height proportional -->
+                <div class="ratio ratio-16x6">
+                    <img src="@Model.CoverPublicUrl" alt="@Model.Title" class="img-fluid w-100 h-100 object-fit-cover rounded-top" />
+                </div>
             }
             <div class="card-body">
-                <h2>@Model.Title</h2>
-                <div class="small text-muted mb-2">@Model.TeacherName • @Model.CategoryName</div>
-                <p>@Model.Description</p>
+                <h2 class="h4 mb-1">@Model.Title</h2>
+                <div class="small text-muted mb-2">
+                    @(!string.IsNullOrWhiteSpace(Model.TeacherName) ? Model.TeacherName : (Model.Teacher?.FullName ?? "-"))
+                    <span class="mx-2">•</span>
+                    @Model.CategoryName
+                </div>
 
-                <div class="d-flex gap-2 align-items-center">
-                    <div class="fw-semibold">@(!string.IsNullOrEmpty(Model.PriceLabel) ? Model.PriceLabel : L["Admin.Paid"])</div>
+                <p class="mb-3 text-break">@Model.Description</p>
+
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="fw-semibold">
+                        @(!string.IsNullOrEmpty(Model.PriceLabel) ? Model.PriceLabel : L["Admin.Paid"])
+                    </div>
+
                     @if (Model.IsPurchased)
                     {
                         <span class="badge bg-success">@L["Status.Completed"]</span>
@@ -30,12 +42,14 @@
                             <form asp-action="RequestPurchase" method="post" class="ms-2">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="PrivateCourseId" value="@Model.Id" />
-                                <button class="btn btn-primary">@L["Purchase.Request"]</button>
+                                <button class="btn btn-primary btn-sm">@L["Purchase.Request"]</button>
                             </form>
                         }
                         else
                         {
-                            <a asp-area="" asp-controller="Account" asp-action="Login" class="btn btn-outline-primary ms-2">@L["Account.LoginToPurchase"]</a>
+                            <a asp-area="" asp-controller="Account" asp-action="Login" class="btn btn-outline-primary btn-sm ms-2">
+                                @L["Account.LoginToPurchase"]
+                            </a>
                         }
                     }
                 </div>
@@ -44,7 +58,8 @@
 
         <div class="card shadow-sm">
             <div class="card-body">
-                <h5>@L["Admin.Lessons"] (@Model.TotalLessons)</h5>
+                <h5 class="mb-3">@L["Admin.Lessons"] (@Model.TotalLessons)</h5>
+
                 @if (!Model.Modules.Any())
                 {
                     <div class="text-muted">@L["Admin.NoLessonsYet"]</div>
@@ -54,22 +69,25 @@
                     @foreach (var m in Model.Modules)
                     {
                         <div class="mb-3">
-                            <h6 class="mb-1">@m.Title</h6>
+                            <h6 class="mb-2">@m.Title</h6>
                             <ul class="list-group">
                                 @foreach (var l in m.Lessons)
                                 {
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <strong>@l.Title</strong>
+                                    <li class="list-group-item d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+                                        <div class="me-2 w-100">
+                                            <div class="fw-semibold text-break">@l.Title</div>
                                         </div>
-                                        <div>
+
+                                        <div class="ms-sm-3">
                                             @if (Model.IsPurchased)
                                             {
-                                                <a asp-area="Student" asp-controller="PrivateCourses" asp-action="Lesson" asp-route-id="@l.Id" class="btn btn-sm btn-primary">@L["Button.View"]</a>
+                                                <a asp-area="Student" asp-controller="PrivateCourses" asp-action="Lesson" asp-route-id="@l.Id" class="btn btn-sm btn-primary">
+                                                    @L["Button.View"]
+                                                </a>
                                             }
                                             else
                                             {
-                                                <span class="text-muted">@(L["Purchase.NotAccessible"] ?? "Locked — purchase required")</span>
+                                                <span class="text-muted small">@L["Purchase.NotAccessible"]</span>
                                             }
                                         </div>
                                     </li>
@@ -82,18 +100,35 @@
         </div>
     </div>
 
-    <aside class="col-md-4">
-        <div class="card sticky-top mb-3">
+    <!-- Sidebar -->
+    <aside class="col-12 col-md-4">
+        <div class="card mb-3 shadow-sm">
             <div class="card-body">
-                <h6>@L["Course.Info"]</h6>
-                <dl class="row">
-                    <dt class="col-4">@L["Admin.Category"]</dt>
-                    <dd class="col-8">@Model.CategoryName</dd>
-                    <dt class="col-4">@L["Admin.Teachers"]</dt>
-                    <dd class="col-8">@Model.TeacherName</dd>
-                    <dt class="col-4">@L["Admin.Lessons"]</dt>
-                    <dd class="col-8">@Model.TotalLessons</dd>
-                </dl>
+                <h6 class="card-title text-uppercase text-muted mb-3">@L["Admin.CourseInfo"]</h6>
+
+                <!-- each row uses the grid so label/value stack nicely on xs and align on md+ -->
+                <div class="row align-items-start mb-2">
+                    <div class="col-5 col-md-4 text-muted small">@L["Admin.Category"]</div>
+                    <div class="col-7 col-md-8 fw-medium text-break">@Model.CategoryName</div>
+                </div>
+
+                <div class="row align-items-start mb-2">
+                    <div class="col-5 col-md-4 text-muted small">@L["Admin.Teachers"]</div>
+                    <div class="col-7 col-md-8">
+                        <div class="fw-medium text-truncate">@(!string.IsNullOrWhiteSpace(Model.TeacherName) ? Model.TeacherName : (Model.Teacher?.FullName ?? "-"))</div>
+                        @if (!string.IsNullOrWhiteSpace(Model.Teacher?.Email))
+                        {
+                            <div class="small text-muted text-break">@Model.Teacher.Email</div>
+                        }
+                    </div>
+                </div>
+
+                <div class="row align-items-start mb-2">
+                    <div class="col-5 col-md-4 text-muted small">@L["Admin.Lessons"]</div>
+                    <div class="col-7 col-md-8">
+                        <span class="badge bg-primary">@Model.TotalLessons</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -102,6 +137,7 @@
         </a>
     </aside>
 </div>
+
 
 
 

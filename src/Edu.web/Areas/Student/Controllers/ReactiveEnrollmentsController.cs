@@ -42,10 +42,10 @@ namespace Edu.Web.Areas.Student.Controllers
             _notifier = notifier;
         }
 
-        // GET: /Student/ReactiveCourses/Details/5
+        // GET: /Student/ReactiveCourses/Details/5 
         [HttpGet("Student/ReactiveCourses/Details/{id:int}")]
-        [AllowAnonymous] // public; Admin/Teacher/Student may access but only Student role treated as 'student'
-        public async Task<IActionResult> Details(int id)
+        [AllowAnonymous]
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             // Load lightweight course + months summary
             var course = await _db.ReactiveCourses
@@ -74,7 +74,7 @@ namespace Edu.Web.Areas.Student.Controllers
                             LessonsCount = m.Lessons.Count()
                         }).ToList()
                 })
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (course == null) return NotFound();
 
@@ -93,15 +93,18 @@ namespace Edu.Web.Areas.Student.Controllers
                 studentId = _userManager.GetUserId(User);
             }
 
-            var monthsBase = course.Months.Select(m => new StudentCourseMonthVm
-            {
-                Id = m.Id,
-                MonthIndex = m.MonthIndex,
-                MonthStartUtc = m.MonthStartUtc,
-                MonthEndUtc = m.MonthEndUtc,
-                IsReadyForPayment = m.IsReadyForPayment,
-                LessonsCount = m.LessonsCount
-            }).OrderBy(m => m.MonthIndex).ToList();
+            var monthsBase = course.Months
+                .Select(m => new StudentCourseMonthVm
+                {
+                    Id = m.Id,
+                    MonthIndex = m.MonthIndex,
+                    MonthStartUtc = m.MonthStartUtc,
+                    MonthEndUtc = m.MonthEndUtc,
+                    IsReadyForPayment = m.IsReadyForPayment,
+                    LessonsCount = m.LessonsCount
+                })
+                .OrderBy(m => m.MonthIndex)
+                .ToList();
 
             // Public view (no payment/enrollment info)
             if (string.IsNullOrEmpty(studentId))
@@ -128,7 +131,7 @@ namespace Edu.Web.Areas.Student.Controllers
             // load student's enrollment (if any)
             var enrollment = await _db.ReactiveEnrollments
                 .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.ReactiveCourseId == course.Id && e.StudentId == studentId);
+                .FirstOrDefaultAsync(e => e.ReactiveCourseId == course.Id && e.StudentId == studentId, cancellationToken);
 
             int? enrollmentId = enrollment?.Id;
 
@@ -139,7 +142,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 paymentList = await _db.ReactiveEnrollmentMonthPayments
                     .AsNoTracking()
                     .Where(p => p.ReactiveEnrollmentId == enrollmentId.Value)
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
             }
 
             // Build months with payment state
@@ -160,7 +163,7 @@ namespace Edu.Web.Areas.Student.Controllers
             var lessonVmList = new List<StudentCourseLessonVm>();
             if (paidMonthIds.Any())
             {
-                // load lessons
+                // load lessons (light projection)
                 var lessons = await _db.ReactiveCourseLessons
                     .AsNoTracking()
                     .Where(l => l.ReactiveCourseMonthId != null && paidMonthIds.Contains(l.ReactiveCourseMonthId))
@@ -175,7 +178,7 @@ namespace Edu.Web.Areas.Student.Controllers
                         l.RecordedVideoUrl,
                         ReactiveCourseMonthId = l.ReactiveCourseMonthId
                     })
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
                 var lessonIds = lessons.Select(x => x.Id).ToList();
 
@@ -186,15 +189,26 @@ namespace Edu.Web.Areas.Student.Controllers
                     files = await _db.FileResources
                         .AsNoTracking()
                         .Where(fr => fr.ReactiveCourseLessonId != null && lessonIds.Contains(fr.ReactiveCourseLessonId.Value))
-                        .ToListAsync();
+                        .ToListAsync(cancellationToken);
                 }
 
-                // prepare distinct keys to resolve public urls asynchronously
+                // prepare distinct keys to resolve public urls asynchronously (batch)
                 var distinctKeys = files
                     .Select(fr => fr.StorageKey ?? fr.FileUrl)
                     .Where(k => !string.IsNullOrEmpty(k))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
+
+                // helper: normalize provider returned url or stored FileUrl/key
+                string? NormalizeUrl(string? u)
+                {
+                    if (string.IsNullOrWhiteSpace(u)) return null;
+                    u = u.Trim().Trim('"', '\'');
+                    if (u.StartsWith("~")) u = Url.Content(u);
+                    if (Uri.TryCreate(u, UriKind.Absolute, out _)) return u;
+                    if (!u.StartsWith("/")) u = "/" + u.TrimStart('/');
+                    return u;
+                }
 
                 var keyToUrl = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
                 if (distinctKeys.Any())
@@ -203,17 +217,18 @@ namespace Edu.Web.Areas.Student.Controllers
                     {
                         var urlTasks = distinctKeys.Select(k => _fileStorage.GetPublicUrlAsync(k!)).ToArray();
                         var urls = await Task.WhenAll(urlTasks);
-                        keyToUrl = distinctKeys.Select((k, i) => (k, urls[i]))
-                                              .ToDictionary(x => x.k!, x => x.Item2, StringComparer.OrdinalIgnoreCase);
+                        keyToUrl = distinctKeys
+                            .Select((k, i) => (Key: k!, Url: NormalizeUrl(urls[i]) ?? NormalizeUrl(k)))
+                            .ToDictionary(x => x.Key, x => x.Url, StringComparer.OrdinalIgnoreCase);
                     }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Some file public URL lookups failed for reactive course {CourseId}", course.Id);
-                        // fallback: dictionary left empty, use fileUrl or storageKey later
+                        // fallback: keyToUrl left empty and we'll fallback to FileUrl / StorageKey
                     }
                 }
 
-                // map lessons -> VMs, using keyToUrl to fill PublicUrl
+                // map lessons -> VMs, using keyToUrl to fill PublicUrl and set DownloadUrl fallback
                 lessonVmList = lessons.Select(l =>
                 {
                     var attached = files
@@ -225,13 +240,15 @@ namespace Edu.Web.Areas.Student.Controllers
                             if (!string.IsNullOrEmpty(keyOrUrl) && keyToUrl.TryGetValue(keyOrUrl, out var resolved) && !string.IsNullOrEmpty(resolved))
                                 publicUrl = resolved;
                             else
-                                publicUrl = ff.FileUrl ?? ff.StorageKey;
+                                publicUrl = NormalizeUrl(ff.FileUrl ?? ff.StorageKey);
 
                             return new ReactiveCourseLessonFileVm
                             {
                                 Id = ff.Id,
                                 FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
-                                PublicUrl = publicUrl
+                                PublicUrl = publicUrl,
+                                // server download fallback (enforces auth/permissions; student role allowed)
+                                DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = ff.Id })
                             };
                         })
                         .ToList();
@@ -281,7 +298,7 @@ namespace Edu.Web.Areas.Student.Controllers
             };
 
             vm.IntroYouTubeId = YouTubeHelper.ExtractYouTubeId(vm.IntroVideoUrl);
-            ViewData["ActivePage"] = "MyEnrollments";
+            ViewData["ActivePage"] = "MyReactiveEnrollments";
             return View(vm);
         }
 
@@ -675,7 +692,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 }).ToList()
             }).ToList();
 
-            ViewData["ActivePage"] = "MyEnrollments";
+            ViewData["ActivePage"] = "MyReactiveEnrollments";
             return View(vm);
         }
     }

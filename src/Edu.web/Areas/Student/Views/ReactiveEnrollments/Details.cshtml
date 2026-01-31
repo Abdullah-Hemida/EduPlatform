@@ -233,6 +233,7 @@
                                                                 </div>
 
                                                                 @* Attachments for recorded lessons *@
+                                                                @* Attachments for recorded lessons (download-only, student-facing) *@
                                                                 @if (l.Files != null && l.Files.Any())
                                                                 {
                                                                     <div class="mt-2">
@@ -241,13 +242,22 @@
                                                                             @foreach (var f in l.Files)
                                                                             {
                                                                                 <li>
-                                                                                    @if (!string.IsNullOrEmpty(f.PublicUrl))
+                                                                                    @{
+                                                                                        var href = !string.IsNullOrEmpty(f.PublicUrl) ? f.PublicUrl : (f.DownloadUrl ?? "#");
+                                                                                        var displayName = f.FileName ?? ("file-" + f.Id);
+                                                                                    }
+                                                                                    @if (!string.IsNullOrEmpty(href) && href != "#")
                                                                                     {
-                                                                                        <a href="@f.PublicUrl" target="_blank" rel="noopener noreferrer">@f.FileName</a>
+                                                                                        <a href="@href"
+                                                                                           class="js-file-download"
+                                                                                           data-file-id="@f.Id"
+                                                                                           data-public-url="@(f.PublicUrl ?? "")"
+                                                                                           target="_blank"
+                                                                                           rel="noopener noreferrer">@displayName</a>
                                                                                     }
                                                                                     else
                                                                                     {
-                                                                                        <span class="text-muted">@f.FileName</span>
+                                                                                        <span class="text-muted">@displayName</span>
                                                                                     }
                                                                                 </li>
                                                                             }
@@ -269,7 +279,7 @@
                                                                     }
                                                                 </div>
 
-                                                                @* Attachments may still exist for upcoming lessons *@
+                                                                @* Attachments for recorded lessons (download-only, student-facing) *@
                                                                 @if (l.Files != null && l.Files.Any())
                                                                 {
                                                                     <div class="mt-2">
@@ -278,19 +288,29 @@
                                                                             @foreach (var f in l.Files)
                                                                             {
                                                                                 <li>
-                                                                                    @if (!string.IsNullOrEmpty(f.PublicUrl))
+                                                                                    @{
+                                                                                        var href = !string.IsNullOrEmpty(f.PublicUrl) ? f.PublicUrl : (f.DownloadUrl ?? "#");
+                                                                                        var displayName = f.FileName ?? ("file-" + f.Id);
+                                                                                    }
+                                                                                    @if (!string.IsNullOrEmpty(href) && href != "#")
                                                                                     {
-                                                                                        <a href="@f.PublicUrl" target="_blank" rel="noopener noreferrer">@f.FileName</a>
+                                                                                        <a href="@href"
+                                                                                           class="js-file-download"
+                                                                                           data-file-id="@f.Id"
+                                                                                           data-public-url="@(f.PublicUrl ?? "")"
+                                                                                           target="_blank"
+                                                                                           rel="noopener noreferrer">@displayName</a>
                                                                                     }
                                                                                     else
                                                                                     {
-                                                                                        <span class="text-muted">@f.FileName</span>
+                                                                                        <span class="text-muted">@displayName</span>
                                                                                     }
                                                                                 </li>
                                                                             }
                                                                         </ul>
                                                                     </div>
                                                                 }
+
                                                             }
                                                         </div>
                                                     </div>

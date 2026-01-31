@@ -46,7 +46,7 @@ namespace Edu.Web.Areas.Student.Controllers
         // GET: Student/OnlineSchool/Details/5
         [HttpGet("Student/OnlineSchool/Details/{id:int}")]
         [AllowAnonymous]
-        public async Task<IActionResult> Details(int id)
+        public async Task<IActionResult> Details(int id, CancellationToken cancellationToken = default)
         {
             // 1) load lightweight course + months (lessons count only)
             var course = await _db.OnlineCourses
@@ -74,7 +74,7 @@ namespace Edu.Web.Areas.Student.Controllers
                             LessonsCount = m.Lessons.Count()
                         }).ToList()
                 })
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (course == null) return NotFound();
 
@@ -88,7 +88,6 @@ namespace Edu.Web.Areas.Student.Controllers
                 }
                 catch
                 {
-                    // fallback to stored key if storage fails
                     coverPublicUrl = course.CoverImageKey;
                 }
             }
@@ -133,7 +132,7 @@ namespace Edu.Web.Areas.Student.Controllers
             // 4) Load student's enrollment (if any)
             var enrollment = await _db.OnlineEnrollments
                 .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.OnlineCourseId == course.Id && e.StudentId == studentId);
+                .FirstOrDefaultAsync(e => e.OnlineCourseId == course.Id && e.StudentId == studentId, cancellationToken);
 
             int? enrollmentId = enrollment?.Id;
 
@@ -144,7 +143,7 @@ namespace Edu.Web.Areas.Student.Controllers
                 paymentList = await _db.OnlineEnrollmentMonthPayments
                     .AsNoTracking()
                     .Where(p => p.OnlineEnrollmentId == enrollmentId.Value)
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
             }
 
             // 6) Build months VMs with per-student payment state + permissions
@@ -153,16 +152,21 @@ namespace Edu.Web.Areas.Student.Controllers
                 var payment = paymentList.FirstOrDefault(p => p.OnlineCourseMonthId == m.Id);
                 m.PaymentId = payment?.Id;
                 m.MyPaymentStatus = payment?.Status;
-
-                // mark explicit boolean for convenience (Paid means student already paid for this month)
                 m.HasPaidPayment = (payment != null && payment.Status == OnlineEnrollmentMonthPaymentStatus.Paid);
-
-                // Allow request only when admin marked ready AND the student doesn't already have a paid payment for that month.
-                // (If a Pending or Rejected payment exists, request button will be controlled by CanRequestPayment logic - here we only block when Paid)
                 m.CanRequestPayment = m.IsReadyForPayment && !m.HasPaidPayment && (payment == null);
-
                 m.CanCancelPayment = (payment != null && payment.Status == OnlineEnrollmentMonthPaymentStatus.Pending);
                 m.CanViewLessons = (payment != null && payment.Status == OnlineEnrollmentMonthPaymentStatus.Paid);
+            }
+
+            // Helper to normalize provider returned or stored urls to absolute/root-relative usable strings
+            string? NormalizeUrl(string? u)
+            {
+                if (string.IsNullOrWhiteSpace(u)) return null;
+                u = u.Trim().Trim('"', '\'');
+                if (u.StartsWith("~")) u = Url.Content(u);
+                if (Uri.TryCreate(u, UriKind.Absolute, out _)) return u;
+                if (!u.StartsWith("/")) u = "/" + u.TrimStart('/');
+                return u;
             }
 
             // 7) If any paid months -> load lessons only for paid months
@@ -182,11 +186,11 @@ namespace Edu.Web.Areas.Student.Controllers
                         l.MeetUrl,
                         l.RecordedVideoUrl,
                         l.Notes,
-                        Files = l.Files.Select(f => new { f.Id, f.Name, f.FileUrl, f.StorageKey }).ToList()
+                        Files = l.Files.Select(f => new { f.Id, f.Name, f.FileUrl, f.StorageKey, f.FileType }).ToList()
                     })
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
-                // Collect all storage keys that need resolution (avoid per-file DB calls)
+                // Collect storage keys to resolve in batch
                 var keysToResolve = lessons
                     .SelectMany(l => l.Files)
                     .Where(ff => !string.IsNullOrEmpty(ff.StorageKey))
@@ -202,12 +206,11 @@ namespace Edu.Web.Areas.Student.Controllers
                         var tasks = keysToResolve.Select(k => _fileStorage.GetPublicUrlAsync(k)).ToArray();
                         var urls = await Task.WhenAll(tasks);
                         keyToPublicUrl = keysToResolve.Zip(urls, (k, u) => (k, u))
-                                                      .ToDictionary(x => x.k, x => x.u, StringComparer.OrdinalIgnoreCase);
+                                                      .ToDictionary(x => x.k, x => NormalizeUrl(x.u), StringComparer.OrdinalIgnoreCase);
                     }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Failed resolving some file storage keys for course {CourseId}", course.Id);
-                        // fallback: leave empty map entries (we'll use FileUrl/FileKey later)
                     }
                 }
 
@@ -228,14 +231,27 @@ namespace Edu.Web.Areas.Student.Controllers
                             OnlineCourseMonthId = x.OnlineCourseMonthId,
                             Files = x.Files.Select(ff =>
                             {
-                                var publicUrl = !string.IsNullOrEmpty(ff.StorageKey) && keyToPublicUrl.TryGetValue(ff.StorageKey!, out var resolved) ? resolved : ff.FileUrl;
-                                if (string.IsNullOrEmpty(publicUrl) && !string.IsNullOrEmpty(ff.StorageKey))
-                                    publicUrl = ff.StorageKey; // fallback
+                                // Prefer resolved public url from storage key, otherwise use stored FileUrl, otherwise fallback to storage key itself
+                                string? publicUrl = null;
+                                if (!string.IsNullOrEmpty(ff.StorageKey) && keyToPublicUrl.TryGetValue(ff.StorageKey!, out var resolved) && !string.IsNullOrEmpty(resolved))
+                                {
+                                    publicUrl = resolved;
+                                }
+                                else if (!string.IsNullOrEmpty(ff.FileUrl))
+                                {
+                                    publicUrl = NormalizeUrl(ff.FileUrl);
+                                }
+                                else if (!string.IsNullOrEmpty(ff.StorageKey))
+                                {
+                                    publicUrl = NormalizeUrl(ff.StorageKey);
+                                }
+
                                 return new OnlineStudentCourseFileVm
                                 {
                                     Id = ff.Id,
-                                    FileName = ff.Name ?? System.IO.Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? ""),
-                                    PublicUrl = publicUrl
+                                    FileName = ff.Name ?? Path.GetFileName(ff.FileUrl ?? ff.StorageKey ?? string.Empty),
+                                    PublicUrl = publicUrl,
+                                    DownloadUrl = Url.Action("Download", "FileResources", new { area = "Admin", id = ff.Id })
                                 };
                             }).ToList()
                         }).ToList();

@@ -80,6 +80,7 @@ namespace Edu.Web.ViewModels
         public string? Name { get; set; }
         public string? FileType { get; set; }
         public string? PublicUrl { get; set; }
+        public string? DownloadUrl { get; set; }
     }
 
     public class LessonDetailsVm : LessonVm
