@@ -40,14 +40,14 @@
                     }
 
                     <div class="mb-3">
-                        <h6>@(L["Description"] ?? "Description")</h6>
+                        <h6>@(L["Admin.Description"] ?? "Description"):</h6>
                         <p class="text-muted">@Model.Description</p>
                     </div>
 
                     @if (Model.Files?.Any() == true)
                     {
                         <div class="mb-3">
-                            <h6>@L["Admin.Files"]</h6>
+                            <h6>@L["Attachments"]:</h6>
                             <ul class="list-group list-group-flush">
                                 @foreach (var f in Model.Files)
                                 {

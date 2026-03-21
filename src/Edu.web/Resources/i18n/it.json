@@ -287,6 +287,7 @@
   "Booking.Tab.Upcoming": "Prenotazioni in arrivo",
   "Booking.Tab.Past": "Prenotazioni passate",
   "Booking.Tab.All": "Tutte le prenotazioni",
+  "Booking.JoinAvailableAt": "Il link della riunione sarà attivo alle {0}.",
 
   "Purchase.Request": "Richiedi acquisto",
   "Purchase.Requested": "Acquisto richiesto. L'admin verificherà.",

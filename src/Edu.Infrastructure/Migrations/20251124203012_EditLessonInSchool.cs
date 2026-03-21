@@ -4,10 +4,8 @@
 
 namespace Edu.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class EditLessonInSchool : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
@@ -31,7 +29,6 @@ namespace Edu.Infrastructure.Migrations
                 oldClrType: typeof(int),
                 oldType: "int");
 
-            // 1) add CurriculumId nullable
             migrationBuilder.AddColumn<int>(
                 name: "CurriculumId",
                 table: "SchoolLessons",
@@ -43,32 +40,53 @@ namespace Edu.Infrastructure.Migrations
                 table: "SchoolLessons",
                 column: "CurriculumId");
 
-            // 2) Populate CurriculumId for lessons that reference a module
+            // Copy CurriculumId from the related module where possible
             migrationBuilder.Sql(@"
-        UPDATE SL
-        SET CurriculumId = SM.CurriculumId
-        FROM SchoolLessons SL
-        INNER JOIN SchoolModules SM ON SL.ModuleId = SM.Id
-        WHERE SL.ModuleId IS NOT NULL;
-    ");
+UPDATE SL
+SET SL.CurriculumId = SM.CurriculumId
+FROM SchoolLessons SL
+INNER JOIN SchoolModules SM ON SL.ModuleId = SM.Id
+WHERE SL.ModuleId IS NOT NULL;
+");
 
-            // 3) Ensure there is at least one curriculum to use as fallback for module-less lessons
-            //    If none exist we raise an error so migration stops and you can create a curriculum first.
+            // Ensure a fallback Level + Curriculum exists for lessons that do not belong to a module
             migrationBuilder.Sql(@"
-        IF (SELECT COUNT(*) FROM Curricula) = 0
-        BEGIN
-            RAISERROR('No curricula found in database. Create at least one curriculum before applying this migration.', 16, 1);
-        END
-    ");
+IF NOT EXISTS (SELECT 1 FROM Curricula)
+BEGIN
+    DECLARE @LevelId INT;
 
-            // 4) Set any remaining NULL CurriculumId (lessons without modules) to the first curriculum id (fallback)
+    IF NOT EXISTS (SELECT 1 FROM Levels)
+    BEGIN
+        INSERT INTO Levels (NameEn, NameIt, NameAr, [Order])
+        VALUES (N'Default Level', N'Default Level', N'المستوى الافتراضي', 1);
+
+        SET @LevelId = CAST(SCOPE_IDENTITY() AS INT);
+    END
+    ELSE
+    BEGIN
+        SELECT TOP 1 @LevelId = Id
+        FROM Levels
+        ORDER BY Id;
+    END
+
+    INSERT INTO Curricula (LevelId, Title, [Order])
+    VALUES (@LevelId, N'Default Curriculum', 1);
+END
+");
+
+            // Assign any remaining lessons to the first available curriculum
             migrationBuilder.Sql(@"
-        DECLARE @cid INT;
-        SELECT TOP 1 @cid = Id FROM Curricula ORDER BY Id;
-        UPDATE SchoolLessons SET CurriculumId = @cid WHERE CurriculumId IS NULL;
-    ");
+DECLARE @CurriculumId INT;
 
-            // 5) Now make CurriculumId NOT NULL and add FK
+SELECT TOP 1 @CurriculumId = Id
+FROM Curricula
+ORDER BY Id;
+
+UPDATE SchoolLessons
+SET CurriculumId = @CurriculumId
+WHERE CurriculumId IS NULL;
+");
+
             migrationBuilder.AlterColumn<int>(
                 name: "CurriculumId",
                 table: "SchoolLessons",
@@ -86,7 +104,6 @@ namespace Edu.Infrastructure.Migrations
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
 
-            // 6) Re-create ModuleId FK with SetNull
             migrationBuilder.AddForeignKey(
                 name: "FK_SchoolLessons_SchoolModules_ModuleId",
                 table: "SchoolLessons",
@@ -96,7 +113,6 @@ namespace Edu.Infrastructure.Migrations
                 onDelete: ReferentialAction.SetNull);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(

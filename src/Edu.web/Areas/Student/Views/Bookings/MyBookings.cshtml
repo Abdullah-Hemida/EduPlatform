@@ -74,12 +74,36 @@ else
                             </div>
 
                             <div class="d-flex gap-2 flex-column flex-sm-row">
-                                @if (b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl))
+                                @* Use this where you currently check b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl) *@
+                                @if (!string.IsNullOrWhiteSpace(b.MeetUrl))
                                 {
-                                    <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer"
-                                       class="btn btn-primary btn-sm btn-collapse-full">
-                                        <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i> @(L["Booking.Join"] ?? "Join")
-                                    </a>
+                                    if (b.CanJoin)
+                                    {
+                                        <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer"
+                                           class="btn btn-primary btn-sm btn-collapse-full">
+                                            <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
+                                             @(L["Booking.OpenMeet"] ?? "Join")
+                                        </a>
+                                    }
+                                    else if (b.Status == BookingStatus.Paid)
+                                    {
+                                        <!-- visible but disabled button + helpful text -->
+                                        <button class="btn btn-outline-secondary btn-sm btn-collapse-full" disabled aria-disabled="true" title="Meeting not started yet">
+                                            <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
+                                            @(L["Booking.OpenMeet"] ?? "Join")
+                                        </button>
+
+                                        <div class="small text-muted mt-1">
+                                            @(
+                                                                        (L["Booking.JoinAvailableAt"] ?? "Meeting link will be active at {0}")
+                                                                        .Replace("{0}", !string.IsNullOrWhiteSpace(b.SlotStartLocalString) ? b.SlotStartLocalString : b.SlotStartUtc?.ToLocalTime().ToString("g") ?? "-")
+                                                                        )
+                        </div>
+                                                }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
                                 }
 
                                 @if (b.CanCancel)
@@ -124,11 +148,32 @@ else
                         <td class="break-any">@(!string.IsNullOrWhiteSpace(b.TeacherName) ? b.TeacherName : "-")</td>
 
                         <td class="text-center">
-                            @if (b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl))
+                            @* Use this where you currently check b.CanJoin && !string.IsNullOrWhiteSpace(b.MeetUrl) *@
+                            @if (!string.IsNullOrWhiteSpace(b.MeetUrl))
                             {
-                                <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-box-arrow-up-right me-1"></i> @(L["Booking.Join"] ?? "Join")
-                                </a>
+                                if (b.CanJoin)
+                                {
+                                    <a href="@b.MeetUrl" target="_blank" rel="noopener noreferrer"
+                                       class="btn btn-primary btn-sm btn-collapse-full">
+                                        <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
+                                        @(L["Booking.OpenMeet"] ?? "Join")
+                                    </a>
+                                }
+                                else if (b.Status == BookingStatus.Paid)
+                                {
+                                    <!-- visible but disabled button + helpful text -->
+                                    <button class="btn btn-outline-secondary btn-sm btn-collapse-full" disabled aria-disabled="true" title="Meeting not started yet">
+                                        <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
+                                        @(L["Booking.OpenMeet"] ?? "Join")
+                                    </button>
+
+                                    <div class="small text-muted mt-1">
+                                        @(
+                                                                (L["Booking.JoinAvailableAt"] ?? "Meeting link will be active at {0}")
+                                                                .Replace("{0}", !string.IsNullOrWhiteSpace(b.SlotStartLocalString) ? b.SlotStartLocalString : b.SlotStartUtc?.ToLocalTime().ToString("g") ?? "-")
+                                                                )
+                    </div>
+                                        }
                             }
                             else
                             {

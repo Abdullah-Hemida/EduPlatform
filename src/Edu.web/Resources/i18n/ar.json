@@ -267,6 +267,7 @@
   "Booking.Tab.Upcoming": "الحجوزات القادمة",
   "Booking.Tab.Past": "الحجوزات السابقة",
   "Booking.Tab.All": "جميع الحجوزات",
+  "Booking.JoinAvailableAt": "سيكون رابط الاجتماع متاحًا في {0}.",
 
   "Purchase.Request": "طلب شراء",
   "Purchase.Requested": "تم إرسال طلب الشراء. سيتم مراجعته من قبل الإدارة.",

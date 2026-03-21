@@ -18,8 +18,23 @@ using Microsoft.AspNetCore.Authorization;
 var builder = WebApplication.CreateBuilder(args);
 
 // DB + Identity (your existing)
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        connectionString,
+        sqlOptions =>
+        {
+            // Retry on transient failures: up to 5 retries, 30s max delay
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+
+            // Increase command timeout (seconds) so large migration scripts don't timeout
+            sqlOptions.CommandTimeout(180); // 3 minutes — increase if needed
+        })
+);
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {

@@ -271,6 +271,7 @@
   "Booking.Tab.Upcoming": "Upcoming Bookings",
   "Booking.Tab.Past": "Past Bookings",
   "Booking.Tab.All": "All Bookings",
+  "Booking.JoinAvailableAt": "Meeting link will be active at {0}.",
 
   "Purchase.Request": "Request purchase",
   "Purchase.Requested": "Purchase requested. Admin will review.",
