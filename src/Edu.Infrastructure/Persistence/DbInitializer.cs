@@ -1,63 +1,73 @@
 ﻿using Edu.Domain.Entities;
+using Edu.Infrastructure.Data; // Ensure you import the namespace where ApplicationDbContext lives
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore; // Needed for .MigrateAsync()
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Edu.Infrastructure.Persistence;
 
-
 public static class DbInitializer
 {
-    private static readonly string[] DefaultRoles = new[] { "Admin", "Teacher", "Student" };
+    private static readonly string[] DefaultRoles = { "Admin", "Teacher", "Student" };
 
     public static async Task InitializeAsync(IServiceProvider serviceProvider, IConfiguration configuration)
     {
         using var scope = serviceProvider.CreateScope();
+
+        // 1. Get the Database Context
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        // 2. Automatically apply migrations and create tables if they do not exist
+        await context.Database.MigrateAsync();
+
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-        // 1) Ensure roles - ✅ CORRECT
+        // Ensure roles exist
         foreach (var role in DefaultRoles)
         {
             if (!await roleManager.RoleExistsAsync(role))
-            {
                 await roleManager.CreateAsync(new IdentityRole(role));
-            }
         }
 
-        // 2) Ensure admin user - ✅ CORRECT
-        var adminEmail = configuration["AdminUser:Email"] ?? "admin@localhost";
-        var adminPassword = configuration["AdminUser:Password"] ?? "Admin123!";
+        var adminEmail = configuration["AdminUser:Email"];
+        var adminPassword = configuration["AdminUser:Password"];
+        var adminFullName = configuration["AdminUser:FullName"] ?? "Ahmed Khedr";
 
-        var admin = await userManager.FindByEmailAsync(adminEmail);
-        if (admin == null)
+        if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
+            return;
+
+        // Check if any Admin user already exists
+        var adminUsers = await userManager.GetUsersInRoleAsync("Admin");
+        var adminExists = adminUsers.Any();
+
+        if (!adminExists)
         {
-            admin = new ApplicationUser
+            var admin = new ApplicationUser
             {
                 UserName = adminEmail,
                 Email = adminEmail,
-                FullName = "Abdullah Hemida",
                 EmailConfirmed = true,
-                PhotoUrl = null
+                FullName = adminFullName
             };
 
-            var createRes = await userManager.CreateAsync(admin, adminPassword);
-            if (createRes.Succeeded)
+            var createResult = await userManager.CreateAsync(admin, adminPassword);
+
+            if (!createResult.Succeeded)
             {
-                await userManager.AddToRoleAsync(admin, "Admin");
+                var errors = string.Join("; ", createResult.Errors.Select(e => e.Description));
+                throw new InvalidOperationException($"Failed to create seed admin user: {errors}");
             }
-            else
+
+            var addToRoleResult = await userManager.AddToRoleAsync(admin, "Admin");
+            if (!addToRoleResult.Succeeded)
             {
-                throw new Exception("Failed to create seed admin user: " + string.Join("; ", createRes.Errors));
-            }
-        }
-        else
-        {
-            if (!await userManager.IsInRoleAsync(admin, "Admin"))
-            {
-                await userManager.AddToRoleAsync(admin, "Admin");
+                var errors = string.Join("; ", addToRoleResult.Errors.Select(e => e.Description));
+                throw new InvalidOperationException($"Failed to assign Admin role: {errors}");
             }
         }
     }
 }
+
 

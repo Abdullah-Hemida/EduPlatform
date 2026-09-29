@@ -1,59 +1,72 @@
 ﻿// Edu.Infrastructure.Services.MailKitEmailSender.cs
+using Edu.Application.IServices;
+using Edu.Infrastructure.Options;
 using MailKit.Net.Smtp;
 using MailKit.Security;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 
-namespace Edu.Infrastructure.Services
+namespace Edu.Infrastructure.Services;
+
+public sealed class MailKitEmailService : IEmailService
 {
-    /// <summary>
-    /// MailKit-based IEmailSender implementation. Fully async and supports CancellationToken.
-    /// </summary>
-    public class MailKitEmailSender : IEmailSender
+    private readonly SmtpOptions _opts;
+    private readonly ILogger<MailKitEmailService> _logger;
+
+    public MailKitEmailService(IOptions<SmtpOptions> opts, ILogger<MailKitEmailService> logger)
     {
-        private readonly SmtpOptions _opts;
+        _opts = opts.Value;
+        _logger = logger;
+    }
 
-        public MailKitEmailSender(IOptions<SmtpOptions> opts)
+    public Task SendToAdminAsync(string subject, string htmlBody, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_opts.AdminReceiveEmail))
+            return Task.CompletedTask;
+
+        return SendAsync(new EmailMessage(_opts.AdminReceiveEmail, subject, htmlBody), cancellationToken);
+    }
+
+    public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(message.To))
+            throw new ArgumentException("Recipient is required.", nameof(message));
+
+        var email = new MimeMessage();
+        email.From.Add(new MailboxAddress(_opts.From, _opts.From));
+        email.To.Add(MailboxAddress.Parse(message.To));
+        email.Subject = message.Subject ?? string.Empty;
+        email.Body = new BodyBuilder { HtmlBody = message.HtmlBody ?? string.Empty }.ToMessageBody();
+
+        using var client = new SmtpClient();
+
+        try
         {
-            _opts = opts?.Value ?? throw new ArgumentNullException(nameof(opts));
-        }
+            var secure = _opts.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
+            await client.ConnectAsync(_opts.Host, _opts.Port, secure, cancellationToken);
 
-        public async Task SendEmailAsync(string toEmail, string subject, string htmlMessage, CancellationToken ct = default)
-        {
-            if (string.IsNullOrWhiteSpace(toEmail)) throw new ArgumentException("toEmail is required", nameof(toEmail));
-
-            var msg = new MimeMessage();
-            msg.From.Add(MailboxAddress.Parse(_opts.From));
-            msg.To.Add(MailboxAddress.Parse(toEmail));
-            msg.Subject = subject ?? string.Empty;
-
-            var bodyBuilder = new BodyBuilder
+            if (!string.IsNullOrWhiteSpace(_opts.Username))
             {
-                HtmlBody = htmlMessage ?? string.Empty
-            };
-            msg.Body = bodyBuilder.ToMessageBody();
+                await client.AuthenticateAsync(_opts.Username, _opts.Password ?? string.Empty, cancellationToken);
+            }
 
-            using var client = new SmtpClient();
-
-            // Connect: use SecureSocketOptions.Auto so MailKit negotiates the best available.
-            // Note: in production you should validate server certificate; override validation only for dev/test.
-            await client.ConnectAsync(_opts.Host, _opts.Port, _opts.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls, ct);
-
+            await client.SendAsync(email, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send email to {To}", message.To);
+            throw;
+        }
+        finally
+        {
             try
             {
-                if (!string.IsNullOrEmpty(_opts.Username))
-                {
-                    // Authenticate if credentials provided
-                    await client.AuthenticateAsync(_opts.Username, _opts.Password ?? string.Empty, ct);
-                }
-
-                await client.SendAsync(msg, ct);
+                if (client.IsConnected)
+                    await client.DisconnectAsync(true, cancellationToken);
             }
-            finally
+            catch
             {
-                // Always disconnect gracefully
-                try { await client.DisconnectAsync(true, ct); }
-                catch { /* swallow disconnect errors to avoid bubbling from a send */ }
             }
         }
     }

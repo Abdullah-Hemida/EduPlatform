@@ -31,6 +31,7 @@ namespace Edu.Web.Areas.Admin.Controllers
         // GET: Index
         public async Task<IActionResult> Index()
         {
+            ViewData["ActivePage"] = "HeroSections";
             var list = await _db.HeroSections.OrderBy(h => h.Placement).ThenBy(h => h.Order).ToListAsync();
             return View(list);
         }
@@ -38,6 +39,7 @@ namespace Edu.Web.Areas.Admin.Controllers
         // GET: Create
         public IActionResult Create(HeroPlacement? placement)
         {
+            ViewData["ActivePage"] = "HeroSections";
             var vm = new AdminHeroVm { Placement = placement ?? HeroPlacement.Home };
             return View(vm);
         }
@@ -79,6 +81,7 @@ namespace Edu.Web.Areas.Admin.Controllers
         // GET: Edit
         public async Task<IActionResult> Edit(int id)
         {
+            ViewData["ActivePage"] = "HeroSections";
             var ent = await _db.HeroSections.FindAsync(id);
             if (ent == null) return NotFound();
 

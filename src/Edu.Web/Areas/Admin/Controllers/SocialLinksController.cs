@@ -23,6 +23,7 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         public async Task<IActionResult> Index()
         {
+            ViewData["ActivePage"] = "SocialLinks";
             var list = await _db.SocialLinks.OrderBy(s => s.Order).ToListAsync();
             return View(list);
         }
@@ -32,6 +33,7 @@ namespace Edu.Web.Areas.Admin.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(SocialLink model)
         {
+            ViewData["ActivePage"] = "SocialLinks";
             if (!ModelState.IsValid) return View(model);
             _db.SocialLinks.Add(model);
             await _db.SaveChangesAsync();
@@ -41,6 +43,7 @@ namespace Edu.Web.Areas.Admin.Controllers
 
         public async Task<IActionResult> Edit(int id)
         {
+            ViewData["ActivePage"] = "SocialLinks";
             var item = await _db.SocialLinks.FindAsync(id);
             if (item == null) return NotFound();
             return View(item);
@@ -49,6 +52,7 @@ namespace Edu.Web.Areas.Admin.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(SocialLink model)
         {
+            ViewData["ActivePage"] = "SocialLinks";
             if (!ModelState.IsValid) return View(model);
             var item = await _db.SocialLinks.FindAsync(model.Id);
             if (item == null) return NotFound();

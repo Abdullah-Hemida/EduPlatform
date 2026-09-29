@@ -48,14 +48,23 @@ namespace Edu.Domain.Entities
             builder.Property(f => f.Name).HasMaxLength(512).IsUnicode(true);
             builder.Property(f => f.FileType).HasMaxLength(200).IsUnicode(false);
 
-            // timestamps: store as datetime2
+            //// timestamps: store as datetime2
+            //builder.Property(f => f.CreatedAtUtc)
+            //       .HasColumnType("datetime2")
+            //       // SQL default for new rows (use SYSUTCDATETIME for UTC on SQL Server)
+            //       .HasDefaultValueSql("SYSUTCDATETIME()")
+            //       .IsRequired();
+
+            //builder.Property(f => f.UpdatedAtUtc).HasColumnType("datetime2").IsRequired(false);
+            // 🟢 FIX FOR POSTGRESQL TIMESTAMPS
             builder.Property(f => f.CreatedAtUtc)
-                   .HasColumnType("datetime2")
-                   // SQL default for new rows (use SYSUTCDATETIME for UTC on SQL Server)
-                   .HasDefaultValueSql("SYSUTCDATETIME()")
+                   .HasColumnType("timestamp with time zone") // Mapped to standard Postgres timestamptz
+                   .HasDefaultValueSql("CURRENT_TIMESTAMP")     // Standard SQL/Postgres UTC time function
                    .IsRequired();
 
-            builder.Property(f => f.UpdatedAtUtc).HasColumnType("datetime2").IsRequired(false);
+            builder.Property(f => f.UpdatedAtUtc)
+                   .HasColumnType("timestamp with time zone")
+                   .IsRequired(false);
 
             // SchoolLesson relationship
             builder.HasOne(f => f.SchoolLesson)

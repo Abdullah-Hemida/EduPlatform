@@ -7,10 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-	  <PackageReference Include="Azure.Storage.Blobs" Version="12.25.0" />
-	  <PackageReference Include="Azure.Storage.Blobs.Batch" Version="12.22.0" />
-	  <PackageReference Include="Azure.Storage.Common" Version="12.24.0" />
-	  <PackageReference Include="libphonenumber-csharp" Version="9.0.21" />	  
+	  <PackageReference Include="AWSSDK.S3" Version="4.0.103.4" />
+	  <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
+	  <PackageReference Include="Azure.Storage.Blobs.Batch" Version="12.24.0" />
+	  <PackageReference Include="Azure.Storage.Common" Version="12.26.0" />
+	  <PackageReference Include="libphonenumber-csharp" Version="9.0.26" />	  
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
@@ -18,12 +19,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
   </ItemGroup>
 
   <ItemGroup>
