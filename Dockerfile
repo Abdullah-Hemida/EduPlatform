@@ -1,8 +1,4 @@
-# 🟢 CRUCIAL FIX: Ensure it says ://microsoft.com
-FROM ://mcr.microsoft.com AS build
-WORKDIR /src
-
-# 🟢 FIX: Must say mcr.microsoft.com
+# Use the official Microsoft .NET SDK image to build the project
 FROM ://microsoft.com AS build
 WORKDIR /src
 
@@ -22,9 +18,10 @@ COPY src/ ./src/
 WORKDIR /src/src/Edu.Web
 RUN dotnet publish Edu.Web.csproj -c Release -o /app/publish /p:UseAppHost=false
 
-# 🟢 FIX: Must say mcr.microsoft.com
-FROM ://mcr.microsoft.com AS final
+# Use the lighter ASP.NET runtime image for production execution
+FROM ://microsoft.com AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "Edu.Web.dll"]
+
 
