@@ -1,5 +1,5 @@
 # Use the official Microsoft .NET SDK image to build the project
-FROM ://microsoft.com AS build
+FROM microsoft.com AS build
 WORKDIR /src
 
 # Copy the solution file and all project blueprint files
@@ -19,7 +19,7 @@ WORKDIR /src/src/Edu.Web
 RUN dotnet publish Edu.Web.csproj -c Release -o /app/publish /p:UseAppHost=false
 
 # Use the lighter ASP.NET runtime image for production execution
-FROM ://microsoft.com AS final
+FROM microsoft.com AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "Edu.Web.dll"]
