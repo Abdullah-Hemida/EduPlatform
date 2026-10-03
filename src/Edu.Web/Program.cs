@@ -20,18 +20,41 @@ using System.Globalization;
 var builder = WebApplication.CreateBuilder(args);
 
 
-// DB Connection fallback
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-                       ?? builder.Configuration.GetConnectionString("DefaultConnection");
+// 1. Get the raw connection string from the environment variable or appsettings.json
+var rawConnectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+                          ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
+string connectionString;
+
+// 2. If it is a DigitalOcean style URI (starts with postgresql://), translate it for EF Core
+if (!string.IsNullOrEmpty(rawConnectionString) && rawConnectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+{
+    var databaseUri = new Uri(rawConnectionString);
+    var userInfo = databaseUri.UserInfo.Split(':');
+
+    var username = userInfo[0];
+    var password = userInfo.Length > 1 ? userInfo[1] : string.Empty;
+    var databaseName = databaseUri.LocalPath.TrimStart('/');
+
+    // Construct standard .NET key-value pairing string
+    connectionString = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseName};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
+}
+else
+{
+    // If it's your local appsettings format, use it directly
+    connectionString = rawConnectionString;
+}
+
+// 3. Register the Database Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql( // <--- Verified PostgreSQL
+    options.UseNpgsql(
         connectionString,
         sqlOptions =>
         {
             sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null);
             sqlOptions.CommandTimeout(180);
         }));
+
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
