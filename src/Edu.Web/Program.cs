@@ -32,8 +32,9 @@ if (!string.IsNullOrEmpty(rawConnectionString) && rawConnectionString.StartsWith
     var databaseUri = new Uri(rawConnectionString);
     var userInfo = databaseUri.UserInfo.Split(':');
 
-    var username = userInfo[0]; // 🟢 Fixed index
-    var password = userInfo.Length > 1 ? userInfo[1] : string.Empty; // 🟢 Fixed index
+    // 🟢 FIX: Accessing explicit array indexes safely
+    var username = userInfo.Length > 0 ? userInfo[0] : string.Empty;
+    var password = userInfo.Length > 1 ? userInfo[1] : string.Empty;
     var databaseName = databaseUri.LocalPath.TrimStart('/');
 
     // Build connection layout compatible with EF Core + mandatory SSL parameters
@@ -53,6 +54,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
             sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null);
             sqlOptions.CommandTimeout(180);
         }));
+
 
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -175,7 +177,8 @@ builder.Services.Configure<RequestLocalizationOptions>(opts =>
         new AcceptLanguageHeaderRequestCultureProvider()
     };
 });
-
+// Dynamically bind to the port DigitalOcean assigns to the app container
+builder.WebHost.UseUrls($"http://*:{Environment.GetEnvironmentVariable("PORT") ?? "8080"}");
 var app = builder.Build();
 
 var locOptions = app.Services.GetRequiredService<IOptions<RequestLocalizationOptions>>();
