@@ -1,4 +1,4 @@
-using Amazon.S3;
+﻿using Amazon.S3;
 using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
@@ -20,28 +20,27 @@ using System.Globalization;
 var builder = WebApplication.CreateBuilder(args);
 
 
-// 1. Get the raw connection string from the environment variable or appsettings.json
+// 1. Fetch the raw environment string
 var rawConnectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
                           ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
 string connectionString;
 
-// 2. If it is a DigitalOcean style URI (starts with postgresql://), translate it for EF Core
+// 2. Safely translate the URL format to classic key-value pairs
 if (!string.IsNullOrEmpty(rawConnectionString) && rawConnectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
 {
     var databaseUri = new Uri(rawConnectionString);
     var userInfo = databaseUri.UserInfo.Split(':');
 
-    var username = userInfo[0];
-    var password = userInfo.Length > 1 ? userInfo[1] : string.Empty;
+    var username = userInfo[0]; // 🟢 Fixed index
+    var password = userInfo.Length > 1 ? userInfo[1] : string.Empty; // 🟢 Fixed index
     var databaseName = databaseUri.LocalPath.TrimStart('/');
 
-    // Construct standard .NET key-value pairing string
+    // Build connection layout compatible with EF Core + mandatory SSL parameters
     connectionString = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseName};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
 }
 else
 {
-    // If it's your local appsettings format, use it directly
     connectionString = rawConnectionString;
 }
 
@@ -250,7 +249,7 @@ app.Run();
 //                errorNumbersToAdd: null);
 
 //            // Increase command timeout (seconds) so large migration scripts don't timeout
-//            sqlOptions.CommandTimeout(180); // 3 minutes � increase if needed
+//            sqlOptions.CommandTimeout(180); // 3 minutes — increase if needed
 //        })
 //);
 
