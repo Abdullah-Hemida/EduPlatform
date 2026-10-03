@@ -20,11 +20,17 @@ using System.Globalization;
 var builder = WebApplication.CreateBuilder(args);
 
 
-// 1. Fetch the raw environment string
+// 1. Fetch the raw environment string (explicitly checking uppercase and lowercase formats)
 var rawConnectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+                          ?? Environment.GetEnvironmentVariable("database_url")
                           ?? builder.Configuration.GetConnectionString("DefaultConnection");
-
 string connectionString;
+// If it's still missing, provide an informative error instead of a silent crash
+if (string.IsNullOrWhiteSpace(rawConnectionString));
+{
+    throw new InvalidOperationException("The DATABASE_URL environment variable is not set.");
+}
+
 
 // 2. Safely translate the URL format to classic key-value pairs
 if (!string.IsNullOrEmpty(rawConnectionString) && rawConnectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
