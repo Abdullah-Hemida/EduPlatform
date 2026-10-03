@@ -19,31 +19,31 @@ using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ==========================================
+// 1. DATABASE CONFIGURATION (PostgreSQL)
+// ==========================================
 
-// 1. Fetch the raw environment string (explicitly checking uppercase and lowercase formats)
 var rawConnectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
                           ?? Environment.GetEnvironmentVariable("database_url")
                           ?? builder.Configuration.GetConnectionString("DefaultConnection");
-string connectionString;
-// If it's still missing, provide an informative error instead of a silent crash
-if (string.IsNullOrWhiteSpace(rawConnectionString));
+
+if (string.IsNullOrWhiteSpace(rawConnectionString))
 {
-    throw new InvalidOperationException("The DATABASE_URL environment variable is not set.");
+    throw new InvalidOperationException("The DATABASE_URL connection configuration string is completely missing.");
 }
 
+string connectionString;
 
-// 2. Safely translate the URL format to classic key-value pairs
-if (!string.IsNullOrEmpty(rawConnectionString) && rawConnectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+// Safely translate the DigitalOcean URL format to classic .NET key-value pairs
+if (rawConnectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
 {
     var databaseUri = new Uri(rawConnectionString);
     var userInfo = databaseUri.UserInfo.Split(':');
 
-    // 🟢 FIX: Accessing explicit array indexes safely
     var username = userInfo.Length > 0 ? userInfo[0] : string.Empty;
     var password = userInfo.Length > 1 ? userInfo[1] : string.Empty;
     var databaseName = databaseUri.LocalPath.TrimStart('/');
 
-    // Build connection layout compatible with EF Core + mandatory SSL parameters
     connectionString = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseName};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
 }
 else
@@ -51,7 +51,6 @@ else
     connectionString = rawConnectionString;
 }
 
-// 3. Register the Database Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(
         connectionString,
@@ -61,9 +60,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
             sqlOptions.CommandTimeout(180);
         }));
 
+// ==========================================
+// 2. IDENTITY CONFIGURATION
+// ==========================================
 
-
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+builder.Services.AddIdentity(options =>
 {
     options.Password.RequireDigit = true;
     options.Password.RequiredLength = 6;
@@ -73,23 +74,12 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// Localization
-builder.Services.AddLocalization();
-builder.Services.AddSingleton<IStringLocalizerFactory, JsonStringLocalizerFactory>();
+// ==========================================
+// 3. STORAGE PROVIDER CONFIGURATION (S3)
+// ==========================================
 
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IHeroService, HeroService>();
-
-// Options
-//builder.Services.Configure<AzureBlobOptions>(builder.Configuration.GetSection("Storage:Azure"));
-// Options binding
 builder.Services.Configure<DigitalOceanSpacesOptions>(builder.Configuration.GetSection("Storage:Spaces"));
-builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
-builder.Services.Configure<AdminSeedOptions>(builder.Configuration.GetSection("AdminUser"));
-builder.Services.Configure<ReactiveCourseOptions>(builder.Configuration.GetSection("ReactiveCourse"));
 
-// File storage provider
-// File storage provider strategy fallback selector
 var storageProvider = builder.Configuration["Storage:Provider"]
     ?? (builder.Environment.IsProduction() ? "Spaces" : "Local");
 
@@ -118,47 +108,31 @@ else
 {
     builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 }
-//var storageProvider = builder.Configuration["Storage:Provider"]
-//    ?? (builder.Environment.IsProduction() ? "Azure" : "Local");
 
-//if (storageProvider.Equals("Azure", StringComparison.OrdinalIgnoreCase))
-//{
-//    builder.Services.AddSingleton(sp =>
-//    {
-//        var opts = sp.GetRequiredService<IOptions<AzureBlobOptions>>().Value;
+// ==========================================
+// 4. CORE SERVICES & OPTIONS MAPPINGS
+// ==========================================
 
-//        if (!string.IsNullOrWhiteSpace(opts.ConnectionString))
-//        {
-//            return new BlobServiceClient(opts.ConnectionString);
-//        }
+builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+builder.Services.Configure<AdminSeedOptions>(builder.Configuration.GetSection("AdminUser"));
+builder.Services.Configure<ReactiveCourseOptions>(builder.Configuration.GetSection("ReactiveCourse"));
 
-//        throw new InvalidOperationException("Storage:Azure:ConnectionString is missing.");
-//        // If you later switch to managed identity, replace this with:
-//        // return new BlobServiceClient(new Uri(opts.AccountUrl), new DefaultAzureCredential());
-//    });
+builder.Services.AddLocalization();
+builder.Services.AddSingleton<IStringLocalizerFactory, JsonStringLocalizerFactory>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 
-//    builder.Services.AddSingleton<IFileStorageService, AzureBlobStorageService>();
-//}
-//else
-//{
-//    builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
-//}
-
-// Email + notifications
+builder.Services.AddScoped<IHeroService, HeroService>();
 builder.Services.AddScoped<IEmailService, MailKitEmailService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
-
 builder.Services.AddScoped<IUserCultureProvider, UserCultureProvider>();
-builder.Services.AddMemoryCache();
 
-builder.Services.AddControllersWithViews()
-    .AddViewLocalization()
-    .AddDataAnnotationsLocalization();
+// ==========================================
+// 5. AUTHENTICATION & AUTHORIZATION
+// ==========================================
 
-builder.Services.AddRazorPages();
 builder.Services.AddAuthentication();
-
 builder.Services.AddScoped<IAuthorizationHandler, TeacherApprovedHandler>();
 
 builder.Services.AddAuthorizationBuilder()
@@ -168,7 +142,16 @@ builder.Services.AddAuthorizationBuilder()
         policy.AddRequirements(new TeacherApprovedRequirement());
     });
 
-// Localization
+// ==========================================
+// 6. CONTROLLERS, RAZOR PAGES & LOCALIZATION
+// ==========================================
+
+builder.Services.AddControllersWithViews()
+    .AddViewLocalization()
+    .AddDataAnnotationsLocalization();
+
+builder.Services.AddRazorPages();
+
 var supportedCultures = new[] { "en", "ar", "it" };
 builder.Services.Configure<RequestLocalizationOptions>(opts =>
 {
@@ -183,25 +166,44 @@ builder.Services.Configure<RequestLocalizationOptions>(opts =>
         new AcceptLanguageHeaderRequestCultureProvider()
     };
 });
-// Dynamically bind to the port DigitalOcean assigns to the app container
+
+// Dynamically bind to the port DigitalOcean assigns to the container
 builder.WebHost.UseUrls($"http://*:{Environment.GetEnvironmentVariable("PORT") ?? "8080"}");
+
 var app = builder.Build();
+
+// ==========================================
+// 7. REQUEST PIPELINE (MIDDLEWARE)
+// ==========================================
 
 var locOptions = app.Services.GetRequiredService<IOptions<RequestLocalizationOptions>>();
 app.UseRequestLocalization(locOptions.Value);
 
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+else
 {
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
-app.UseStaticFiles();
+// 🟢 FIX: Do not redirect to HTTPS if we are inside DigitalOcean's internal health-checking environment
+if (!rawConnectionString.Contains("digitalocean", StringComparison.OrdinalIgnoreCase))
+{
+    app.UseHttpsRedirection();
+}
 
+app.UseStaticFiles();
 app.UseRouting();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
+// ==========================================
+// 8. ROUTING & DATABASE SEEDING
+// ==========================================
 
 app.MapControllerRoute(
     name: "areas",
@@ -221,6 +223,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
 
 
 
@@ -432,3 +435,30 @@ app.Run();
 //            sqlOptions.CommandTimeout(180);
 //        }));
 // DB + Identity
+
+
+//var storageProvider = builder.Configuration["Storage:Provider"]
+//    ?? (builder.Environment.IsProduction() ? "Azure" : "Local");
+
+//if (storageProvider.Equals("Azure", StringComparison.OrdinalIgnoreCase))
+//{
+//    builder.Services.AddSingleton(sp =>
+//    {
+//        var opts = sp.GetRequiredService<IOptions<AzureBlobOptions>>().Value;
+
+//        if (!string.IsNullOrWhiteSpace(opts.ConnectionString))
+//        {
+//            return new BlobServiceClient(opts.ConnectionString);
+//        }
+
+//        throw new InvalidOperationException("Storage:Azure:ConnectionString is missing.");
+//        // If you later switch to managed identity, replace this with:
+//        // return new BlobServiceClient(new Uri(opts.AccountUrl), new DefaultAzureCredential());
+//    });
+
+//    builder.Services.AddSingleton<IFileStorageService, AzureBlobStorageService>();
+//}
+//else
+//{
+//    builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
+//}
