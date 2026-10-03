@@ -64,7 +64,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // 2. IDENTITY CONFIGURATION
 // ==========================================
 
-builder.Services.AddIdentity(options =>
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.Password.RequireDigit = true;
     options.Password.RequiredLength = 6;
