@@ -1,4 +1,5 @@
-﻿using Edu.Application.IServices;
+﻿using Amazon.S3;
+using Edu.Application.IServices;
 using Edu.Domain.Entities;
 using Edu.Infrastructure.Data;
 using Edu.Infrastructure.Storage;
@@ -19,19 +20,22 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
         private readonly ApplicationDbContext _db;
         private readonly IFileStorageService _files;
         private readonly IStringLocalizer<IndexModel> _localizer;
+        private readonly ILogger<IndexModel> _logger;
 
         public IndexModel(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
             ApplicationDbContext db,
             IFileStorageService files,
-            IStringLocalizer<IndexModel> localizer)
+            IStringLocalizer<IndexModel> localizer,
+            ILogger<IndexModel> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _db = db;
             _files = files;
             _localizer = localizer;
+            _logger = logger;
         }
 
         public string Username { get; set; } = null!;
@@ -190,10 +194,81 @@ namespace Edu.Web.Areas.Identity.Pages.Account.Manage
                     return Page();
                 }
 
-                var key = await _files.SaveFileAsync(photo, $"users/{user.Id}");
-                user.PhotoStorageKey = key;
-                Input.PhotoStorageKey = key;
-                try { Input.PhotoUrl = await _files.GetPublicUrlAsync(key); } catch { Input.PhotoUrl = null; }
+                //var key = await _files.SaveFileAsync(photo, $"users/{user.Id}");
+                //user.PhotoStorageKey = key;
+                //Input.PhotoStorageKey = key;
+                //try { Input.PhotoUrl = await _files.GetPublicUrlAsync(key); } catch { Input.PhotoUrl = null; }
+                try
+                {
+                    _logger.LogInformation(
+                        "Starting profile photo upload. UserId={UserId}, FileName={FileName}, Length={Length}, ContentType={ContentType}",
+                        user.Id,
+                        photo.FileName,
+                        photo.Length,
+                        photo.ContentType);
+
+                    var key = await _files.SaveFileAsync(photo, $"users/{user.Id}");
+
+                    _logger.LogInformation(
+                        "Profile photo uploaded successfully. UserId={UserId}, StorageKey={StorageKey}",
+                        user.Id,
+                        key);
+
+                    user.PhotoStorageKey = key;
+                    Input.PhotoStorageKey = key;
+
+                    try
+                    {
+                        Input.PhotoUrl = await _files.GetPublicUrlAsync(key);
+
+                        _logger.LogInformation(
+                            "Profile photo public URL generated successfully. UserId={UserId}",
+                            user.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Profile photo upload succeeded, but generating the public URL failed. UserId={UserId}, StorageKey={StorageKey}",
+                            user.Id,
+                            key);
+
+                        Input.PhotoUrl = null;
+                    }
+                }
+                catch (AmazonS3Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "DigitalOcean Spaces profile photo upload failed. UserId={UserId}, FileName={FileName}, StatusCode={StatusCode}, ErrorCode={ErrorCode}, Message={Message}",
+                        user.Id,
+                        photo.FileName,
+                        ex.StatusCode,
+                        ex.ErrorCode,
+                        ex.Message);
+
+                    ModelState.AddModelError(
+                        "photo",
+                        "The image could not be uploaded. Please try again.");
+
+                    await OnGetAsync();
+                    return Page();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Unexpected error during profile photo upload. UserId={UserId}, FileName={FileName}",
+                        user.Id,
+                        photo.FileName);
+
+                    ModelState.AddModelError(
+                        "photo",
+                        "An unexpected error occurred while uploading the image.");
+
+                    await OnGetAsync();
+                    return Page();
+                }
             }
 
             // Persist changes (user & student changes)

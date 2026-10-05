@@ -6,7 +6,7 @@ namespace Edu.Infrastructure.Options
     {
         public string? AccessKey { get; set; }
         public string? SecretKey { get; set; }
-        public string Container { get; set; } = "edu-files"; // This behaves as your bucket name
+        public string Container { get; set; } = "futuragenerazion-storage-file"; // This behaves as your bucket name
         public string ServiceUrl { get; set; } = "https://digitaloceanspaces.com"; // Choose your DO region URL
         public bool UseCdnUrl { get; set; } = false;
         public string? CdnBaseUrl { get; set; }
