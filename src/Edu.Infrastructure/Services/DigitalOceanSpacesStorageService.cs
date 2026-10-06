@@ -55,13 +55,12 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
         try
         {
             _logger.LogInformation(
-                "Uploading file to DigitalOcean Spaces. " +
-                "Bucket={Bucket}, Key={Key}, Endpoint={Endpoint}, ContentType={ContentType}, Size={Size}",
+                "Uploading file to DigitalOcean Spaces. Bucket={Bucket}, Key={Key}, Endpoint={Endpoint}, Size={Size}, ContentType={ContentType}",
                 _opts.Container,
                 fileKey,
                 _opts.ServiceUrl,
-                contentType,
-                file.Length);
+                file.Length,
+                contentType);
 
             await _s3Client.PutObjectAsync(request);
 
@@ -74,16 +73,24 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
         {
             _logger.LogError(
                 ex,
-                "DigitalOcean Spaces upload failed. " +
-                "Bucket={Bucket}, Key={Key}, Endpoint={Endpoint}, " +
-                "StatusCode={StatusCode}, ErrorCode={ErrorCode}, " +
-                "RequestId={RequestId}, Message={Message}",
+                """
+        DigitalOcean Spaces upload failed.
+        Bucket: {Bucket}
+        Key: {Key}
+        Endpoint: {Endpoint}
+        HTTP Status: {StatusCode}
+        AWS Error Code: {ErrorCode}
+        Request ID: {RequestId}
+        Amazon ID 2: {AmazonId2}
+        Message: {Message}
+        """,
                 _opts.Container,
                 fileKey,
                 _opts.ServiceUrl,
                 ex.StatusCode,
                 ex.ErrorCode,
                 ex.RequestId,
+                ex.AmazonId2,
                 ex.Message);
 
             throw;
