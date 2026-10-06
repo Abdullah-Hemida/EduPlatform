@@ -31,15 +31,24 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
 
     public async Task<string> SaveFileAsync(IFormFile file, string folder)
     {
-        if (file == null) throw new ArgumentNullException(nameof(file));
-        if (file.Length == 0) throw new ArgumentException("File is empty.", nameof(file));
+        if (file == null)
+            throw new ArgumentNullException(nameof(file));
+
+        if (file.Length == 0)
+            throw new ArgumentException("File is empty.", nameof(file));
 
         var ext = Path.GetExtension(file.FileName);
         var blobFileName = $"{Guid.NewGuid():N}{ext}";
-        var folderNormalized = NormalizeFolder(folder);
-        var fileKey = string.IsNullOrEmpty(folderNormalized) ? blobFileName : $"{folderNormalized}/{blobFileName}";
 
-        var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
+        var folderNormalized = NormalizeFolder(folder);
+
+        var fileKey = string.IsNullOrEmpty(folderNormalized)
+            ? blobFileName
+            : $"{folderNormalized}/{blobFileName}";
+
+        var contentType = string.IsNullOrWhiteSpace(file.ContentType)
+            ? "application/octet-stream"
+            : file.ContentType;
 
         await using var stream = file.OpenReadStream();
 
@@ -49,7 +58,7 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
             Key = fileKey,
             InputStream = stream,
             ContentType = contentType,
-            CannedACL = S3CannedACL.Private // Kept private so GetPublicUrlAsync generates safe timed links
+            CannedACL = S3CannedACL.Private
         };
 
         try
@@ -62,28 +71,44 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
                 file.Length,
                 contentType);
 
+            // Diagnostic: verify that the configured credentials
+            // can see the configured Space.
+            var metadata = await _s3Client.GetBucketLocationAsync(
+                new Amazon.S3.Model.GetBucketLocationRequest
+                {
+                    BucketName = _opts.Container
+                });
+
+            _logger.LogInformation(
+                "Bucket check succeeded. Bucket={Bucket}, Location={Location}",
+                _opts.Container,
+                metadata.Location?.Value);
+
+            // Actual upload
             await _s3Client.PutObjectAsync(request);
 
             _logger.LogInformation(
                 "Successfully uploaded file to DigitalOcean Spaces. Bucket={Bucket}, Key={Key}",
                 _opts.Container,
                 fileKey);
+
+            return fileKey;
         }
         catch (AmazonS3Exception ex)
         {
             _logger.LogError(
                 ex,
                 """
-        DigitalOcean Spaces upload failed.
-        Bucket: {Bucket}
-        Key: {Key}
-        Endpoint: {Endpoint}
-        HTTP Status: {StatusCode}
-        AWS Error Code: {ErrorCode}
-        Request ID: {RequestId}
-        Amazon ID 2: {AmazonId2}
-        Message: {Message}
-        """,
+            DigitalOcean Spaces operation failed.
+            Bucket: {Bucket}
+            Key: {Key}
+            Endpoint: {Endpoint}
+            HTTP Status: {StatusCode}
+            AWS Error Code: {ErrorCode}
+            Request ID: {RequestId}
+            Amazon ID 2: {AmazonId2}
+            Message: {Message}
+            """,
                 _opts.Container,
                 fileKey,
                 _opts.ServiceUrl,
@@ -95,7 +120,6 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
 
             throw;
         }
-        return fileKey;
     }
 
     public async Task DeleteFileAsync(string fileUrlOrKey)
