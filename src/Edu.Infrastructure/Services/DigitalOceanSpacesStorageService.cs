@@ -52,7 +52,42 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
             CannedACL = S3CannedACL.Private // Kept private so GetPublicUrlAsync generates safe timed links
         };
 
-        await _s3Client.PutObjectAsync(request);
+        try
+        {
+            _logger.LogInformation(
+                "Uploading file to DigitalOcean Spaces. " +
+                "Bucket={Bucket}, Key={Key}, Endpoint={Endpoint}, ContentType={ContentType}, Size={Size}",
+                _opts.Container,
+                fileKey,
+                _opts.ServiceUrl,
+                contentType,
+                file.Length);
+
+            await _s3Client.PutObjectAsync(request);
+
+            _logger.LogInformation(
+                "Successfully uploaded file to DigitalOcean Spaces. Bucket={Bucket}, Key={Key}",
+                _opts.Container,
+                fileKey);
+        }
+        catch (AmazonS3Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "DigitalOcean Spaces upload failed. " +
+                "Bucket={Bucket}, Key={Key}, Endpoint={Endpoint}, " +
+                "StatusCode={StatusCode}, ErrorCode={ErrorCode}, " +
+                "RequestId={RequestId}, Message={Message}",
+                _opts.Container,
+                fileKey,
+                _opts.ServiceUrl,
+                ex.StatusCode,
+                ex.ErrorCode,
+                ex.RequestId,
+                ex.Message);
+
+            throw;
+        }
         return fileKey;
     }
 

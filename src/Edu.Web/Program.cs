@@ -89,17 +89,24 @@ if (storageProvider.Equals("Spaces", StringComparison.OrdinalIgnoreCase))
     {
         var opts = sp.GetRequiredService<IOptions<DigitalOceanSpacesOptions>>().Value;
 
-        if (string.IsNullOrWhiteSpace(opts.AccessKey) || string.IsNullOrWhiteSpace(opts.SecretKey))
+        if (string.IsNullOrWhiteSpace(opts.AccessKey) ||
+            string.IsNullOrWhiteSpace(opts.SecretKey))
         {
-            throw new InvalidOperationException("DigitalOcean Spaces Key Credentials are missing.");
+            throw new InvalidOperationException(
+                "DigitalOcean Spaces Key Credentials are missing.");
         }
 
         var config = new AmazonS3Config
         {
-            ServiceURL = opts.ServiceUrl
+            ServiceURL = opts.ServiceUrl,
+            AuthenticationRegion = "fra1",
+            ForcePathStyle = false
         };
 
-        return new AmazonS3Client(opts.AccessKey, opts.SecretKey, config);
+        return new AmazonS3Client(
+            opts.AccessKey,
+            opts.SecretKey,
+            config);
     });
 
     builder.Services.AddScoped<IFileStorageService, DigitalOceanSpacesStorageService>();
@@ -185,7 +192,18 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    app.UseExceptionHandler("/Home/Error");
+    app.UseExceptionHandler(exceptionApp =>
+    {
+        exceptionApp.Run(async context =>
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "text/plain";
+
+            await context.Response.WriteAsync(
+                "An unexpected error occurred. Check the application logs.");
+        });
+    });
+
     app.UseHsts();
 }
 
