@@ -24,6 +24,23 @@ public sealed class DigitalOceanSpacesStorageService : IFileStorageService
         _s3Client = s3Client;
         _opts = opts.Value;
         _logger = logger;
+
+        _logger.LogInformation(
+        "Spaces configuration: Bucket={Bucket}, Endpoint={Endpoint}, AccessKey={AccessKey}",
+        _opts.Container,
+        _opts.ServiceUrl,
+        MaskAccessKey(_opts.AccessKey));
+    }
+
+    private static string MaskAccessKey(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return "(empty)";
+
+        if (key.Length <= 8)
+            return "********";
+
+        return $"{key[..4]}...{key[^4..]}";
     }
 
     private static string NormalizeFolder(string? folder)
