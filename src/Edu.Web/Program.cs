@@ -85,9 +85,40 @@ var storageProvider = builder.Configuration["Storage:Provider"]
 
 if (storageProvider.Equals("Spaces", StringComparison.OrdinalIgnoreCase))
 {
+    //builder.Services.AddSingleton<IAmazonS3>(sp =>
+    //{
+    //    var opts = sp.GetRequiredService<IOptions<DigitalOceanSpacesOptions>>().Value;
+
+    //    if (string.IsNullOrWhiteSpace(opts.AccessKey) ||
+    //        string.IsNullOrWhiteSpace(opts.SecretKey))
+    //    {
+    //        throw new InvalidOperationException(
+    //            "DigitalOcean Spaces Key Credentials are missing.");
+    //    }
+
+    //    var config = new AmazonS3Config
+    //    {
+    //        ServiceURL = opts.ServiceUrl,
+    //        AuthenticationRegion = "fra1",
+    //        ForcePathStyle = false
+    //    };
+
+    //    return new AmazonS3Client(
+    //        opts.AccessKey,
+    //        opts.SecretKey,
+    //        config);
+    //});
     builder.Services.AddSingleton<IAmazonS3>(sp =>
     {
         var opts = sp.GetRequiredService<IOptions<DigitalOceanSpacesOptions>>().Value;
+        var logger = sp.GetRequiredService<ILoggerFactory>()
+                       .CreateLogger("DigitalOceanSpaces");
+
+        logger.LogInformation(
+            "Spaces configuration: Bucket={Bucket}, Endpoint={Endpoint}, AccessKey={AccessKey}",
+            opts.Container,
+            opts.ServiceUrl,
+            MaskAccessKey(opts.AccessKey));
 
         if (string.IsNullOrWhiteSpace(opts.AccessKey) ||
             string.IsNullOrWhiteSpace(opts.SecretKey))
@@ -99,7 +130,7 @@ if (storageProvider.Equals("Spaces", StringComparison.OrdinalIgnoreCase))
         var config = new AmazonS3Config
         {
             ServiceURL = opts.ServiceUrl,
-            AuthenticationRegion = "fra1",
+            AuthenticationRegion = "us-east-1",
             ForcePathStyle = false
         };
 
@@ -108,14 +139,22 @@ if (storageProvider.Equals("Spaces", StringComparison.OrdinalIgnoreCase))
             opts.SecretKey,
             config);
     });
-
     builder.Services.AddScoped<IFileStorageService, DigitalOceanSpacesStorageService>();
 }
 else
 {
     builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 }
+static string MaskAccessKey(string? key)
+{
+    if (string.IsNullOrWhiteSpace(key))
+        return "(empty)";
 
+    if (key.Length <= 8)
+        return "********";
+
+    return $"{key[..4]}...{key[^4..]}";
+}
 // ==========================================
 // 4. CORE SERVICES & OPTIONS MAPPINGS
 // ==========================================
