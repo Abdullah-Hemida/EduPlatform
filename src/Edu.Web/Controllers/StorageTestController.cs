@@ -26,7 +26,31 @@ namespace Edu.Web.Controllers
         public async Task<IActionResult> Test()
         {
             var results = new List<string>();
+            try
+            {
+                var response = await _s3.ListBucketsAsync();
 
+                results.Add(
+                    $"PASS - ListBuckets: {response.Buckets.Count} bucket(s)");
+
+                foreach (var bucket in response.Buckets)
+                {
+                    results.Add($"Bucket: {bucket.BucketName}");
+                }
+            }
+            catch (AmazonS3Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "ListBuckets failed. Status={Status}, ErrorCode={ErrorCode}",
+                    ex.StatusCode,
+                    ex.ErrorCode);
+
+                results.Add(
+                    $"FAIL - ListBuckets: Status={ex.StatusCode}, ErrorCode={ex.ErrorCode}, Message={ex.Message}");
+
+                return Content(string.Join(Environment.NewLine, results));
+            }
             // 1. Test bucket access
             try
             {

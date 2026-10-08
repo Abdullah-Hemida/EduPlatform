@@ -110,7 +110,10 @@ if (storageProvider.Equals("Spaces", StringComparison.OrdinalIgnoreCase))
     //});
     builder.Services.AddSingleton<IAmazonS3>(sp =>
     {
-        var opts = sp.GetRequiredService<IOptions<DigitalOceanSpacesOptions>>().Value;
+        var opts = sp
+            .GetRequiredService<IOptions<DigitalOceanSpacesOptions>>()
+            .Value;
+
         var logger = sp.GetRequiredService<ILoggerFactory>()
                        .CreateLogger("DigitalOceanSpaces");
 
@@ -129,9 +132,7 @@ if (storageProvider.Equals("Spaces", StringComparison.OrdinalIgnoreCase))
 
         var config = new AmazonS3Config
         {
-            ServiceURL = opts.ServiceUrl,
-            AuthenticationRegion = "us-east-1",
-            ForcePathStyle = false
+            ServiceURL = opts.ServiceUrl
         };
 
         return new AmazonS3Client(
