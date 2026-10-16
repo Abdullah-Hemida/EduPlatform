@@ -34,8 +34,7 @@ public sealed class MailKitEmailService : IEmailService
             throw new ArgumentException("Recipient is required.", nameof(message));
 
         var email = new MimeMessage();
-        email.From.Add(new MailboxAddress(_opts.From, _opts.From));
-        email.To.Add(MailboxAddress.Parse(message.To));
+        email.From.Add(MailboxAddress.Parse(_opts.From)); email.To.Add(MailboxAddress.Parse(message.To));
         email.Subject = message.Subject ?? string.Empty;
         email.Body = new BodyBuilder { HtmlBody = message.HtmlBody ?? string.Empty }.ToMessageBody();
 

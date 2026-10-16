@@ -134,9 +134,12 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddScoped<IHeroService, HeroService>();
 builder.Services.AddScoped<IEmailService, MailKitEmailService>();
-builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IUserCultureProvider, UserCultureProvider>();
+
+builder.Services.AddTransient<
+    Microsoft.AspNetCore.Identity.UI.Services.IEmailSender,
+    IdentityEmailSenderAdapter>();
 
 // ==========================================
 // 5. AUTHENTICATION & AUTHORIZATION

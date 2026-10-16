@@ -85,7 +85,7 @@
         catch (Exception ex)
         {
             // optionally log if you have logger available; degrade gracefully
-            displayName = displayName ?? (User.Identity?.Name ?? "User");
+            displayName = displayName ?? (User?.Identity?.Name ?? "User");
             dashboardUrl = null;
             dashboardDisabled = false;
         }
@@ -98,7 +98,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@ViewData["Title"] - Edu Platform</title>
+    <title>@ViewData["Title"] - FuturaGenerazion</title>
 
     <!-- Bootstrap core CSS (from lib) -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -120,10 +120,21 @@
         <div class="container-fluid ">
 
             <!-- Brand -->
-            <a class="navbar-brand fw-bold d-flex align-items-center text-decoration-none order-1" href="/">
-                @* <i class="fas fa-graduation-cap me-2 text-primary fa-lg"></i> *@
-                <img src="~/uploads/images/future_generation_logo.jpg" class="rounded-pill ms-2" style="width:40px; height:40px;" alt="Future Generation" />
-                <span class="brand-gradient">@Localizer["Site.Title"]</span>
+
+            <a class="navbar-brand d-flex align-items-center text-decoration-none order-1"
+               asp-area=""
+               asp-controller="Home"
+               asp-action="Index">
+
+                <img src="~/uploads/images/future_generation_logo.jpg"
+                     class="rounded-circle me-2"
+                     style="width:45px; height:45px; object-fit:cover;"
+                     alt="Future Generation Logo" />
+
+                <span class="brand-gradient fw-bold">
+                    @Localizer["Site.Title"]
+                </span>
+
             </a>
 
             <!-- Mobile toggle -->
